@@ -1,0 +1,95 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro</title>
+    <link rel="stylesheet" href="{% static 'dist/css/app.min.css' %}">
+</head>
+<body class="login-page">
+    <div class="login-card">
+        <h1>Crear cuenta</h1>
+        <div class="login-messages">
+            {% for message in messages %}
+                <div class="msg {{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <label for="primer_nombre">Primer nombre</label>
+            <input type="text" id="primer_nombre" name="primer_nombre" value="{{ form_data.primer_nombre|default_if_none:'' }}" required>
+
+            <label for="segundo_nombre">Segundo nombre</label>
+            <input type="text" id="segundo_nombre" name="segundo_nombre" value="{{ form_data.segundo_nombre|default_if_none:'' }}">
+
+            <label for="primer_apellido">Primer apellido</label>
+            <input type="text" id="primer_apellido" name="primer_apellido" value="{{ form_data.primer_apellido|default_if_none:'' }}" required>
+
+            <label for="segundo_apellido">Segundo apellido</label>
+            <input type="text" id="segundo_apellido" name="segundo_apellido" value="{{ form_data.segundo_apellido|default_if_none:'' }}">
+
+            <label for="identificacion">Identificación</label>
+            <input type="text" id="identificacion" name="identificacion" value="{{ form_data.identificacion|default_if_none:'' }}" required>
+
+            <label for="id_tipo_identificacion">Tipo de identificación</label>
+            <select id="id_tipo_identificacion" name="id_tipo_identificacion" required>
+                <option value="">Seleccione</option>
+                {% for tipo in tipos_ident %}
+                    <option value="{{ tipo.id_tipo_identificacion }}" {% if form_data.id_tipo_identificacion == tipo.id_tipo_identificacion|stringformat:"s" %}selected{% endif %}>{{ tipo.descripcion_tp_identificacion }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="id_tipo_usuario">Tipo de usuario</label>
+            <select id="id_tipo_usuario" name="id_tipo_usuario" required>
+                <option value="">Seleccione</option>
+                {% for tipo_u in tipos_usuario %}
+                    <option value="{{ tipo_u.id_tp_user }}" {% if form_data.id_tipo_usuario == tipo_u.id_tp_user|stringformat:"s" %}selected{% endif %}>{{ tipo_u.descripcion_tp_user }}</option>
+                {% endfor %}
+            </select>
+
+            <fieldset style="margin: 0 0 0.9rem; padding: 0; border: 0;">
+                <legend style="margin-bottom: 0.35rem; font-weight: 600; color: #4b5563;">Roles</legend>
+                {% for rol in roles %}
+                    <label class="role-option" data-tipo="{{ rol.tipo_usuario.id_tp_user }}" style="display: block; margin-bottom: 0.4rem; font-weight: 500;">
+                        <input type="checkbox" name="roles" value="{{ rol.id_rol }}" style="margin-right: 0.45rem;" {% if rol.id_rol|stringformat:"s" in selected_roles %}checked{% endif %}>
+                        {{ rol.nombre_rol }}
+                    </label>
+                {% endfor %}
+            </fieldset>
+
+            <label for="correo">Correo</label>
+            <input type="email" id="correo" name="correo" value="{{ form_data.correo|default_if_none:'' }}" required>
+
+            <label for="password">Contraseña</label>
+            <input type="password" id="password" name="password" required>
+
+            <label for="password2">Confirmar contraseña</label>
+            <input type="password" id="password2" name="password2" required>
+
+            <button type="submit">Registrar</button>
+        </form>
+        <p style="margin-top: 1rem; text-align: center;">
+            ¿Ya tienes cuenta? <a href="{% url 'login' %}">Inicia sesión</a>
+        </p>
+    </div>
+    <script>
+        (function() {
+            const selectTipo = document.getElementById('id_tipo_usuario');
+            const roleLabels = document.querySelectorAll('.role-option');
+            const syncRoles = () => {
+                const tipo = selectTipo.value;
+                roleLabels.forEach(lbl => {
+                    const matches = !tipo || lbl.dataset.tipo === tipo;
+                    lbl.style.display = matches ? 'block' : 'none';
+                    if (!matches) {
+                        const input = lbl.querySelector('input[type="checkbox"]');
+                        input.checked = false;
+                    }
+                });
+            };
+            selectTipo.addEventListener('change', syncRoles);
+            syncRoles();
+        })();
+    </script>
+</body>
+</html>

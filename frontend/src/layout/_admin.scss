@@ -1,0 +1,78 @@
+.admin-header {
+  background: linear-gradient(90deg, #0f172a, #1d4ed8);
+  color: #fff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+
+  .logo {
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+  }
+
+  .admin-nav {
+    display: flex;
+    gap: 0.8rem;
+
+    a {
+      color: #e2e8f0;
+      text-decoration: none;
+      font-weight: 600;
+      padding: 0.45rem 0.75rem;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      background: rgba(255, 255, 255, 0.05);
+
+      &:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.12);
+      }
+    }
+  }
+
+  .admin-user {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    a {
+      color: #cbd5f5;
+      text-decoration: none;
+      font-weight: 700;
+
+      &:hover {
+        color: #fff;
+      }
+    }
+  }
+}
+
+.admin-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 10px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    color: #0f172a;
+    text-decoration: none;
+    font-weight: 600;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+    }
+  }
+}

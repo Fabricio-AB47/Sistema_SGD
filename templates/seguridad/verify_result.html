@@ -1,0 +1,19 @@
+﻿<!doctype html>
+<html>
+<body>
+  {% if status == "ok" %}
+    <h1>Correo verificado</h1>
+    <p>Tu correo ha sido verificado.</p>
+  {% elif status == "expired" %}
+    <h1>Token expirado</h1>
+    <p>Vuelve a solicitar el correo de verificación.</p>
+  {% elif status == "used" %}
+    <h1>Token ya usado</h1>
+  {% elif status == "inactive" %}
+    <h1>Cuenta inactiva</h1>
+  {% else %}
+    <h1>Token inválido</h1>
+  {% endif %}
+  <a href="{% url 'verify_request' %}">Volver</a>
+</body>
+</html>

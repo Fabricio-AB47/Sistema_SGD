@@ -1,0 +1,123 @@
+.admin-layout {
+  min-height: 100vh;
+  background: #f5f7fb;
+  color: #0f172a;
+  font-family: Arial, sans-serif;
+  display: grid;
+  grid-template-rows: auto 1fr;
+
+  .admin-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    background: #0f172a;
+    color: #fff;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
+
+    .logo {
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .admin-nav a {
+      color: #e2e8f0;
+      margin-right: 1rem;
+      text-decoration: none;
+      font-weight: 600;
+
+      &:hover {
+        color: #fff;
+      }
+    }
+
+    .admin-user {
+      font-weight: 600;
+
+      a {
+        color: #60a5fa;
+        margin-left: 0.5rem;
+      }
+    }
+  }
+
+  .admin-content {
+    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1rem;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+      color: #0f172a;
+    }
+
+    .card-meta {
+      color: #475569;
+      font-size: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+
+      label {
+        font-weight: 700;
+        color: #0f172a;
+      }
+
+      input,
+      select {
+        padding: 0.55rem 0.65rem;
+        border: 1px solid #d4d8e2;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+        &:focus {
+          outline: none;
+          border-color: #2563eb;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+      }
+
+      .combo-roles {
+        min-height: 140px;
+      }
+
+      .hint {
+        font-size: 0.8rem;
+        color: #64748b;
+      }
+    }
+
+    button {
+      align-self: flex-start;
+      padding: 0.6rem 1rem;
+      border: none;
+      background: linear-gradient(90deg, #2563eb, #1d4ed8);
+      color: #fff;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.28);
+      }
+    }
+  }
+}

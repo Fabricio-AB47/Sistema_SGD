@@ -1,0 +1,34 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Iniciar sesión</title>
+    <link rel="stylesheet" href="{% static 'dist/css/app.min.css' %}">
+</head>
+<body class="login-page">
+    <div class="login-card">
+        <h1>SGD - Iniciar sesión</h1>
+        {% if messages %}
+            <div class="login-messages">
+                {% for message in messages %}
+                    <div class="msg {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        <form method="post">
+            {% csrf_token %}
+            <label for="correo">Correo</label>
+            <input type="email" id="correo" name="correo" required>
+
+            <label for="password">Contraseña</label>
+            <input type="password" id="password" name="password" required>
+
+            <button type="submit">Ingresar</button>
+        </form>
+        <p style="margin-top: 1rem; text-align: center;">
+            ¿Olvidaste tu contraseña? <a href="{% url 'request_reset' %}">Restablécela aquí</a>
+        </p>
+    </div>
+</body>
+</html>

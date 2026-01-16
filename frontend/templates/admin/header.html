@@ -1,0 +1,18 @@
+<header class="admin-header">
+    <div class="logo">SIG Panel</div>
+    <nav class="admin-nav">
+        <a href="/">Inicio</a>
+        <a href="{% url 'admin_create_user' %}">Crear usuario</a>
+        <a href="{% url 'admin_user_role' %}">Usuario y roles</a>
+        <a href="{% url 'admin_criterio' %}">Criterios</a>
+        <a href="{% url 'admin_subcriterio' %}">Subcriterios</a>
+        <a href="{% url 'admin_tipo_indicador' %}">Tipos indicador</a>
+        <a href="{% url 'admin_indicador' %}">Indicadores</a>
+        <a href="#">Reportes</a>
+    </nav>
+    <div class="admin-user">
+        {% if usuario %}
+            <span>{{ usuario }}</span> | <a href="{% url 'logout' %}">Salir</a>
+        {% endif %}
+    </div>
+</header>

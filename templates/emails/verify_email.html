@@ -1,0 +1,14 @@
+﻿<!doctype html>
+<html>
+  <body>
+    <p>Hola {{ usuario.primer_nombre }},</p>
+    <p>Para verificar tu correo haz clic en el botón (expira en 24 horas):</p>
+    <p>
+      <a href="{{ verification_url }}" style="padding:10px 16px; background:#2563eb; color:#fff; text-decoration:none; border-radius:6px;">
+        Verificar correo
+      </a>
+    </p>
+    <p>Si no puedes hacer clic, copia y pega este enlace:<br>{{ verification_url }}</p>
+    <p>Gracias,<br>Equipo SGD</p>
+  </body>
+</html>

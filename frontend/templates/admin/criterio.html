@@ -1,0 +1,47 @@
+﻿{% extends "admin/base.html" %}
+{% block title %}Criterios{% endblock %}
+{% block header %}{% include "admin/header.html" %}{% endblock %}
+{% block content %}
+<div class="catalogs-page">
+  <div class="catalogs-wrapper two-col criterio-layout">
+    <section class="card">
+      <div class="card-title">Crear criterio</div>
+      {% if messages %}{% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}{% endif %}
+      <form method="post" class="form-grid single">
+        {% csrf_token %}
+        <div class="form-group">
+          <label>Nombre criterio</label>
+          <input type="text" name="nombre_criterio" placeholder="Nombre" required>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Guardar</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-title">Listado</div>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Criterio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in criterios %}
+            <tr>
+              <td>{{ c.id_criterio }}</td>
+              <td>{{ c.nombre_criterio }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="2">Sin registros.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

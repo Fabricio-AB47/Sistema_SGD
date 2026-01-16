@@ -1,0 +1,12 @@
+{% extends "admin/base.html" %}
+{% block title %}Panel - Gestion{% endblock %}
+{% block header %}{% include "admin/header.html" %}{% endblock %}
+{% block content %}
+<section class="card" style="text-align:center; padding:3rem 2rem;">
+    <div class="card-title">Panel de administracion</div>
+    <p>Usa el menu superior para crear usuarios, tipos de usuario o asignar roles.</p>
+    <p style="margin-top:1rem;">
+        <a class="btn-link" href="{% url 'admin_create_user' %}">Ir a crear usuario</a>
+    </p>
+</section>
+{% endblock %}
