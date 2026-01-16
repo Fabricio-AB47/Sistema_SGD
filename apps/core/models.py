@@ -315,7 +315,9 @@ class Auditoria(models.Model):
     id_registro = models.IntegerField(null=True, blank=True)
     descripcion = models.CharField(max_length=500)
     valores_nuevos = models.CharField(max_length=500, null=True, blank=True)
-    valor_anteriores = models.CharField(max_length=500, null=True, blank=True)
+    valores_anteriores = models.CharField(
+        max_length=500, null=True, blank=True, db_column="valores_anteriores"
+    )
     fecha_evento = models.DateTimeField()
     ip = models.CharField(max_length=50, null=True, blank=True)
     user_agent = models.CharField(max_length=300, null=True, blank=True)

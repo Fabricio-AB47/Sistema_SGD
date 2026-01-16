@@ -24,6 +24,7 @@ from apps.core.views import (
     subcriterio_view,
     tipo_indicador_view,
     indicador_view,
+    update_credential_view,
 )
 from apps.seguridad.views import (
     login_view,
@@ -37,6 +38,11 @@ urlpatterns = [
     path("", home, name="home"),
     path("admin/crear-usuario/", create_user_view, name="admin_create_user"),
     path("admin/asignacion-usuario-rol/", user_role_view, name="admin_user_role"),
+    path(
+        "admin/usuarios/<int:user_id>/credencial",
+        update_credential_view,
+        name="admin_user_credential",
+    ),
     path("admin/criterios/", criterio_view, name="admin_criterio"),
     path("admin/subcriterios/", subcriterio_view, name="admin_subcriterio"),
     path("admin/tipos-indicador/", tipo_indicador_view, name="admin_tipo_indicador"),

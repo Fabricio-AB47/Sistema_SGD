@@ -1,0 +1,111 @@
+@use "sass:meta";
+@use "variables" as v; // si falla la ruta, ajusta a "./variables" o "../variables"
+
+/** Media Queries **/
+@mixin telefono {
+  @media (min-width: v.$mobile) { @content; }
+}
+@mixin tablet {
+  @media (min-width: v.$tablet) { @content; }
+}
+@mixin desktop {
+  @media (min-width: v.$desktop) { @content; }
+}
+
+/* --- Mixins genéricos compatibles con otros parciales --- */
+/* Mobile-first: min-width */
+@mixin up($bp) {
+  @if meta.type-of($bp) == 'string' {
+    @if $bp == telefono or $bp == phone { @media (min-width: v.$mobile) { @content; } }
+    @else if $bp == tablet              { @media (min-width: v.$tablet) { @content; } }
+    @else if $bp == laptop              { @media (min-width: v.$laptop) { @content; } }
+    @else if $bp == desktop             { @media (min-width: v.$desktop){ @content; } }
+    @else { @warn "up(#{$bp}) no reconocido"; @content; }
+  } @else if meta.type-of($bp) == 'number' {
+    @media (min-width: $bp) { @content; }
+  } @else {
+    @warn "up(#{$bp}) tipo no soportado"; @content;
+  }
+}
+
+/* Hasta antes de un breakpoint */
+@mixin down($bp) {
+  $max: null;
+  @if meta.type-of($bp) == 'string' {
+    @if $bp == telefono or $bp == phone { $max: v.$mobile - 0.02px; }
+    @else if $bp == tablet              { $max: v.$tablet - 0.02px; }
+    @else if $bp == laptop              { $max: v.$laptop - 0.02px; }
+    @else if $bp == desktop             { $max: v.$desktop - 0.02px; }
+  } @else if meta.type-of($bp) == 'number' {
+    $max: $bp - 0.02px;
+  }
+  @if $max != null { @media (max-width: $max) { @content; } } @else { @content; }
+}
+
+/* Entre dos breakpoints (incluye min y excluye max) */
+@mixin between($from, $to) {
+  $min: null; $max: null;
+
+  @if meta.type-of($from) == 'string' {
+    @if $from == telefono or $from == phone { $min: v.$mobile; }
+    @else if $from == tablet                { $min: v.$tablet; }
+    @else if $from == laptop                { $min: v.$laptop; }
+    @else if $from == desktop               { $min: v.$desktop; }
+  } @else if meta.type-of($from) == 'number' { $min: $from; }
+
+  @if meta.type-of($to) == 'string' {
+    @if $to == telefono or $to == phone { $max: v.$mobile - 0.02px; }
+    @else if $to == tablet              { $max: v.$tablet - 0.02px; }
+    @else if $to == laptop              { $max: v.$laptop - 0.02px; }
+    @else if $to == desktop             { $max: v.$desktop - 0.02px; }
+  } @else if meta.type-of($to) == 'number' { $max: $to - 0.02px; }
+
+  @if $min != null and $max != null {
+    @media (min-width: $min) and (max-width: $max) { @content; }
+  } @else {
+    @content;
+  }
+}
+
+/* Helper rápido para un mismo prop en diferentes tamaños */
+@mixin responsive($prop, $phone, $tablet:null, $laptop:null, $desktop:null) {
+  #{$prop}: $phone;
+  @if $tablet  != null { @include up(tablet)  { #{$prop}: $tablet; } }
+  @if $laptop  != null { @include up(laptop)  { #{$prop}: $laptop; } }
+  @if $desktop != null { @include up(desktop) { #{$prop}: $desktop; } }
+}
+
+/* Tipografía fluida */
+@mixin fluid-type($min, $max, $minVw:360px, $maxVw:1280px) {
+  font-size: clamp($min,
+    calc(#{$min} + (#{$max} - #{$min}) * ((100vw - #{$minVw}) / (#{$maxVw} - #{$minVw}))),
+    $max);
+}
+
+/* Botón utilitario (usa variables globales) */
+@mixin boton($bgColor:v.$btn-bg, $display:inline-flex) {
+  background: $bgColor;
+  color: v.$btn-color;
+  font-weight: v.$btn-weight;
+  text-decoration: none;
+  padding: v.$btn-padding-y v.$btn-padding-x;
+  text-align: center;
+  display: $display;
+  border: none;
+  border-radius: v.$btn-radius;
+  box-shadow: v.$btn-shadow;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: v.$btn-shadow-hover;
+    cursor: pointer;
+  }
+}
+
+/* Grid utilitario */
+@mixin grid($columnas, $espaciado) {
+  display: grid;
+  gap: $espaciado;
+  grid-template-columns: repeat($columnas, 1fr);
+}

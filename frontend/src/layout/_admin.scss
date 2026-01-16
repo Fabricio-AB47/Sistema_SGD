@@ -1,16 +1,37 @@
+@use "../variables/variables" as v;
+@use "../variables/mixins" as m;
+
 .admin-header {
-  background: linear-gradient(90deg, #0f172a, #1d4ed8);
-  color: #fff;
+  background: linear-gradient(90deg, v.$primario, v.$primario_oscuro);
+  color: v.$blanco;
   padding: 1rem 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: v.$sombra_media;
 
   .logo {
-    font-weight: 800;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.45rem 0.75rem;
+    background: v.$gris;
+    border-radius: 10px;
+    box-shadow: inset 0 1px 0 rgba(v.$blanco, 0.3);
+
+    img {
+      display: block;
+      max-height: 53px;
+      width: auto;
+    }
+
+    .logo-text {
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      color: v.$blanco;
+      text-transform: uppercase;
+      font-size: 1rem;
+    }
   }
 
   .admin-nav {
@@ -18,17 +39,17 @@
     gap: 0.8rem;
 
     a {
-      color: #e2e8f0;
+      color: v.$blanco;
       text-decoration: none;
       font-weight: 600;
       padding: 0.45rem 0.75rem;
       border-radius: 8px;
       transition: all 0.2s ease;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(v.$blanco, 0.08);
 
       &:hover {
-        color: #fff;
-        background: rgba(255, 255, 255, 0.12);
+        color: v.$blanco;
+        background: rgba(v.$blanco, 0.16);
       }
     }
   }
@@ -40,12 +61,12 @@
     gap: 0.5rem;
 
     a {
-      color: #cbd5f5;
+      color: v.$acento;
       text-decoration: none;
       font-weight: 700;
 
       &:hover {
-        color: #fff;
+        color: v.$blanco;
       }
     }
   }
@@ -62,17 +83,17 @@
     gap: 0.45rem;
     padding: 0.65rem 0.85rem;
     border-radius: 10px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    color: #0f172a;
+    background: v.$fondo_panel;
+    border: 1px solid v.$borde_suave;
+    color: v.$texto_principal;
     text-decoration: none;
     font-weight: 600;
-    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+    box-shadow: v.$sombra_suave;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 
     &:hover {
         transform: translateY(-2px);
-        box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+        box-shadow: v.$sombra_media;
     }
   }
 }

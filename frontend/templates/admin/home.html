@@ -2,11 +2,84 @@
 {% block title %}Panel - Gestion{% endblock %}
 {% block header %}{% include "admin/header.html" %}{% endblock %}
 {% block content %}
-<section class="card" style="text-align:center; padding:3rem 2rem;">
-    <div class="card-title">Panel de administracion</div>
-    <p>Usa el menu superior para crear usuarios, tipos de usuario o asignar roles.</p>
-    <p style="margin-top:1rem;">
-        <a class="btn-link" href="{% url 'admin_create_user' %}">Ir a crear usuario</a>
-    </p>
+<section class="dashboard-grid">
+  <div class="card dash-card">
+    <div class="card-title">Usuarios inactivos</div>
+    <div class="dash-number">{{ usuarios_inactivos }}</div>
+    {% if usuarios_inactivos|add:'0' > 0 %}
+      <button class="btn-secondary" id="showUsers2">Ver usuarios</button>
+    {% else %}
+      <span class="hint">Sin usuarios inactivos</span>
+    {% endif %}
+  </div>
+  <div class="card dash-card">
+    <div class="card-title">Usuarios activos</div>
+    <div class="dash-number">{{ usuarios_activos }}</div>
+    <button class="btn-secondary" id="showUsers">Ver usuarios</button>
+  </div>
 </section>
+
+<div class="roles-modal" id="usersModal" hidden>
+  <div class="roles-modal__backdrop"></div>
+  <div class="roles-modal__content" style="width:min(900px,95vw); max-height:90vh;">
+    <div class="roles-modal__header">
+      <h3>Usuarios y roles</h3>
+    </div>
+    <div class="roles-modal__body" style="padding:0;">
+      <div class="table-wrapper wide-table">
+        <table class="data-table wide">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Correo</th>
+              <th>Estado</th>
+              <th>Roles</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for u in usuarios %}
+            <tr>
+              <td>{{ u.id_user }}</td>
+              <td>{{ u.primer_nombre }} {{ u.primer_apellido }}</td>
+              <td>{{ u.correo }}</td>
+              <td>{{ u.activo|yesno:"Activo,Inactivo" }}</td>
+              <td>
+                {% with roles_list=u.roles_asignados.all %}
+                  {% if roles_list %}
+                    {{ roles_list|join:", " }}
+                  {% else %}
+                    Sin rol
+                  {% endif %}
+                {% endwith %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5">Sin usuarios registrados.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="roles-modal__footer">
+      <button type="button" class="btn-ghost" id="hideUsers">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const modal = document.getElementById('usersModal');
+    const show1 = document.getElementById('showUsers');
+    const show2 = document.getElementById('showUsers2');
+    const hideBtn = document.getElementById('hideUsers');
+    const backdrop = modal.querySelector('.roles-modal__backdrop');
+    function open(){ modal.hidden = false; }
+    function close(){ modal.hidden = true; }
+    show1?.addEventListener('click', open);
+    show2?.addEventListener('click', open);
+    hideBtn?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
+  })();
+</script>
 {% endblock %}

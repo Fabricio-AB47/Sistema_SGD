@@ -6,6 +6,7 @@ from django.db.utils import OperationalError
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
+from apps.seguridad.views import _send_reset_email
 from apps.seguridad.models import (
     Rol,
     TipoIdentificacion,
@@ -69,6 +70,7 @@ def home(request):
             messages.error(request, f"Error: {exc}")
         return redirect("home")
 
+    usuarios_qs = Usuario.objects.all().prefetch_related("roles_asignados__rol", "roles_asignados")
     context = {
         "db_status": status,
         "db_info": {
@@ -83,7 +85,9 @@ def home(request):
         "tipos_ident": TipoIdentificacion.objects.all(),
         "tipos_usuario": TipoUsuario.objects.filter(activo_tp_user=True),
         "roles": Rol.objects.filter(activo=True),
-        "usuarios": Usuario.objects.filter(activo=True),
+        "usuarios": usuarios_qs,
+        "usuarios_activos": usuarios_qs.filter(activo=True).count(),
+        "usuarios_inactivos": usuarios_qs.filter(activo=False).count(),
     }
     return render(request, "admin/home.html", context)
 
@@ -177,6 +181,67 @@ def create_user_view(request):
         "usuario": request.session.get("usuario_nombre"),
     }
     return render(request, "admin/user_create.html", context)
+
+
+def update_credential_view(request, user_id):
+    """
+    Actualiza la credencial (intentos, bloqueo, requiere cambio) de un usuario.
+    Tras guardar, redirige a crear usuario con mensaje de exito o error.
+    """
+    if not request.session.get("usuario_id"):
+        return redirect("login")
+
+    if request.method != "POST":
+        messages.error(request, "Metodo no permitido.")
+        return redirect("admin_create_user")
+
+    try:
+        usuario = Usuario.objects.get(pk=user_id)
+    except Usuario.DoesNotExist:
+        messages.error(request, "Usuario no encontrado.")
+        return redirect("admin_create_user")
+
+    intentos = request.POST.get("intentos_fallidos") or "0"
+    bloqueado_hasta_raw = request.POST.get("bloqueado_hasta", "")
+    requiere_cambio = bool(request.POST.get("requiere_cambio"))
+
+    bloqueado_dt = None
+    if bloqueado_hasta_raw:
+        try:
+            bloqueado_dt = timezone.make_aware(
+                timezone.datetime.fromisoformat(bloqueado_hasta_raw)
+            )
+        except Exception:
+            bloqueado_dt = None
+
+    try:
+        cred, _ = UsuarioCredencial.objects.update_or_create(
+            usuario=usuario,
+            defaults={
+                "intentos_fallidos": int(intentos or 0),
+                "bloqueado_hasta": bloqueado_dt,
+                "requiere_cambio": requiere_cambio,
+            },
+        )
+        # Si requiere cambio, opcionalmente reiniciar ultimo_login
+        if requiere_cambio:
+            cred.ultimo_login = None
+            cred.save(update_fields=["ultimo_login"])
+            # Enviar enlace de restablecimiento inmediato
+            try:
+                _send_reset_email(usuario, request)
+                messages.success(
+                    request,
+                    "Credencial actualizada. Se ha enviado enlace de cambio de contrasena y no podra iniciar sesion hasta cambiarla.",
+                )
+            except Exception as exc:
+                messages.warning(request, f"Credencial actualizada pero no se pudo enviar el correo: {exc}")
+        else:
+            messages.success(request, "Credencial actualizada correctamente.")
+    except Exception as exc:
+        messages.error(request, f"No se pudo actualizar la credencial: {exc}")
+
+    return redirect("admin_create_user")
 
 
 def user_role_view(request):

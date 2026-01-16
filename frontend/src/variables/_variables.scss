@@ -1,0 +1,58 @@
+/* Importación de Fuentes de Google Fonts */
+@import url('https://fonts.googleapis.com/css?family=Lato:300,400,700,900');
+
+/* Fuente principal */
+$fuente_principal: 'Lato', sans-serif;
+$fuente_encabezados: $fuente_principal;
+
+/* Colores base */
+$rojo: #931913; /* Rojo principal */
+$celeste: #8DBBC7; /* Celeste secundario */
+$blanco: #ffffff; /* Blanco */
+$gris: #C7C6C6; /* Gris claro */
+$gris_oscuro: #777777; /* Gris oscuro */
+$negro: #000000;
+
+/* Paleta derivada */
+$primario: $rojo;
+$primario_oscuro: darken($primario, 8%);
+$primario_claro: lighten($primario, 18%);
+$acento: $celeste;
+$acento_oscuro: darken($acento, 10%);
+$acento_claro: lighten($acento, 25%);
+$texto_principal: $negro;
+$texto_secundario: $gris_oscuro;
+$texto_suave: lighten($gris_oscuro, 15%);
+$fondo_base: lighten($celeste, 42%);
+$fondo_suave: lighten($celeste, 32%);
+$fondo_panel: $blanco;
+$borde_suave: darken($gris, 4%);
+$borde_claro: lighten($gris, 6%);
+$sombra_suave: 0 10px 22px rgba($negro, 0.08);
+$sombra_media: 0 14px 28px rgba($negro, 0.14);
+$focus: rgba($acento, 0.45);
+
+/* Botones */
+$btn-bg: linear-gradient(120deg, $primario, $primario_oscuro);
+$btn-color: $blanco;
+$btn-weight: 700;
+$btn-padding-y: 0.65rem;
+$btn-padding-x: 1.15rem;
+$btn-radius: 10px;
+$btn-shadow: 0 10px 22px rgba($primario, 0.25);
+$btn-shadow-hover: 0 12px 26px rgba($primario, 0.3);
+
+/* Tamaños de Media Queries (Breakpoints) */
+$mobile: 480px;
+$tablet: 768px;
+$laptop: 992px;
+$desktop: 1024px;
+
+/* Espaciado general */
+$separacion: 5rem;
+
+/* Pesos de fuente */
+$delgada: 300;
+$regular: 400;
+$bold: 700;
+$black: 900;

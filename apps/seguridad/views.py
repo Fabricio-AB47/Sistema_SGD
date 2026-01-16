@@ -7,9 +7,12 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import EmailMultiAlternatives
+from django.core.mail import get_connection
 from django.db import transaction
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.utils.http import urlencode
+import os
 
 from apps.seguridad.models import (
     EmailVerificationToken,
@@ -20,8 +23,29 @@ from apps.seguridad.models import (
     UsuarioCredencial,
     UsuarioRol,
     UserSession,
+    UserActivity,
 )
 from apps.seguridad.email_service import send_verification_email
+from apps.seguridad.utils import audit_log
+
+
+def _format_from(raw_from):
+    """
+    Si raw_from es solo nombre, arma "Nombre <correo@...>".
+    Si incluye un correo, se devuelve tal cual.
+    """
+    if raw_from:
+        if "@" in raw_from:
+            return raw_from
+        base_email = (
+            getattr(settings, "MAIL_USER", None)
+            or settings.EMAIL_HOST_USER
+            or getattr(settings, "DEFAULT_FROM_EMAIL", None)
+        )
+        if base_email:
+            return f'"{raw_from}" <{base_email}>'
+        return raw_from
+    return settings.EMAIL_HOST_USER or getattr(settings, "DEFAULT_FROM_EMAIL", None)
 
 
 def _normalize_password_hash(raw_value):
@@ -52,6 +76,72 @@ def _password_matches(plain, stored_hash):
     return plain == stored_hash
 
 
+def _send_reset_email(usuario, request):
+    """
+    Genera un enlace de restablecimiento (token temporal en sesion) y envia correo.
+    Se reutiliza la misma logica del flujo de reset simple.
+    """
+    token = secrets.token_urlsafe(32)
+    params = urlencode({"token": token, "correo": usuario.correo})
+    reset_link = request.build_absolute_uri(f"/reset-password/confirm/?{params}")
+    request.session["reset_token"] = token
+    request.session["reset_correo"] = usuario.correo
+    request.session["reset_created_at"] = timezone.now().isoformat()
+
+    subject = "Restablecimiento de contrasena"
+    body = (
+        f"Hola {usuario.primer_nombre},\n\n"
+        f"Usa este enlace para restablecer tu contrasena:\n{reset_link}\n\n"
+        "Si no solicitaste esto, ignora el correo."
+    )
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=body,
+        from_email=_format_from(
+            getattr(settings, "MAIL_FROM_2", None)
+            or os.environ.get("MAIL_FROM_2")
+            or "Notificacion de Cambio restablecimiento de Contraseña"
+        ),
+        to=[usuario.correo],
+        cc=[settings.MAIL_CC] if getattr(settings, "MAIL_CC", "") else [],
+    )
+    msg.send(fail_silently=True)
+
+
+def _send_alert_email(to_email, subject, body):
+    """
+    Envía alertas simples (exitos/fallas) sin romper el flujo.
+    Si se definen credenciales alternativas (ALERT_EMAIL_*), las usa; caso contrario usa las globales.
+    """
+    try:
+        alert_host = getattr(settings, "ALERT_EMAIL_HOST", None)
+        conn = None
+        if alert_host:
+            conn = get_connection(
+                host=alert_host,
+                port=getattr(settings, "ALERT_EMAIL_PORT", settings.EMAIL_PORT),
+                username=getattr(settings, "ALERT_EMAIL_USER", settings.EMAIL_HOST_USER),
+                password=getattr(settings, "ALERT_EMAIL_PASSWORD", settings.EMAIL_HOST_PASSWORD),
+                use_tls=getattr(settings, "ALERT_EMAIL_USE_TLS", settings.EMAIL_USE_TLS),
+                use_ssl=getattr(settings, "ALERT_EMAIL_USE_SSL", getattr(settings, "EMAIL_USE_SSL", False)),
+                timeout=getattr(settings, "EMAIL_TIMEOUT", 20),
+            )
+        raw_from = getattr(settings, "MAIL_FROM_1", None) or os.environ.get("MAIL_FROM_1")
+        from_addr = _format_from(raw_from)
+        msg = EmailMultiAlternatives(
+            subject=subject,
+            body=body,
+            from_email=from_addr,
+            to=[to_email],
+            cc=[settings.MAIL_CC] if getattr(settings, "MAIL_CC", "") else [],
+            connection=conn,
+            reply_to=[from_addr] if from_addr else None,
+        )
+        msg.send(fail_silently=True)
+    except Exception:
+        pass
+
+
 def login_view(request):
     if request.session.get("usuario_id"):
         return redirect("home")
@@ -64,6 +154,7 @@ def login_view(request):
             messages.error(request, "Ingrese correo y contrasena.")
             return render(request, "auth/login.html")
 
+        now = timezone.localtime(timezone.now())
         try:
             usuario = Usuario.objects.get(correo=correo)
             credencial = usuario.credencial
@@ -71,13 +162,67 @@ def login_view(request):
             messages.error(request, "Usuario o contrasena incorrectos.")
             return render(request, "auth/login.html")
 
+        # Bloqueo temporal por intentos fallidos
+        if credencial.bloqueado_hasta and credencial.bloqueado_hasta > now:
+            messages.error(
+                request,
+                f"Usuario bloqueado hasta {timezone.localtime(credencial.bloqueado_hasta).strftime('%Y-%m-%d %H:%M')}.",
+            )
+            return render(request, "auth/login.html")
+
         stored_hash = _normalize_password_hash(credencial.password_hash)
         # Valida contra hash PBKDF2 (robusto, con sal e iteraciones)
         if not _password_matches(password, stored_hash):
-            messages.error(request, "Usuario o contrasena incorrectos.")
+            # Incrementa intentos y bloquea 5 minutos si llega a 3
+            new_fails = (credencial.intentos_fallidos or 0) + 1
+            bloqueado_hasta = None
+            if new_fails >= 3:
+                bloqueado_hasta = now + timedelta(minutes=5)
+                messages.error(
+                    request,
+                    "Has superado el limite de intentos. Usuario bloqueado por 5 minutos.",
+                )
+            else:
+                messages.error(request, "Usuario o contrasena incorrectos.")
+
+            UsuarioCredencial.objects.filter(usuario=usuario).update(
+                intentos_fallidos=new_fails,
+                bloqueado_hasta=bloqueado_hasta,
+            )
+            # Alerta por correo de intento fallido
+            _send_alert_email(
+                usuario.correo,
+                "Alerta: intento de acceso fallido",
+                (
+                    f"Hola {usuario.primer_nombre},\n\n"
+                    f"Se registró un intento de acceso fallido a tu cuenta.\n"
+                    f"Intentos acumulados: {new_fails}.\n"
+                    f"IP: {request.META.get('REMOTE_ADDR', '-')}\n"
+                    f"Navegador: {request.META.get('HTTP_USER_AGENT', '-')[:200]}\n"
+                    + (
+                        f"\nTu cuenta quedó bloqueada hasta {timezone.localtime(bloqueado_hasta).strftime('%Y-%m-%d %H:%M')}."
+                        if bloqueado_hasta
+                        else ""
+                    )
+                ),
+            )
             return render(request, "auth/login.html")
 
-        now = timezone.localtime(timezone.now())
+        # Si requiere cambio de contrasena, no permitir login y enviar enlace
+        if credencial.requiere_cambio:
+            try:
+                _send_reset_email(usuario, request)
+                messages.error(
+                    request,
+                    "Debes cambiar tu contrasena antes de ingresar. Te enviamos un enlace de restablecimiento.",
+                )
+            except Exception as exc:
+                messages.error(
+                    request,
+                    f"Debes cambiar tu contrasena antes de ingresar. No se pudo enviar el correo: {exc}",
+                )
+            return render(request, "auth/login.html")
+
         idle_minutes = getattr(settings, "SESSION_IDLE_MINUTES", 15)
         fecha_exp = now + timezone.timedelta(minutes=idle_minutes)
         try:
@@ -89,10 +234,50 @@ def login_view(request):
                 ip=request.META.get("REMOTE_ADDR", ""),
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:300],
             )
-            UsuarioCredencial.objects.filter(usuario=usuario).update(ultimo_login=now)
+            UsuarioCredencial.objects.filter(usuario=usuario).update(
+                ultimo_login=now, intentos_fallidos=0, bloqueado_hasta=None
+            )
             request.session["user_session_id"] = session_obj.id_sesion
         except Exception:
             # No bloquear el login si falla el registro de sesion
+            pass
+
+        # Alerta por correo de inicio de sesión exitoso
+        _send_alert_email(
+            usuario.correo,
+            "Inicio de sesión exitoso",
+            (
+                f"Hola {usuario.primer_nombre},\n\n"
+                f"Iniciaste sesión correctamente el {now.strftime('%Y-%m-%d %H:%M')}.\n"
+                f"IP: {request.META.get('REMOTE_ADDR', '-')}\n"
+                f"Navegador: {request.META.get('HTTP_USER_AGENT', '-')[:200]}"
+            ),
+        )
+
+        # Registro de actividad de usuario (login) y auditoria
+        try:
+            activity = UserActivity.objects.create(
+                usuario=usuario,
+                login_at=now,
+                last_seen_at=now,
+                logout_at=None,
+                ip=request.META.get("REMOTE_ADDR", ""),
+                user_agent=request.META.get("HTTP_USER_AGENT", "")[:300],
+            )
+            request.session["user_activity_id"] = activity.id_user_act
+        except Exception:
+            request.session.pop("user_activity_id", None)
+
+        try:
+            audit_log(
+                usuario_id=usuario.id_user,
+                accion="LOGIN",
+                tabla="usuario",
+                id_registro=usuario.id_user,
+                descripcion="Inicio de sesion",
+                request=request,
+            )
+        except Exception:
             pass
 
         request.session["usuario_id"] = usuario.id_user
@@ -104,6 +289,29 @@ def login_view(request):
 
 
 def logout_view(request):
+    usuario_id = request.session.get("usuario_id")
+    activity_id = request.session.get("user_activity_id")
+    now = timezone.localtime(timezone.now())
+
+    if activity_id:
+        try:
+            UserActivity.objects.filter(pk=activity_id).update(logout_at=now, last_seen_at=now)
+        except Exception:
+            pass
+
+    if usuario_id:
+        try:
+            audit_log(
+                usuario_id=usuario_id,
+                accion="LOGOUT",
+                tabla="usuario",
+                id_registro=usuario_id,
+                descripcion="Cierre de sesion",
+                request=request,
+            )
+        except Exception:
+            pass
+
     request.session.flush()
     return redirect("login")
 
@@ -330,7 +538,11 @@ def request_reset_view(request):
         msg = EmailMultiAlternatives(
             subject=subject,
             body=body,
-            from_email=settings.DEFAULT_FROM_EMAIL or settings.EMAIL_HOST_USER,
+            from_email=_format_from(
+                getattr(settings, "MAIL_FROM_2", None)
+                or os.environ.get("MAIL_FROM_2")
+                or "Notificacion de Cambio restablecimiento de Contraseña"
+            ),
             to=[correo],
             cc=[settings.MAIL_CC] if getattr(settings, "MAIL_CC", "") else [],
         )

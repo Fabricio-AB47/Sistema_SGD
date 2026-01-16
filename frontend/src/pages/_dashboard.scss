@@ -1,33 +1,57 @@
+@use "../variables/variables" as v;
+@use "../variables/mixins" as m;
+
 .admin-layout {
   min-height: 100vh;
-  background: #f5f7fb;
-  color: #0f172a;
-  font-family: Arial, sans-serif;
+  background: v.$fondo_base;
+  color: v.$texto_principal;
+  font-family: v.$fuente_principal;
   display: grid;
   grid-template-rows: auto 1fr;
+   overflow-x: hidden;
+   width: 100%;
 
   .admin-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 1rem 1.5rem;
-    background: #0f172a;
-    color: #fff;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.25);
+    background: linear-gradient(90deg, v.$primario, v.$primario_oscuro);
+    color: v.$blanco;
+    box-shadow: v.$sombra_media;
 
     .logo {
-      font-weight: 700;
-      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 0.45rem 0.75rem;
+      background: v.$gris;
+      border-radius: 10px;
+      box-shadow: inset 0 1px 0 rgba(v.$blanco, 0.3);
+
+      img {
+        display: block;
+        max-height: 53px;
+        width: auto;
+      }
+
+      .logo-text {
+        font-weight: 800;
+        letter-spacing: 0.8px;
+        color: v.$blanco;
+        text-transform: uppercase;
+        font-size: 1rem;
+      }
     }
 
     .admin-nav a {
-      color: #e2e8f0;
+      color: v.$blanco;
       margin-right: 1rem;
       text-decoration: none;
       font-weight: 600;
 
       &:hover {
-        color: #fff;
+        color: v.$blanco;
       }
     }
 
@@ -35,7 +59,7 @@
       font-weight: 600;
 
       a {
-        color: #60a5fa;
+        color: v.$acento;
         margin-left: 0.5rem;
       }
     }
@@ -44,16 +68,16 @@
   .admin-content {
     padding: 1.5rem;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.2rem;
   }
 
   .card {
-    background: #fff;
-    border: 1px solid #e5e7eb;
+    background: v.$fondo_panel;
+    border: 1px solid v.$borde_suave;
     border-radius: 10px;
     padding: 1rem;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    box-shadow: v.$sombra_suave;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -62,11 +86,11 @@
       font-size: 1.05rem;
       font-weight: 700;
       margin-bottom: 0.4rem;
-      color: #0f172a;
+      color: v.$texto_principal;
     }
 
     .card-meta {
-      color: #475569;
+      color: v.$texto_secundario;
       font-size: 0.9rem;
       display: flex;
       flex-direction: column;
@@ -74,21 +98,23 @@
 
       label {
         font-weight: 700;
-        color: #0f172a;
+        color: v.$texto_principal;
       }
 
       input,
       select {
         padding: 0.55rem 0.65rem;
-        border: 1px solid #d4d8e2;
+        border: 1px solid v.$borde_suave;
         border-radius: 8px;
         font-size: 0.95rem;
         transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        background: v.$fondo_panel;
+        color: v.$texto_principal;
 
         &:focus {
           outline: none;
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+          border-color: v.$acento_oscuro;
+          box-shadow: 0 0 0 3px v.$focus;
         }
       }
 
@@ -98,26 +124,13 @@
 
       .hint {
         font-size: 0.8rem;
-        color: #64748b;
+        color: v.$texto_suave;
       }
     }
 
     button {
       align-self: flex-start;
-      padding: 0.6rem 1rem;
-      border: none;
-      background: linear-gradient(90deg, #2563eb, #1d4ed8);
-      color: #fff;
-      font-weight: 700;
-      border-radius: 8px;
-      cursor: pointer;
-      box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-
-      &:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.28);
-      }
+      @include m.boton();
     }
   }
 }

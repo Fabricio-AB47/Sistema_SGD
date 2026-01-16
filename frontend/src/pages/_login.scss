@@ -1,6 +1,9 @@
+@use "../variables/variables" as v;
+@use "../variables/mixins" as m;
+
 .login-page {
-  font-family: Arial, sans-serif;
-  background: #f7f7f9;
+  font-family: v.$fuente_principal;
+  background: v.$fondo_base;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -9,49 +12,47 @@
 
   .login-card {
     width: 380px;
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
+    background: v.$fondo_panel;
+    border: 1px solid v.$borde_suave;
+    border-radius: v.$btn-radius;
     padding: 1.75rem;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+    box-shadow: v.$sombra_suave;
 
     h1 {
       margin: 0 0 1rem;
       font-size: 1.5rem;
       text-align: center;
-      color: #111827;
+      color: v.$primario;
     }
 
     label {
       display: block;
       margin-bottom: 0.35rem;
-      color: #4b5563;
+      color: v.$texto_secundario;
       font-weight: 600;
     }
 
     input {
       width: 100%;
       padding: 0.65rem 0.75rem;
-      border: 1px solid #d1d5db;
+      border: 1px solid v.$borde_suave;
       border-radius: 8px;
       font-size: 0.95rem;
       margin-bottom: 0.9rem;
       box-sizing: border-box;
+      background: v.$fondo_panel;
+      color: v.$texto_principal;
+
+      &:focus {
+        outline: none;
+        border-color: v.$acento_oscuro;
+        box-shadow: 0 0 0 3px v.$focus;
+      }
     }
 
     button {
       width: 100%;
-      padding: 0.65rem;
-      background: #2563eb;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      font-weight: 700;
-      cursor: pointer;
-
-      &:hover {
-        background: #1d4ed8;
-      }
+      @include m.boton(v.$btn-bg, block);
     }
 
     .login-messages {
@@ -63,15 +64,15 @@
         font-size: 0.9rem;
 
         &.error {
-          background: #fdecec;
-          border: 1px solid #f3b8b8;
-          color: #b42318;
+          background: lighten(v.$primario, 44%);
+          border: 1px solid lighten(v.$primario, 20%);
+          color: v.$primario_oscuro;
         }
 
         &.success {
-          background: #e1f7e6;
-          border: 1px solid #b8e4c3;
-          color: #0f7b32;
+          background: lighten(v.$acento, 35%);
+          border: 1px solid lighten(v.$acento, 18%);
+          color: darken(v.$acento, 18%);
         }
       }
     }

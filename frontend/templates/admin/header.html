@@ -1,5 +1,9 @@
+{% load static %}
 <header class="admin-header">
-    <div class="logo">SIG Panel</div>
+    <div class="logo">
+        <img src="{% static 'dist/img/Intec-Logowithsloganwhite.svg' %}" alt="Intec logo"><br>
+        <span class="logo-text">SIG panel</span>
+    </div>
     <nav class="admin-nav">
         <a href="/">Inicio</a>
         <a href="{% url 'admin_create_user' %}">Crear usuario</a>

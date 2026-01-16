@@ -14,7 +14,10 @@
                 {% endfor %}
             </div>
         {% endif %}
-        <button type="button" class="btn-secondary" id="openUsersModal">Ver usuarios</button>
+        <div class="actions-inline">
+            <button type="button" class="btn-secondary" id="openUsersModal">Ver usuarios</button>
+            <button type="button" class="btn-secondary" id="openCredListModal">Ver credenciales</button>
+        </div>
         <form method="post" class="user-create-form">
             {% csrf_token %}
             <div class="card-meta">
@@ -107,6 +110,8 @@
                                 data-correo="{{ u.correo }}"
                                 data-tipo-ident="{{ u.id_tipo_identificacion }}"
                                 data-tipo-usuario="{{ u.tipo_usuario_id }}"
+                                data-user-email="{{ u.correo }}"
+                                data-user-fullname="{{ u.primer_nombre }} {{ u.primer_apellido }}"
                             >Editar</button>
                             <a class="btn-ghost" href="/admin/usuarios/{{ u.id_user }}/eliminar">Eliminar</a>
                         </td>
@@ -237,6 +242,104 @@
     </div>
 </div>
 
+<div class="roles-modal" id="credentialModal" hidden>
+    <div class="roles-modal__backdrop"></div>
+    <div class="roles-modal__content" style="width:min(520px,90vw); max-height:85vh;">
+        <div class="roles-modal__header">
+            <h3>Credencial de usuario</h3>
+            <small id="credUserInfo" class="roles-summary"></small>
+        </div>
+        <form id="credentialForm" method="post" class="roles-modal__body" style="gap:0.75rem;">
+            {% csrf_token %}
+            <input type="hidden" name="id_user" id="cred_id_user">
+            <div class="card-meta">
+                <label>Intentos fallidos</label>
+                <input class="cred-input" type="number" name="intentos_fallidos" id="cred_intentos" min="0" value="0" style="max-width:260px;">
+                <small class="hint">Si es distinto de 0, el login tomara este contador y bloqueara segun la politica.</small>
+            </div>
+            <div class="card-meta">
+                <label>Bloqueado hasta (opcional)</label>
+                <input class="cred-input" type="datetime-local" name="bloqueado_hasta" id="cred_bloqueado" style="max-width:320px;">
+            </div>
+            <div class="card-meta">
+                <label>Requiere cambio de contraseña</label>
+                <input type="checkbox" name="requiere_cambio" id="cred_requiere">
+            </div>
+            <div class="card-meta">
+                <label>Último login</label>
+                <input class="cred-input" type="text" id="cred_ultimo_login" readonly placeholder="Se muestra cuando exista registro" style="max-width:380px;">
+            </div>
+            <div class="card-meta">
+                <label>Fecha cambio de contraseña</label>
+                <input class="cred-input" type="text" id="cred_fecha_cambio" readonly placeholder="Se muestra cuando exista registro" style="max-width:380px;">
+            </div>
+        </form>
+        <div class="roles-modal__footer">
+            <button type="button" id="credCancel" class="btn-ghost">Cancelar</button>
+            <button type="submit" form="credentialForm" class="btn-primary">Guardar credencial</button>
+        </div>
+    </div>
+</div>
+
+<div class="roles-modal" id="credListModal" hidden>
+    <div class="roles-modal__backdrop"></div>
+    <div class="roles-modal__content" style="width:min(960px,95vw); max-height:85vh;">
+        <div class="roles-modal__header">
+            <h3>Credenciales (usuario + hash)</h3>
+        </div>
+        <div class="roles-modal__body" style="padding:0;">
+            <div class="table-wrapper wide-table">
+                <table class="data-table wide">
+                    <thead>
+                        <tr>
+                            <th>ID usuario</th>
+                            <th>Nombre</th>
+                            <th>Correo</th>
+                            <th>Algoritmo</th>
+                            <th>Intentos</th>
+                            <th>Bloqueado hasta</th>
+                            <th>Ultimo login</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in usuarios %}
+                        <tr>
+                            <td>{{ u.id_user }}</td>
+                            <td>{{ u.primer_nombre }} {{ u.primer_apellido }}</td>
+                            <td>{{ u.correo }}</td>
+                            <td>{{ u.credencial.algoritmo_hash|default:"-" }}</td>
+                            <td>{{ u.credencial.intentos_fallidos|default:"0" }}</td>
+                            <td>{{ u.credencial.bloqueado_hasta|default:"-" }}</td>
+                            <td>{{ u.credencial.ultimo_login|default:"-" }}</td>
+                            <td>
+                                <button
+                                    type="button"
+                                    class="btn-secondary credential-btn"
+                                    data-id="{{ u.id_user }}"
+                                    data-user-email="{{ u.correo }}"
+                                    data-user-fullname="{{ u.primer_nombre }} {{ u.primer_apellido }}"
+                                    data-intentos="{{ u.credencial.intentos_fallidos|default:0 }}"
+                                    data-bloqueado="{{ u.credencial.bloqueado_hasta|date:'Y-m-d\\TH:i' }}"
+                                    data-requiere="{{ u.credencial.requiere_cambio|yesno:'true,false' }}"
+                                    data-ultimo-login="{{ u.credencial.ultimo_login|default:'' }}"
+                                    data-fecha-cambio="{{ u.credencial.fecha_cambio|default:'' }}"
+                                >Editar</button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7">Sin credenciales registradas.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="roles-modal__footer">
+            <button type="button" id="credListClose" class="btn-primary">Cerrar</button>
+        </div>
+    </div>
+</div>
+
 <script src="{% static 'dist/js/roles-modal.min.js' %}"></script>
 <script>
   (function() {
@@ -330,6 +433,74 @@
     cancelBtn?.addEventListener('click', close);
     backdrop?.addEventListener('click', close);
     acceptBtn?.addEventListener('click', accept);
+  })();
+
+  // Modal de credenciales: permite configurar campos de usuario_credencial
+  (function() {
+    const modal = document.getElementById('credentialModal');
+    const form = document.getElementById('credentialForm');
+    const closeBtn = document.getElementById('credCancel');
+    const backdrop = modal.querySelector('.roles-modal__backdrop');
+    const info = document.getElementById('credUserInfo');
+    const credButtons = document.querySelectorAll('.credential-btn');
+    const credListModal = document.getElementById('credListModal');
+
+    function open(data = {}) {
+      // Define la acción del formulario hacia un endpoint específico (ajusta en backend)
+      form.action = data.id ? `/admin/usuarios/${data.id}/credencial` : '#';
+      document.getElementById('cred_id_user').value = data.id || '';
+      document.getElementById('cred_intentos').value = data.intentos || 0;
+      document.getElementById('cred_bloqueado').value = data.bloqueado || '';
+      document.getElementById('cred_requiere').checked = !!data.requiere;
+      document.getElementById('cred_ultimo_login').value = data.ultimo_login || '';
+      document.getElementById('cred_fecha_cambio').value = data.fecha_cambio || '';
+      info.textContent = data.fullname
+        ? `Usuario: ${data.fullname} (${data.email || ''} | ID ${data.id || ''})`
+        : '';
+      modal.hidden = false;
+    }
+    function close() { modal.hidden = true; }
+
+    // Apertura desde la tabla de credenciales/usuarios
+    credButtons.forEach(btn => {
+      btn.addEventListener('click', () => open({
+        id: btn.dataset.id,
+        fullname: btn.dataset.userFullname,
+        email: btn.dataset.userEmail,
+        intentos: btn.dataset.intentos || 0,
+        bloqueado: btn.dataset.bloqueado || '',
+        requiere: btn.dataset.requiere === 'true',
+        ultimo_login: btn.dataset.ultimoLogin || '',
+        fecha_cambio: btn.dataset.fechaCambio || '',
+      }));
+    });
+
+    // Si abrimos desde el listado de credenciales, opcionalmente ocultamos ese modal para evitar solape
+    credButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (credListModal && !credListModal.hidden) {
+          credListModal.hidden = true;
+        }
+      });
+    });
+
+    closeBtn?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
+  })();
+
+  // Modal listado de credenciales
+  (function() {
+    const modal = document.getElementById('credListModal');
+    const openBtn = document.getElementById('openCredListModal');
+    const closeBtn = document.getElementById('credListClose');
+    const backdrop = modal.querySelector('.roles-modal__backdrop');
+
+    function open() { modal.hidden = false; }
+    function close() { modal.hidden = true; }
+
+    openBtn?.addEventListener('click', open);
+    closeBtn?.addEventListener('click', close);
+    backdrop?.addEventListener('click', close);
   })();
 </script>
 {% endblock %}
