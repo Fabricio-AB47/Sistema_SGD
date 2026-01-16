@@ -21,11 +21,11 @@ SECRET_KEY=tu_clave_segura
 DJANGO_ALLOWED_HOSTS=127.0.0.1,localhost
 
 DB_ENGINE=mssql
-DB_NAME=SIG
-DB_USER=sa
+DB_NAME=***
+DB_USER=**
 DB_PASSWORD=***
-DB_HOST=192.168.x.x
-DB_PORT=1433
+DB_HOST=****
+DB_PORT=***
 DB_ODBC_DRIVER=ODBC Driver 17 for SQL Server
 DB_ODBC_EXTRA_PARAMS=TrustServerCertificate=yes;Encrypt=no
 ```
