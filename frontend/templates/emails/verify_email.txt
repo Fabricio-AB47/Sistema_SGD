@@ -1,6 +1,0 @@
-﻿Hola {{ usuario.primer_nombre }},
-
-Para verificar tu correo visita este enlace (expira en 24 horas):
-{{ verification_url }}
-
-Si no solicitaste esto, ignora este mensaje.
