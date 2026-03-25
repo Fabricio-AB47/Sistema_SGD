@@ -1,0 +1,139 @@
+{% with current_path=request.path current_url_name=request.resolver_match.url_name %}
+<aside class="sidebar">
+  <div class="sidebar__brand">
+    <h2 class="sidebar__title">Menu principal</h2>
+    <p class="sidebar__caption">Navegacion organizada por la relacion real de la base: seguridad, acreditacion, documentos y trazabilidad.</p>
+  </div>
+
+  <nav class="sidebar__nav" aria-label="Menu principal">
+    <a class="sidebar__link{% if current_url_name == 'core-dashboard' %} is-active{% endif %}" href="{% url 'core-dashboard' %}">
+      <span class="sidebar__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M4 10.75L12 4l8 6.75V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1v-9.25Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span>Dashboard</span>
+    </a>
+
+    <div class="sidebar__group{% if '/usuarios/' in current_path or '/roles/' in current_path or '/seguridad/' in current_path or '/integraciones/' in current_path or '/permisos/' in current_path %} sidebar__group--open{% endif %}" data-sidebar-group>
+      <button class="sidebar__toggle" type="button" data-sidebar-toggle aria-expanded="{% if '/usuarios/' in current_path or '/roles/' in current_path or '/seguridad/' in current_path or '/integraciones/' in current_path or '/permisos/' in current_path %}true{% else %}false{% endif %}">
+        <span class="sidebar__toggle-main">
+          <span class="sidebar__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 1 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span>Usuarios y seguridad</span>
+        </span>
+        <span class="sidebar__chevron" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none">
+            <path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </button>
+
+      <div class="sidebar__submenu" data-sidebar-panel>
+        <span class="sidebar__subheading">Gestion base</span>
+        <a class="sidebar__sublink{% if current_url_name == 'usuarios-lista' or current_url_name == 'usuarios-crear' or current_url_name == 'usuarios-detalle' or current_url_name == 'usuarios-editar' or current_url_name == 'usuarios-asignar-roles' %} is-active{% endif %}" href="{% url 'usuarios-lista' %}">Usuarios</a>
+        <a class="sidebar__sublink{% if current_url_name == 'roles-lista' or current_url_name == 'roles-crear' %} is-active{% endif %}" href="{% url 'roles-lista' %}">Roles</a>
+        <a class="sidebar__sublink{% if current_url_name == 'seguridad-sesiones' %} is-active{% endif %}" href="{% url 'seguridad-sesiones' %}">Sesiones</a>
+
+        <span class="sidebar__subheading">Permisos y alcance</span>
+        <a class="sidebar__sublink{% if current_url_name == 'permisos-roles-permisos' %} is-active{% endif %}" href="{% url 'permisos-roles-permisos' %}">Permisos por rol</a>
+        <a class="sidebar__sublink{% if current_url_name == 'permisos-usuario-rol' %} is-active{% endif %}" href="{% url 'permisos-usuario-rol' %}">Asignacion usuario-rol</a>
+        <a class="sidebar__sublink{% if current_url_name == 'permisos-acceso-indicador' %} is-active{% endif %}" href="{% url 'permisos-acceso-indicador' %}">Acceso por indicador</a>
+        <a class="sidebar__sublink{% if current_url_name == 'permisos-acceso-elemento' %} is-active{% endif %}" href="{% url 'permisos-acceso-elemento' %}">Acceso por elemento</a>
+
+        <span class="sidebar__subheading">Integraciones API</span>
+        <a class="sidebar__sublink{% if current_url_name == 'integraciones-servicios-lista' or current_url_name == 'integraciones-servicios-crear' or current_url_name == 'integraciones-servicios-editar' %} is-active{% endif %}" href="{% url 'integraciones-servicios-lista' %}">Servicios API</a>
+        <a class="sidebar__sublink{% if current_url_name == 'integraciones-credenciales-lista' or current_url_name == 'integraciones-credenciales-crear' %} is-active{% endif %}" href="{% url 'integraciones-credenciales-lista' %}">Credenciales API</a>
+        <a class="sidebar__sublink{% if current_url_name == 'integraciones-tokens-lista' %} is-active{% endif %}" href="{% url 'integraciones-tokens-lista' %}">Tokens API</a>
+        <a class="sidebar__sublink{% if current_url_name == 'integraciones-consumos-lista' %} is-active{% endif %}" href="{% url 'integraciones-consumos-lista' %}">Consumos API</a>
+      </div>
+    </div>
+
+    <div class="sidebar__group{% if '/acreditacion/' in current_path or '/documentos/' in current_path or '/evaluacion/' in current_path or '/informes/' in current_path or '/mejora/' in current_path %} sidebar__group--open{% endif %}" data-sidebar-group>
+      <button class="sidebar__toggle" type="button" data-sidebar-toggle aria-expanded="{% if '/acreditacion/' in current_path or '/documentos/' in current_path or '/evaluacion/' in current_path or '/informes/' in current_path or '/mejora/' in current_path %}true{% else %}false{% endif %}">
+        <span class="sidebar__toggle-main">
+          <span class="sidebar__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M7 4h10M7 8h10M5 12h14M7 16h10M9 20h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span>Acreditacion</span>
+        </span>
+        <span class="sidebar__chevron" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none">
+            <path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </button>
+
+      <div class="sidebar__submenu" data-sidebar-panel>
+        <span class="sidebar__subheading">Estructura CACES</span>
+        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-criterios-lista' %} is-active{% endif %}" href="{% url 'acreditacion-criterios-lista' %}">Criterios</a>
+        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-subcriterios-lista' %} is-active{% endif %}" href="{% url 'acreditacion-subcriterios-lista' %}">Subcriterios</a>
+        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-indicadores-lista' or current_url_name == 'acreditacion-indicadores-detalle' %} is-active{% endif %}" href="{% url 'acreditacion-indicadores-lista' %}">Indicadores</a>
+        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-elementos-lista' %} is-active{% endif %}" href="{% url 'acreditacion-elementos-lista' %}">Elementos fundamentales</a>
+        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-matriz' %} is-active{% endif %}" href="{% url 'acreditacion-matriz' %}">Matriz de acreditacion</a>
+
+        <span class="sidebar__subheading">Ciclos y acceso</span>
+        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-ciclos-lista' or current_url_name == 'acreditacion-ciclos-crear' %} is-active{% endif %}" href="{% url 'acreditacion-ciclos-lista' %}">Ciclos y autorizacion</a>
+
+        <span class="sidebar__subheading">Control documental</span>
+        <a class="sidebar__sublink{% if current_url_name == 'documentos-clasificaciones-lista' %} is-active{% endif %}" href="{% url 'documentos-clasificaciones-lista' %}">Clasificaciones documentales</a>
+        <a class="sidebar__sublink{% if current_url_name == 'documentos-lista' %} is-active{% endif %}" href="{% url 'documentos-lista' %}">Documentos</a>
+        <a class="sidebar__sublink{% if current_url_name == 'documentos-subir' %} is-active{% endif %}" href="{% url 'documentos-subir' %}">Subir documento</a>
+        <a class="sidebar__sublink{% if current_url_name == 'documentos-versiones' %} is-active{% endif %}" href="{% url 'documentos-versiones' %}">Versiones</a>
+        <a class="sidebar__sublink{% if current_url_name == 'documentos-accesos' %} is-active{% endif %}" href="{% url 'documentos-accesos' %}">Accesos</a>
+
+        <span class="sidebar__subheading">Evaluacion y mejora</span>
+        <a class="sidebar__sublink{% if current_url_name == 'evaluacion-evidencias-lista' %} is-active{% endif %}" href="{% url 'evaluacion-evidencias-lista' %}">Evidencias</a>
+        <a class="sidebar__sublink{% if current_url_name == 'evaluacion-evidencia-registrar' %} is-active{% endif %}" href="{% url 'evaluacion-evidencia-registrar' %}">Registrar evidencia</a>
+        <a class="sidebar__sublink{% if current_url_name == 'evaluacion-bandeja' %} is-active{% endif %}" href="{% url 'evaluacion-bandeja' %}">Bandeja de evaluacion</a>
+        <a class="sidebar__sublink{% if current_url_name == 'evaluacion-evaluar' %} is-active{% endif %}" href="{% url 'evaluacion-evaluar' %}">Evaluar evidencia</a>
+        <a class="sidebar__sublink{% if current_url_name == 'evaluacion-observaciones' %} is-active{% endif %}" href="{% url 'evaluacion-observaciones' %}">Observaciones</a>
+        <a class="sidebar__sublink{% if current_url_name == 'informes-lista' %} is-active{% endif %}" href="{% url 'informes-lista' %}">Informes</a>
+        <a class="sidebar__sublink{% if current_url_name == 'informes-generar' %} is-active{% endif %}" href="{% url 'informes-generar' %}">Generar informe</a>
+        <a class="sidebar__sublink{% if current_url_name == 'informes-aprobar' %} is-active{% endif %}" href="{% url 'informes-aprobar' %}">Aprobar informe</a>
+        <a class="sidebar__sublink{% if current_url_name == 'mejora-lista' %} is-active{% endif %}" href="{% url 'mejora-lista' %}">Planes de mejora</a>
+        <a class="sidebar__sublink{% if current_url_name == 'mejora-crear' %} is-active{% endif %}" href="{% url 'mejora-crear' %}">Crear plan</a>
+        <a class="sidebar__sublink{% if current_url_name == 'mejora-seguimiento' %} is-active{% endif %}" href="{% url 'mejora-seguimiento' %}">Seguimiento</a>
+      </div>
+    </div>
+
+    <div class="sidebar__group{% if '/auditoria/' in current_path %} sidebar__group--open{% endif %}" data-sidebar-group>
+      <button class="sidebar__toggle" type="button" data-sidebar-toggle aria-expanded="{% if '/auditoria/' in current_path %}true{% else %}false{% endif %}">
+        <span class="sidebar__toggle-main">
+          <span class="sidebar__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+          </span>
+          <span>Soporte</span>
+        </span>
+        <span class="sidebar__chevron" aria-hidden="true">
+          <svg viewBox="0 0 20 20" fill="none">
+            <path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </button>
+      <div class="sidebar__submenu" data-sidebar-panel>
+        <a class="sidebar__sublink{% if current_url_name == 'auditoria-lista' or current_url_name == 'auditoria-detalle' %} is-active{% endif %}" href="{% url 'auditoria-lista' %}">Auditoria</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="sidebar__footer">
+    <a class="sidebar__link sidebar__link--logout" href="{% url 'seguridad-logout' %}">
+      <span class="sidebar__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M10 17l5-5-5-5M15 12H3M12 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span>Cerrar sesion</span>
+    </a>
+  </div>
+</aside>
+{% endwith %}

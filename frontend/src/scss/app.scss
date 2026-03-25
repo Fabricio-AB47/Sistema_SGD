@@ -1,0 +1,17 @@
+// Punto de entrada principal de estilos.
+// Carga variables, mixins, componentes base y módulos de página.
+@forward "base/variables";   // Tokens de color y espaciados institucionales.
+@forward "base/mixins";      // Mixins responsivos reutilizables en todo el proyecto.
+@forward "base/buttons";     // Botonera institucional (primario, secundario, ghost, danger).
+@forward "base/layout";      // Reset + layout general (sidebar, content, cards).
+@forward "base/messages";    // Toasts de mensajes Django.
+@forward "pages/normalize";  // Reset / normalización.
+@forward "pages/login";      // Estilos de la pantalla de acceso.
+@forward "pages/admin_pages"; // Shell visual de paginas administrativas.
+@forward "pages/permisos";   // Estilos del modulo de permisos.
+@forward "pages/seguridad";  // Estilos del modulo de seguridad.
+@forward "pages/acreditacion"; // Estilos del módulo de acreditación.
+@forward "pages/documentos"; // Estilos del módulo documental.
+@forward "pages/usuarios";   // Estilos específicos del módulo de usuarios.
+@forward "pages/integraciones"; // Estilos del módulo de integraciones API.
+@forward "pages/auditoria";  // Estilos del módulo de auditoría.

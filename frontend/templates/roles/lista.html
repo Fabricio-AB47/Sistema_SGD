@@ -1,0 +1,46 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Roles | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Roles</h1>
+    <p class="text-muted">Define y administra roles del sistema.</p>
+  </div>
+  <div>
+    <a class="btn btn-primary" href="{% url 'roles-crear' %}">Nuevo rol</a>
+  </div>
+</div>
+
+<div class="card table-responsive">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Descripción</th>
+        <th>Acceso global</th>
+        <th>Estado</th>
+        <th class="text-right">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rol in roles %}
+        <tr>
+          <td>{{ rol.nombre_rol }}</td>
+          <td>{{ rol.descripcion|default:"--" }}</td>
+          <td>{% if rol.acceso_global %}<span class="status status-success">Sí</span>{% else %}<span class="status status-muted">No</span>{% endif %}</td>
+          <td>{% if rol.activo %}<span class="status status-success">Activo</span>{% else %}<span class="status status-muted">Inactivo</span>{% endif %}</td>
+          <td class="text-right">
+            <div class="integraciones__actions">
+              <a class="btn btn-secondary" href="{% url 'permisos-roles-detalle' %}?rol={{ rol.pk }}">Detalle</a>
+              <a class="btn btn-primary" href="{% url 'permisos-roles-permisos' %}?rol={{ rol.pk }}">Permisos</a>
+            </div>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-center text-muted">No hay roles</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

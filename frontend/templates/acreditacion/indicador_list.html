@@ -1,0 +1,115 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<div class="acreditacion-content-grid">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Indicadores institucionales</h3>
+        <p class="text-muted">Carga real sobre la tabla `indicador`.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Codigo</th>
+            <th>Indicador</th>
+            <th>Tipo</th>
+            <th>Subcriterio</th>
+            <th>Elementos</th>
+            <th>Estado</th>
+            <th class="text-right">Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for indicador in indicadores %}
+            <tr>
+              <td>{{ indicador.codigo_indicador }}</td>
+              <td>
+                <strong>{{ indicador.nombre_indicador }}</strong>
+                <div class="text-muted">{{ indicador.descripcion|default:"--" }}</div>
+              </td>
+              <td>{{ indicador.tipo_indicador.descripcion }}</td>
+              <td>{{ indicador.subcriterio.codigo_subcriterio }}</td>
+              <td>{{ indicador.elementos_count }}</td>
+              <td>
+                {% if indicador.activo %}
+                  <span class="acreditacion-status acreditacion-status--success">Activo</span>
+                {% else %}
+                  <span class="acreditacion-status acreditacion-status--muted">Inactivo</span>
+                {% endif %}
+              </td>
+              <td class="text-right">
+                <a href="{% url 'acreditacion-indicadores-detalle' %}?indicador={{ indicador.pk }}">Abrir</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-muted">No existen indicadores registrados.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card acreditacion-panel">
+    <h3>Nuevo indicador</h3>
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="acreditacion-form__grid">
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Subcriterio</span>
+          {{ form.subcriterio }}
+          {{ form.subcriterio.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Tipo</span>
+          {{ form.tipo_indicador }}
+          {{ form.tipo_indicador.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Codigo</span>
+          {{ form.codigo_indicador }}
+          {{ form.codigo_indicador.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Nombre</span>
+          {{ form.nombre_indicador }}
+          {{ form.nombre_indicador.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Descripcion</span>
+          {{ form.descripcion }}
+          {{ form.descripcion.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Medio de verificacion</span>
+          {{ form.medio_verificacion }}
+          {{ form.medio_verificacion.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Ponderacion</span>
+          {{ form.ponderacion }}
+          {{ form.ponderacion.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Orden visual</span>
+          {{ form.orden_visual }}
+          {{ form.orden_visual.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Activo</span>
+          {{ form.activo }}
+          {{ form.activo.errors }}
+        </label>
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar indicador</button>
+      </div>
+    </form>
+  </article>
+</div>
+{% endblock %}

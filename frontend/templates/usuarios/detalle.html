@@ -1,0 +1,45 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Detalle usuario | SIG{% endblock %}
+
+{% block content %}
+  {# Cabecera del detalle con acciones rápidas #}
+  <div class="page-header">
+    <div>
+      <h1>{{ usuario.primer_nombre }} {{ usuario.primer_apellido }}</h1>
+      <p class="text-muted">{{ usuario.correo }}</p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn btn-secondary" href="{% url 'usuarios-editar' usuario.pk %}">Editar</a>
+      <a class="btn btn-primary" href="{% url 'usuarios-asignar-roles' usuario.pk %}">Asignar roles</a>
+    </div>
+  </div>
+
+  {# Tarjeta de detalle en formato definiciones #}
+  <div class="card">
+    <dl class="detail-list">
+      <div>
+        <dt>Identificación</dt><dd>{{ usuario.identificacion }}</dd>
+      </div>
+      <div>
+        <dt>Tipo</dt><dd>{{ usuario.tipo_identificacion.descripcion }}</dd>
+      </div>
+      <div>
+        <dt>Teléfono</dt><dd>{{ usuario.telefono|default:"-" }}</dd>
+      </div>
+      <div>
+        <dt>Estado</dt>
+        <dd>{% if usuario.activo %}<span class="status status-success">Activo</span>{% else %}<span class="status status-muted">Inactivo</span>{% endif %}</dd>
+      </div>
+      <div>
+        <dt>Roles</dt>
+        <dd>
+          {% for ur in usuario.roles_asignados.all %}
+            <span class="badge">{{ ur.rol.nombre_rol }}</span>
+          {% empty %}
+            <span class="text-muted">Sin roles asignados</span>
+          {% endfor %}
+        </dd>
+      </div>
+    </dl>
+  </div>
+{% endblock %}

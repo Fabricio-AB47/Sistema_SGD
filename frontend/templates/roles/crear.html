@@ -1,0 +1,39 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Nuevo rol | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Nuevo rol</h1>
+    <p class="text-muted">Crea un rol y define su alcance.</p>
+  </div>
+</div>
+
+<div class="card">
+  <p class="text-muted">Al guardar el rol se abrira su detalle real para que completes permisos, usuarios e indicadores sin perder el registro recien creado.</p>
+  <form method="post" class="form-grid">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="form-group">
+      <span>Nombre</span>
+      {{ form.nombre_rol }}{{ form.nombre_rol.errors }}
+    </div>
+    <div class="form-group">
+      <span>Descripción</span>
+      {{ form.descripcion }}{{ form.descripcion.errors }}
+    </div>
+    <div class="form-check">
+      {{ form.acceso_global }} <span>Acceso global</span>
+      {{ form.acceso_global.errors }}
+    </div>
+    <div class="form-check">
+      {{ form.activo }} <span>Activo</span>
+      {{ form.activo.errors }}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">Guardar</button>
+      <a class="btn btn-secondary" href="{% url 'roles-lista' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

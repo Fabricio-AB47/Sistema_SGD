@@ -1,0 +1,44 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}{% if object %}Editar servicio{% else %}Nuevo servicio{% endif %} | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{% if object %}Editar servicio{% else %}Nuevo servicio{% endif %}</h1>
+    <p class="text-muted">Configura los datos base del servicio y su disponibilidad.</p>
+  </div>
+</div>
+
+<div class="card">
+  <form method="post" class="form-grid integraciones__form">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="form-group">
+      <span>Nombre del servicio</span>
+      {{ form.nombre_servicio }}{{ form.nombre_servicio.errors }}
+    </div>
+    <div class="form-group">
+      <span>Proveedor</span>
+      {{ form.proveedor }}{{ form.proveedor.errors }}
+    </div>
+    <div class="form-group form-group--wide">
+      <span>URL base</span>
+      {{ form.url_base }}{{ form.url_base.errors }}
+    </div>
+    <div class="form-group form-group--full">
+      <span>Descripcion</span>
+      {{ form.descripcion }}{{ form.descripcion.errors }}
+    </div>
+    <div class="form-check">
+      {{ form.activo }} <span>Activo</span>
+      {{ form.activo.errors }}
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">Guardar</button>
+      <a class="btn btn-secondary" href="{% url 'integraciones-servicios-lista' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

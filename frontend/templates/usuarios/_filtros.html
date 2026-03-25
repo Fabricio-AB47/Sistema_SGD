@@ -1,0 +1,30 @@
+{# Filtros de búsqueda para lista de usuarios #}
+<form class="filters" method="get">
+  <div class="filters__grid">
+    <label class="form-group">
+      <span>Nombre o correo</span>
+      <input type="text" name="q" value="{{ request.GET.q }}" placeholder="Buscar por nombre, apellido o correo">
+    </label>
+    <label class="form-group">
+      <span>Rol</span>
+      <select name="rol">
+        <option value="">Todos</option>
+        {% for rol in roles %}
+          <option value="{{ rol.id }}" {% if request.GET.rol == rol.id|stringformat:"s" %}selected{% endif %}>{{ rol.nombre_rol }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="form-group">
+      <span>Estado</span>
+      <select name="activo">
+        <option value="">Todos</option>
+        <option value="1" {% if request.GET.activo == '1' %}selected{% endif %}>Activo</option>
+        <option value="0" {% if request.GET.activo == '0' %}selected{% endif %}>Inactivo</option>
+      </select>
+    </label>
+    <div class="filters__actions">
+      <button type="submit" class="btn btn-primary">Filtrar</button>
+      <a href="{% url 'usuarios-lista' %}" class="btn btn-secondary">Limpiar</a>
+    </div>
+  </div>
+</form>

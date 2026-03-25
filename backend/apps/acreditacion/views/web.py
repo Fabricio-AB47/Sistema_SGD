@@ -1,0 +1,429 @@
+import logging
+
+from django.contrib import messages
+from django.db import DatabaseError, IntegrityError, OperationalError
+from django.http import Http404
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.views import View
+from django.views.generic import RedirectView, TemplateView
+
+from apps.core.mixins import SigLoginRequiredMixin
+from apps.acreditacion.forms import (
+    CicloAuthorizationRevisionForm,
+    CicloEstadoUpdateForm,
+    CicloEvaluacionForm,
+    CriterioForm,
+    ElementoFundamentalForm,
+    IndicadorElementoForm,
+    IndicadorForm,
+    SubcriterioForm,
+)
+from apps.acreditacion.selectors import (
+    get_acreditacion_metrics,
+    get_ciclo_detail,
+    get_ciclos_queryset,
+    get_criterios_queryset,
+    get_elementos_queryset,
+    get_indicator_detail,
+    get_indicadores_queryset,
+    get_matrix_rows,
+    get_subcriterios_queryset,
+)
+from apps.acreditacion.services import (
+    actualizar_estado_ciclo,
+    crear_ciclo,
+    crear_criterio,
+    crear_elemento,
+    crear_indicador,
+    crear_subcriterio,
+    vincular_indicador_elemento,
+)
+from apps.acreditacion.models import CicloEvaluacion
+from apps.documentos.services import (
+    AuthorizationServiceError,
+    upload_cycle_authorization_revision,
+)
+from apps.documentos.selectors import attach_cycle_authorization_status
+from apps.integraciones.services.graph_service import GraphServiceError
+from apps.usuarios.models import Usuario
+
+
+logger = logging.getLogger(__name__)
+
+MODULE_TITLE = "Acreditacion"
+MODULE_DESCRIPTION = "Gestiona la estructura CACES real del sistema y su relacion con ciclos y evidencia."
+MODULE_TABS = [
+    {"label": "Criterios", "url_name": "acreditacion-criterios-lista", "active_names": ["acreditacion-criterios-lista"]},
+    {"label": "Subcriterios", "url_name": "acreditacion-subcriterios-lista", "active_names": ["acreditacion-subcriterios-lista"]},
+    {"label": "Indicadores", "url_name": "acreditacion-indicadores-lista", "active_names": ["acreditacion-indicadores-lista", "acreditacion-indicadores-detalle"]},
+    {"label": "Elementos fundamentales", "url_name": "acreditacion-elementos-lista", "active_names": ["acreditacion-elementos-lista"]},
+    {"label": "Matriz de acreditacion", "url_name": "acreditacion-matriz", "active_names": ["acreditacion-matriz"]},
+    {"label": "Ciclos y autorizacion", "url_name": "acreditacion-ciclos-lista", "active_names": ["acreditacion-ciclos-lista", "acreditacion-ciclos-crear", "acreditacion-ciclos-detalle"]},
+]
+
+
+def _report_operation_error(*, request, exc: Exception, form=None, user_message: str):
+    logger.exception("Operacion de acreditacion fallida", exc_info=exc)
+    messages.error(request, user_message)
+    if form is not None:
+        form.add_error(None, user_message)
+
+
+class AcreditacionBaseView(SigLoginRequiredMixin, TemplateView):
+    template_name = ""
+    page_title = ""
+    page_description = ""
+    page_status = "Operacion real"
+    page_actions = []
+    show_acreditacion_overview = True
+
+    def _actor(self):
+        user_id = self.request.session.get("sig_user_id")
+        if not user_id:
+            return None
+        return Usuario.objects.filter(pk=user_id).only("id_user", "primer_nombre", "primer_apellido").first()
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            {
+                "module_title": MODULE_TITLE,
+                "module_description": MODULE_DESCRIPTION,
+                "module_tabs": MODULE_TABS,
+                "page_title": self.page_title,
+                "page_description": self.page_description,
+                "page_status": self.page_status,
+                "page_actions": self.page_actions,
+                "show_acreditacion_overview": self.show_acreditacion_overview,
+                "current_url_name": self.request.resolver_match.url_name if self.request.resolver_match else "",
+                "acreditacion_metrics": get_acreditacion_metrics(),
+            }
+        )
+        context.update(kwargs)
+        return context
+
+
+class CriterioListView(AcreditacionBaseView):
+    template_name = "acreditacion/criterio_list.html"
+    page_title = "Criterios"
+    page_description = "Carga y administra la estructura principal de criterios de acreditacion."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form"] = kwargs.get("form") or CriterioForm()
+        context["criterios"] = get_criterios_queryset()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = CriterioForm(request.POST)
+        if form.is_valid():
+            try:
+                crear_criterio(form=form, actor=self._actor(), request=request)
+            except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible registrar el criterio. Revisa la informacion y vuelve a intentar.",
+                )
+            else:
+                messages.success(request, "Criterio registrado correctamente.")
+                return redirect("acreditacion-criterios-lista")
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class SubcriterioListView(AcreditacionBaseView):
+    template_name = "acreditacion/subcriterio_list.html"
+    page_title = "Subcriterios"
+    page_description = "Carga subcriterios asociados a cada criterio real del sistema."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form"] = kwargs.get("form") or SubcriterioForm()
+        context["subcriterios"] = get_subcriterios_queryset()
+        context["criterios"] = get_criterios_queryset()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = SubcriterioForm(request.POST)
+        if form.is_valid():
+            try:
+                crear_subcriterio(form=form, actor=self._actor(), request=request)
+            except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible registrar el subcriterio. Revisa la informacion y vuelve a intentar.",
+                )
+            else:
+                messages.success(request, "Subcriterio registrado correctamente.")
+                return redirect("acreditacion-subcriterios-lista")
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class IndicadorListView(AcreditacionBaseView):
+    template_name = "acreditacion/indicador_list.html"
+    page_title = "Indicadores"
+    page_description = "Carga indicadores y vincula su tipo, subcriterio y peso de evaluacion."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form"] = kwargs.get("form") or IndicadorForm()
+        context["indicadores"] = get_indicadores_queryset()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = IndicadorForm(request.POST)
+        if form.is_valid():
+            try:
+                indicador = crear_indicador(form=form, actor=self._actor(), request=request)
+            except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible registrar el indicador. Revisa la informacion y vuelve a intentar.",
+                )
+            else:
+                messages.success(request, "Indicador registrado correctamente.")
+                return redirect(f"{reverse('acreditacion-indicadores-detalle')}?indicador={indicador.pk}")
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class IndicadorDetailView(AcreditacionBaseView):
+    template_name = "acreditacion/indicador_detail.html"
+    page_title = "Detalle de indicador"
+    page_description = "Gestiona la ficha operativa del indicador y su relacion con elementos fundamentales."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        selected_indicator = kwargs.get("selected_indicator") or get_indicator_detail(
+            self.request.GET.get("indicador")
+        )
+        context["selected_indicator"] = selected_indicator
+        context["indicadores"] = get_indicadores_queryset()
+        context["relation_form"] = kwargs.get("relation_form") or IndicadorElementoForm(
+            initial={"indicador": selected_indicator} if selected_indicator else None
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = IndicadorElementoForm(request.POST)
+        selected_indicator = get_indicator_detail(request.POST.get("indicador"))
+        if form.is_valid():
+            try:
+                vincular_indicador_elemento(
+                    indicador=form.cleaned_data["indicador"],
+                    elemento_fundamental=form.cleaned_data["elemento_fundamental"],
+                    actor=self._actor(),
+                    request=request,
+                )
+            except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible vincular el elemento al indicador.",
+                )
+            else:
+                messages.success(request, "Elemento vinculado al indicador.")
+                return redirect(f"{reverse('acreditacion-indicadores-detalle')}?indicador={form.cleaned_data['indicador'].pk}")
+        return self.render_to_response(
+            self.get_context_data(relation_form=form, selected_indicator=selected_indicator)
+        )
+
+
+class ElementoListView(AcreditacionBaseView):
+    template_name = "acreditacion/elemento_list.html"
+    page_title = "Elementos fundamentales"
+    page_description = "Carga los elementos fundamentales que alimentan la evidencia documental."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form"] = kwargs.get("form") or ElementoFundamentalForm()
+        context["elementos"] = get_elementos_queryset()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = ElementoFundamentalForm(request.POST)
+        if form.is_valid():
+            try:
+                crear_elemento(form=form, actor=self._actor(), request=request)
+            except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible registrar el elemento fundamental.",
+                )
+            else:
+                messages.success(request, "Elemento fundamental registrado correctamente.")
+                return redirect("acreditacion-elementos-lista")
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class MatrizView(AcreditacionBaseView):
+    template_name = "acreditacion/matriz.html"
+    page_title = "Matriz de acreditacion"
+    page_description = "Lectura real de la jerarquia criterio > subcriterio > indicador > elemento."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["matrix_rows"] = get_matrix_rows()
+        return context
+
+
+class CicloListView(AcreditacionBaseView):
+    template_name = "acreditacion/ciclo_list.html"
+    page_title = "Ciclos y documento de autorizacion"
+    page_description = "En una sola pantalla registras el ciclo, cargas su autorizacion y consultas el documento asociado."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form"] = kwargs.get("form") or CicloEvaluacionForm()
+        ciclos = attach_cycle_authorization_status(get_ciclos_queryset())
+        context["ciclos"] = ciclos
+        context["ciclos_summary"] = {
+            "total": len(ciclos),
+            "con_autorizacion": sum(1 for ciclo in ciclos if getattr(ciclo, "has_authorization_document", False)),
+            "aprobados": sum(
+                1
+                for ciclo in ciclos
+                if (getattr(getattr(ciclo, "estado", None), "descripcion", "") or "").strip().upper() == "APROBADO"
+            ),
+            "habilitados": sum(1 for ciclo in ciclos if getattr(ciclo, "document_upload_enabled", False)),
+        }
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = CicloEvaluacionForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                crear_ciclo(form=form, actor=self._actor(), request=request)
+            except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible registrar el ciclo y su documento. Verifica los datos, la conexion a SQL Server y Microsoft Graph.",
+                )
+            else:
+                messages.success(request, "Ciclo y documento de autorizacion registrados correctamente.")
+                return redirect("acreditacion-ciclos-lista")
+        else:
+            messages.error(
+                request,
+                "No fue posible registrar el ciclo. Revisa los campos obligatorios y vuelve a adjuntar el documento de autorizacion.",
+            )
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class CicloCreateView(RedirectView):
+    pattern_name = "acreditacion-ciclos-lista"
+    permanent = False
+
+
+class CicloDetailView(AcreditacionBaseView):
+    template_name = "acreditacion/ciclo_detail.html"
+    page_title = "Informacion del ciclo"
+    page_description = "Consulta el estado del ciclo y el documento de autorizacion asociado en una subpantalla dedicada."
+    page_actions = [
+        {"label": "Volver a ciclos", "url_name": "acreditacion-ciclos-lista", "variant": "secondary"},
+    ]
+    show_acreditacion_overview = False
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        ciclo = kwargs.get("ciclo")
+        context["ciclo"] = ciclo
+        context["estado_form"] = kwargs.get("estado_form") or CicloEstadoUpdateForm(
+            initial={"ciclo_id": ciclo.pk, "estado": ciclo.estado}
+        )
+        context["authorization_revision_form"] = kwargs.get("authorization_revision_form") or CicloAuthorizationRevisionForm()
+        return context
+
+    def get(self, request, ciclo_id, *args, **kwargs):
+        ciclo = get_ciclo_detail(ciclo_id)
+        if ciclo is None:
+            raise Http404("El ciclo no existe.")
+        return self.render_to_response(self.get_context_data(ciclo=ciclo))
+
+    def post(self, request, ciclo_id, *args, **kwargs):
+        ciclo = get_ciclo_detail(ciclo_id)
+        if ciclo is None:
+            raise Http404("El ciclo no existe.")
+
+        form = CicloAuthorizationRevisionForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                upload_cycle_authorization_revision(
+                    ciclo=ciclo,
+                    descripcion_documento=form.cleaned_data.get("descripcion_documento"),
+                    uploaded_file=form.cleaned_data["archivo"],
+                    actor=self._actor(),
+                    request=request,
+                )
+            except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible registrar la nueva version del documento.",
+                )
+            else:
+                messages.success(request, "Nueva version del documento registrada correctamente.")
+                return redirect("acreditacion-ciclos-lista")
+
+        ciclo = get_ciclo_detail(ciclo_id)
+        return self.render_to_response(
+            self.get_context_data(
+                ciclo=ciclo,
+                authorization_revision_form=form,
+            )
+        )
+
+
+class CicloEstadoUpdateView(SigLoginRequiredMixin, View):
+    def _actor(self):
+        user_id = self.request.session.get("sig_user_id")
+        if not user_id:
+            return None
+        return Usuario.objects.filter(pk=user_id).only("id_user", "primer_nombre", "primer_apellido").first()
+
+    def post(self, request, ciclo_id, *args, **kwargs):
+        ciclo = CicloEvaluacion.objects.select_related("estado").filter(pk=ciclo_id).first()
+        if ciclo is None:
+            raise Http404("El ciclo no existe.")
+
+        form = CicloEstadoUpdateForm(request.POST)
+        if form.is_valid():
+            if form.cleaned_data["ciclo_id"] != ciclo.pk:
+                form.add_error(None, "El ciclo enviado no coincide con la solicitud.")
+            else:
+                try:
+                    actualizar_estado_ciclo(
+                        ciclo=ciclo,
+                        estado=form.cleaned_data["estado"],
+                        actor=self._actor(),
+                        request=request,
+                    )
+                except (ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                    _report_operation_error(
+                        request=request,
+                        exc=exc,
+                        user_message="No fue posible actualizar el estado del ciclo.",
+                    )
+                else:
+                    messages.success(request, f"Estado actualizado a {form.cleaned_data['estado'].descripcion}.")
+                redirect_to = request.POST.get("next_url", "").strip()
+                if redirect_to:
+                    return redirect(redirect_to)
+                return redirect("acreditacion-ciclos-lista")
+
+        messages.error(request, "No fue posible actualizar el estado del ciclo.")
+        redirect_to = request.POST.get("next_url", "").strip()
+        if redirect_to:
+            return redirect(redirect_to)
+        return redirect("acreditacion-ciclos-lista")

@@ -1,0 +1,44 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}{{ page_title }} | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <p class="text-muted">{{ page_description }}</p>
+  </div>
+</div>
+
+<div class="card admin-tabs">
+  {% for tab in permission_tabs %}
+    <a class="admin-tabs__link{% if request.resolver_match.url_name == tab.url_name %} is-active{% endif %}" href="{% url tab.url_name %}">
+      {{ tab.label }}
+    </a>
+  {% endfor %}
+</div>
+
+<div class="permissions-metrics">
+  <article class="permissions-metrics__card">
+    <span class="permissions-metrics__label">Roles</span>
+    <strong class="permissions-metrics__value">{{ permission_metrics.roles }}</strong>
+  </article>
+  <article class="permissions-metrics__card">
+    <span class="permissions-metrics__label">Permisos</span>
+    <strong class="permissions-metrics__value">{{ permission_metrics.permisos }}</strong>
+  </article>
+  <article class="permissions-metrics__card">
+    <span class="permissions-metrics__label">Asignaciones usuario-rol</span>
+    <strong class="permissions-metrics__value">{{ permission_metrics.usuarios_roles }}</strong>
+  </article>
+  <article class="permissions-metrics__card">
+    <span class="permissions-metrics__label">Accesos por indicador</span>
+    <strong class="permissions-metrics__value">{{ permission_metrics.accesos_indicador }}</strong>
+  </article>
+  <article class="permissions-metrics__card">
+    <span class="permissions-metrics__label">Accesos por elemento</span>
+    <strong class="permissions-metrics__value">{{ permission_metrics.accesos_elemento }}</strong>
+  </article>
+</div>
+
+{% block permisos_content %}{% endblock %}
+{% endblock %}

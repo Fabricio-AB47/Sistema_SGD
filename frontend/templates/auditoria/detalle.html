@@ -1,0 +1,73 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Detalle de auditoria | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Detalle de auditoria</h1>
+    <p class="text-muted">Revision del evento registrado en el sistema.</p>
+  </div>
+  <div class="page-header__actions">
+    <a class="btn btn-secondary" href="{% url 'auditoria-lista' %}">Volver</a>
+  </div>
+</div>
+
+<div class="card auditoria__detail-card">
+  <dl class="detail-list auditoria__detail-list">
+    <div>
+      <dt>Fecha</dt>
+      <dd>{{ auditoria.fecha_evento|date:"d/m/Y H:i:s" }}</dd>
+    </div>
+    <div>
+      <dt>Usuario</dt>
+      <dd>
+        {% if auditoria.usuario %}
+          {{ auditoria.usuario.primer_nombre }} {{ auditoria.usuario.primer_apellido }}
+        {% else %}
+          Sistema
+        {% endif %}
+      </dd>
+    </div>
+    <div>
+      <dt>Tipo evento</dt>
+      <dd>{{ auditoria.tipo_evento|default:"--" }}</dd>
+    </div>
+    <div>
+      <dt>Accion</dt>
+      <dd>{{ auditoria.accion }}</dd>
+    </div>
+    <div>
+      <dt>Tabla afectada</dt>
+      <dd>{{ auditoria.tabla_afectada|default:"--" }}</dd>
+    </div>
+    <div>
+      <dt>ID registro</dt>
+      <dd>{{ auditoria.id_registro|default:"--" }}</dd>
+    </div>
+    <div>
+      <dt>IP</dt>
+      <dd>{{ auditoria.ip|default:"--" }}</dd>
+    </div>
+    <div>
+      <dt>Criticidad</dt>
+      <dd>{{ auditoria.criticidad|default:"--" }}</dd>
+    </div>
+  </dl>
+</div>
+
+<div class="card auditoria__detail-card">
+  <h2 class="auditoria__block-title">Descripcion</h2>
+  <p class="auditoria__description-full">{{ auditoria.descripcion }}</p>
+</div>
+
+<div class="auditoria__json-grid">
+  <div class="card auditoria__detail-card">
+    <h2 class="auditoria__block-title">Valores anteriores</h2>
+    <pre class="auditoria__json">{{ valores_anteriores_pretty }}</pre>
+  </div>
+  <div class="card auditoria__detail-card">
+    <h2 class="auditoria__block-title">Valores nuevos</h2>
+    <pre class="auditoria__json">{{ valores_nuevos_pretty }}</pre>
+  </div>
+</div>
+{% endblock %}

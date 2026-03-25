@@ -1,0 +1,121 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}{{ page_title }} | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <p class="text-muted">{{ page_description }}</p>
+  </div>
+  {% if page_actions %}
+    <div class="page-header__actions">
+      {% for action in page_actions %}
+        <a class="btn {% if action.variant == 'secondary' %}btn-secondary{% elif action.variant == 'ghost' %}btn-ghost{% else %}btn-primary{% endif %}" href="{% url action.url_name %}">{{ action.label }}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+
+<div class="card acreditacion-tabs">
+  {% for tab in module_tabs %}
+    {% if tab.url_name != 'acreditacion-indicadores-detalle' and tab.url_name != 'acreditacion-ciclos-crear' %}
+      <a class="acreditacion-tabs__link{% if current_url_name in tab.active_names %} is-active{% endif %}" href="{% url tab.url_name %}">{{ tab.label }}</a>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<div class="card acreditacion-hero">
+  <div>
+    <p class="eyebrow">Modelo de acreditacion</p>
+    <h2>{{ page_title }}</h2>
+    <p class="text-muted">{{ module_description }}</p>
+  </div>
+  <span class="hero-badge">{{ page_status }}</span>
+</div>
+
+<div class="acreditacion-kpis">
+  <article class="acreditacion-kpis__card">
+    <span class="acreditacion-kpis__label">Criterios</span>
+    <strong class="acreditacion-kpis__value">{{ acreditacion_metrics.criterios }}</strong>
+  </article>
+  <article class="acreditacion-kpis__card">
+    <span class="acreditacion-kpis__label">Subcriterios</span>
+    <strong class="acreditacion-kpis__value">{{ acreditacion_metrics.subcriterios }}</strong>
+  </article>
+  <article class="acreditacion-kpis__card">
+    <span class="acreditacion-kpis__label">Indicadores</span>
+    <strong class="acreditacion-kpis__value">{{ acreditacion_metrics.indicadores }}</strong>
+  </article>
+  <article class="acreditacion-kpis__card">
+    <span class="acreditacion-kpis__label">Elementos / ciclos</span>
+    <strong class="acreditacion-kpis__value">{{ acreditacion_metrics.elementos }} / {{ acreditacion_metrics.ciclos }}</strong>
+  </article>
+</div>
+
+{% if page_highlights %}
+  <div class="acreditacion-highlights">
+    {% for item in page_highlights %}
+      <article class="acreditacion-highlights__card">
+        <span class="acreditacion-highlights__label">{{ item.label }}</span>
+        <strong class="acreditacion-highlights__value">{{ item.value }}</strong>
+      </article>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if show_acreditacion_overview %}
+  <div class="acreditacion-overview">
+    <article class="card acreditacion-panel">
+      <div class="acreditacion-panel__header">
+        <div>
+          <h3>Ruta estructural</h3>
+          <p class="text-muted">Pantallas base para poblar la matriz academica y dejar lista la carga documental.</p>
+        </div>
+        <span class="badge">Carga principal</span>
+      </div>
+      <div class="acreditacion-steps">
+        <div class="acreditacion-steps__item">
+          <span class="acreditacion-steps__index">1</span>
+          <div>
+            <strong>Criterios y subcriterios</strong>
+            <p class="text-muted">Definen el arbol institucional que ordena la acreditacion.</p>
+          </div>
+        </div>
+        <div class="acreditacion-steps__item">
+          <span class="acreditacion-steps__index">2</span>
+          <div>
+            <strong>Indicadores y elementos fundamentales</strong>
+            <p class="text-muted">Preparan las carpetas, evidencias y niveles de seguimiento.</p>
+          </div>
+        </div>
+        <div class="acreditacion-steps__item">
+          <span class="acreditacion-steps__index">3</span>
+          <div>
+            <strong>Matriz, asignaciones y ciclos</strong>
+            <p class="text-muted">Conectan responsables, permisos y periodos de trabajo.</p>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <article class="card acreditacion-panel">
+      <div class="acreditacion-panel__header">
+        <div>
+          <h3>Flujo relacionado</h3>
+          <p class="text-muted">La acreditacion alimenta el resto del SIG para asegurar evidencias y mejora continua.</p>
+        </div>
+        <span class="badge">Dependencias</span>
+      </div>
+      <ul class="acreditacion-links">
+        <li><a href="{% url 'documentos-lista' %}">Documentos y versionamiento</a></li>
+        <li><a href="{% url 'acreditacion-ciclos-lista' %}">Ciclos y documento de autorizacion</a></li>
+        <li><a href="{% url 'evaluacion-evidencias-lista' %}">Registro de evidencias</a></li>
+        <li><a href="{% url 'informes-lista' %}">Informes de autoevaluacion</a></li>
+        <li><a href="{% url 'mejora-lista' %}">Planes de mejora</a></li>
+      </ul>
+    </article>
+  </div>
+{% endif %}
+
+{% block acreditacion_content %}{% endblock %}
+{% endblock %}

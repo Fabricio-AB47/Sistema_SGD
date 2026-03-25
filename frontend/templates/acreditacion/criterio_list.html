@@ -1,0 +1,94 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<div class="acreditacion-content-grid">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Catalogo de criterios</h3>
+        <p class="text-muted">Carga real sobre la tabla `criterio`.</p>
+      </div>
+      <div class="acreditacion-panel__actions">
+        <a class="btn btn-secondary" href="{% url 'acreditacion-subcriterios-lista' %}">Ver subcriterios</a>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Codigo</th>
+            <th>Criterio</th>
+            <th>Subcriterios</th>
+            <th>Indicadores</th>
+            <th>Orden</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for criterio in criterios %}
+            <tr>
+              <td>{{ criterio.codigo_criterio }}</td>
+              <td>
+                <strong>{{ criterio.nombre_criterio }}</strong>
+                <div class="text-muted">{{ criterio.descripcion|default:"--" }}</div>
+              </td>
+              <td>{{ criterio.subcriterios_count }}</td>
+              <td>{{ criterio.indicadores_count }}</td>
+              <td>{{ criterio.orden_visual|default:"--" }}</td>
+              <td>
+                {% if criterio.activo %}
+                  <span class="acreditacion-status acreditacion-status--success">Activo</span>
+                {% else %}
+                  <span class="acreditacion-status acreditacion-status--muted">Inactivo</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted">No existen criterios registrados.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card acreditacion-panel">
+    <h3>Nuevo criterio</h3>
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="acreditacion-form__grid">
+        <label class="acreditacion-form__field">
+          <span>Codigo</span>
+          {{ form.codigo_criterio }}
+          {{ form.codigo_criterio.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Orden visual</span>
+          {{ form.orden_visual }}
+          {{ form.orden_visual.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Nombre</span>
+          {{ form.nombre_criterio }}
+          {{ form.nombre_criterio.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Descripcion</span>
+          {{ form.descripcion }}
+          {{ form.descripcion.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Activo</span>
+          {{ form.activo }}
+          {{ form.activo.errors }}
+        </label>
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar criterio</button>
+      </div>
+    </form>
+  </article>
+</div>
+{% endblock %}

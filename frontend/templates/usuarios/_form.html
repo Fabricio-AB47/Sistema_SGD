@@ -1,0 +1,70 @@
+{# Formulario base para crear/editar usuario #}
+<form method="post" class="form-grid">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+
+  <div class="form-group">
+    <span>Primer nombre</span>
+    {{ form.primer_nombre }}
+    {{ form.primer_nombre.errors }}
+  </div>
+  <div class="form-group">
+    <span>Segundo nombre</span>
+    {{ form.segundo_nombre }}
+    {{ form.segundo_nombre.errors }}
+  </div>
+  <div class="form-group">
+    <span>Primer apellido</span>
+    {{ form.primer_apellido }}
+    {{ form.primer_apellido.errors }}
+  </div>
+  <div class="form-group">
+    <span>Segundo apellido</span>
+    {{ form.segundo_apellido }}
+    {{ form.segundo_apellido.errors }}
+  </div>
+  <div class="form-group">
+    <span>Tipo de identificación</span>
+    {{ form.id_tipo_identificacion }}
+    {{ form.id_tipo_identificacion.errors }}
+  </div>
+  <div class="form-group">
+    <span>Identificación</span>
+    {{ form.identificacion }}
+    {{ form.identificacion.errors }}
+  </div>
+  <div class="form-group">
+    <span>Correo</span>
+    {{ form.correo }}
+    {{ form.correo.errors }}
+  </div>
+  <div class="form-group">
+    <span>Teléfono</span>
+    {{ form.telefono }}
+    {{ form.telefono.errors }}
+  </div>
+  <div class="form-group">
+    <span>Contraseña</span>
+    {{ form.password }}
+    {{ form.password.errors }}
+  </div>
+  <div class="form-group">
+    <span>Confirmar contraseña</span>
+    {{ form.password_confirm }}
+    {{ form.password_confirm.errors }}
+  </div>
+  <div class="form-group">
+    <span>Rol</span>
+    {{ form.rol }}
+    {{ form.rol.errors }}
+  </div>
+  <div class="form-check">
+    {{ form.activo }} <span>Activo</span>
+    {{ form.activo.errors }}
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Guardar</button>
+    <a class="btn btn-secondary" href="{% url 'usuarios-lista' %}">Cancelar</a>
+  </div>
+</form>

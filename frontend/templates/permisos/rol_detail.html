@@ -1,0 +1,172 @@
+{% extends "permisos/_page_base.html" %}
+
+{% block permisos_content %}
+<div class="card permissions-filter">
+  <form method="get" class="filters__grid">
+    <div class="form-group">
+      <span>Rol</span>
+      <select name="rol">
+        {% for role in roles %}
+          <option value="{{ role.pk }}" {% if selected_role and selected_role.pk == role.pk %}selected{% endif %}>
+            {{ role.nombre_rol }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filters__actions">
+      <button class="btn btn-primary" type="submit">Cargar detalle</button>
+    </div>
+  </form>
+</div>
+
+{% if selected_role %}
+  <div class="permissions-grid">
+    <article class="card permissions-panel">
+      <div class="permissions-panel__header">
+        <div>
+          <h2>Editar rol</h2>
+          <p class="text-muted">Actualiza la configuracion base del rol seleccionado.</p>
+        </div>
+      </div>
+      <form method="post" class="form-grid">
+        {% csrf_token %}
+        <input type="hidden" name="rol_id" value="{{ selected_role.pk }}">
+        <div class="form-group">
+          <span>{{ form.nombre_rol.label }}</span>
+          {{ form.nombre_rol }}
+          {{ form.nombre_rol.errors }}
+        </div>
+        <div class="form-group">
+          <span>{{ form.descripcion.label }}</span>
+          {{ form.descripcion }}
+          {{ form.descripcion.errors }}
+        </div>
+        <div class="form-check">
+          {{ form.acceso_global }}
+          <span>{{ form.acceso_global.label }}</span>
+        </div>
+        <div class="form-check">
+          {{ form.activo }}
+          <span>{{ form.activo.label }}</span>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit">Actualizar rol</button>
+          <a class="btn btn-secondary" href="{% url 'permisos-roles-permisos' %}?rol={{ selected_role.pk }}">Editar permisos</a>
+        </div>
+      </form>
+    </article>
+
+    <article class="card permissions-panel">
+      <div class="permissions-panel__header">
+        <div>
+          <h2>Resumen relacional</h2>
+          <p class="text-muted">Relaciones activas del rol dentro del esquema de seguridad.</p>
+        </div>
+      </div>
+      <div class="permissions-summary">
+        <div>
+          <span class="permissions-summary__label">Permisos asignados</span>
+          <strong>{{ selected_role.permisos_detalle|length }}</strong>
+        </div>
+        <div>
+          <span class="permissions-summary__label">Usuarios relacionados</span>
+          <strong>{{ selected_role.usuarios_detalle|length }}</strong>
+        </div>
+        <div>
+          <span class="permissions-summary__label">Accesos por indicador</span>
+          <strong>{{ selected_role.indicadores_detalle|length }}</strong>
+        </div>
+      </div>
+    </article>
+  </div>
+
+  <div class="permissions-grid">
+    <article class="card permissions-panel">
+      <div class="permissions-panel__header"><h2>Permisos del rol</h2></div>
+      <div class="permissions-chip-list">
+        {% for item in selected_role.permisos_detalle %}
+          <span class="badge">{{ item.permiso.modulo }} / {{ item.permiso.codigo_permiso }}</span>
+        {% empty %}
+          <p class="text-muted">Este rol todavia no tiene permisos asignados.</p>
+        {% endfor %}
+      </div>
+    </article>
+
+    <article class="card permissions-panel">
+      <div class="permissions-panel__header"><h2>Usuarios con este rol</h2></div>
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Correo</th>
+              <th>Asignacion</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in selected_role.usuarios_detalle %}
+              <tr>
+                <td>{{ item.usuario.nombre_completo }}</td>
+                <td>{{ item.usuario.correo }}</td>
+                <td>{{ item.fecha_asignacion|date:"d/m/Y H:i"|default:"--" }}</td>
+                <td>
+                  {% if item.activo %}
+                    <span class="status status-success">Activo</span>
+                  {% else %}
+                    <span class="status status-muted">Inactivo</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="4" class="text-center text-muted">No hay usuarios con este rol.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </div>
+
+  <article class="card permissions-panel">
+    <div class="permissions-panel__header"><h2>Accesos por indicador</h2></div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Ciclo</th>
+            <th>Indicador</th>
+            <th>Acceso total</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in selected_role.indicadores_detalle %}
+            <tr>
+              <td>{{ item.ciclo.nombre }}</td>
+              <td>{{ item.indicador.codigo_indicador }} - {{ item.indicador.nombre_indicador }}</td>
+              <td>{% if item.acceso_total %}Si{% else %}No{% endif %}</td>
+              <td>
+                {% if item.activo %}
+                  <span class="status status-success">Activo</span>
+                {% else %}
+                  <span class="status status-muted">Inactivo</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="text-center text-muted">No existen accesos por indicador para este rol.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+{% else %}
+  <div class="card">
+    <p class="text-muted">No hay roles registrados. Crea uno primero desde la pestaña Roles.</p>
+  </div>
+{% endif %}
+{% endblock %}

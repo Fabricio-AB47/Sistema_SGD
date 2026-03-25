@@ -1,0 +1,95 @@
+{% extends "permisos/_page_base.html" %}
+
+{% block permisos_content %}
+<div class="permissions-grid">
+  <article class="card permissions-panel">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Asignar acceso por indicador</h2>
+        <p class="text-muted">Relaciona <code>rol</code>, <code>indicador</code> y <code>ciclo_evaluacion</code> en la tabla <code>rol_indicador</code>.</p>
+      </div>
+    </div>
+    <form method="post" class="form-grid">
+      {% csrf_token %}
+      <div class="form-group">
+        <span>{{ form.rol.label }}</span>
+        {{ form.rol }}
+        {{ form.rol.errors }}
+      </div>
+      <div class="form-group">
+        <span>{{ form.indicador.label }}</span>
+        {{ form.indicador }}
+        {{ form.indicador.errors }}
+      </div>
+      <div class="form-group">
+        <span>{{ form.ciclo.label }}</span>
+        {{ form.ciclo }}
+        {{ form.ciclo.errors }}
+      </div>
+      <div class="form-check">
+        {{ form.acceso_total }}
+        <span>{{ form.acceso_total.label }}</span>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Guardar acceso</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="card permissions-panel permissions-panel--wide">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Accesos registrados</h2>
+        <p class="text-muted">Solo se muestran relaciones reales entre rol, indicador y ciclo.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Rol</th>
+            <th>Ciclo</th>
+            <th>Indicador</th>
+            <th>Acceso total</th>
+            <th>Estado</th>
+            <th class="text-right">Accion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for assignment in assignments %}
+            <tr>
+              <td>{{ assignment.rol.nombre_rol }}</td>
+              <td>{{ assignment.ciclo.nombre }}</td>
+              <td>{{ assignment.indicador.codigo_indicador }} - {{ assignment.indicador.nombre_indicador }}</td>
+              <td>{% if assignment.acceso_total %}Si{% else %}No{% endif %}</td>
+              <td>
+                {% if assignment.activo %}
+                  <span class="status status-success">Activo</span>
+                {% else %}
+                  <span class="status status-muted">Inactivo</span>
+                {% endif %}
+              </td>
+              <td class="text-right">
+                {% if assignment.activo %}
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="deactivate">
+                    <input type="hidden" name="access_id" value="{{ assignment.pk }}">
+                    <button class="btn btn-ghost" type="submit">Desactivar</button>
+                  </form>
+                {% else %}
+                  <span class="text-muted">Sin accion</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted">No existen accesos por indicador.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div>
+{% endblock %}

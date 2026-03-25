@@ -1,0 +1,15 @@
+{% extends "base/base.html" %}
+
+{% block body %}
+<div class="layout">
+    {% include "includes/sidebar.html" %}
+    <div class="content">
+        {% include "includes/navbar.html" %}
+        <section class="page-wrapper">
+            {% include "includes/messages.html" %}
+            {% block content %}{% endblock %}
+        </section>
+        {% include "includes/footer.html" %}
+    </div>
+</div>
+{% endblock %}

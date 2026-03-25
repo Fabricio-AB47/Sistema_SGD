@@ -1,0 +1,164 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<div class="ciclos-page ciclos-page--detail">
+  <section class="ciclo-detail-hero">
+    <article class="card acreditacion-panel ciclo-detail-hero__main">
+      <div class="ciclo-detail-hero__header">
+        <div>
+          <p class="eyebrow">Ficha de seguimiento</p>
+          <h3>{{ ciclo.nombre }}</h3>
+          <p class="text-muted">Administra el estado del ciclo, revisa el documento asociado y registra nuevas versiones firmadas.</p>
+        </div>
+        <span class="acreditacion-pill">{{ ciclo.anio|default:"Sin anio" }}</span>
+      </div>
+
+      <div class="ciclo-detail-hero__metrics">
+        <div class="ciclo-detail-hero__metric">
+          <span>Inicio</span>
+          <strong>{{ ciclo.fecha_inicio|date:"d/m/Y H:i" }}</strong>
+        </div>
+        <div class="ciclo-detail-hero__metric">
+          <span>Fin</span>
+          <strong>{{ ciclo.fecha_fin|date:"d/m/Y H:i" }}</strong>
+        </div>
+        <div class="ciclo-detail-hero__metric">
+          <span>Estado</span>
+          {% with estado_desc=ciclo.estado.descripcion|upper %}
+            <strong>
+              <span class="acreditacion-status {% if estado_desc == 'APROBADO' %}acreditacion-status--success{% elif estado_desc == 'ABIERTO' %}acreditacion-status--info{% elif estado_desc == 'EN_REVISION' %}acreditacion-status--warning{% else %}acreditacion-status--muted{% endif %}">
+                {{ ciclo.estado.descripcion }}
+              </span>
+            </strong>
+          {% endwith %}
+        </div>
+        <div class="ciclo-detail-hero__metric">
+          <span>Carga documental</span>
+          <strong>{% if ciclo.document_upload_enabled %}Habilitada{% else %}Bloqueada{% endif %}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="card acreditacion-panel ciclo-detail-hero__aside">
+      <h3>Contexto rapido</h3>
+      <p class="text-muted">{{ ciclo.descripcion|default:"Este ciclo no tiene descripcion registrada." }}</p>
+      <ul class="acreditacion-links">
+        <li>Usa esta pantalla para aprobar el ciclo o mantenerlo en revision.</li>
+        <li>El documento principal se edita desde Microsoft Graph.</li>
+        <li>Cada archivo adicional genera una nueva version trazable.</li>
+      </ul>
+    </article>
+  </section>
+
+  <div class="ciclo-detail-grid">
+    <article class="card acreditacion-panel ciclo-detail-card">
+      <div class="ciclo-detail-card__header">
+        <div>
+          <h3>Estado del ciclo</h3>
+          <p class="text-muted">Actualiza el estado operativo desde una vista dedicada.</p>
+        </div>
+      </div>
+
+      <form method="post" action="{% url 'acreditacion-ciclos-estado' ciclo.pk %}" class="acreditacion-form">
+        {% csrf_token %}
+        {{ estado_form.non_field_errors }}
+        <input type="hidden" name="ciclo_id" value="{{ ciclo.pk }}">
+        <input type="hidden" name="next_url" value="{% url 'acreditacion-ciclos-lista' %}">
+        <label class="acreditacion-form__field">
+          <span>Estado actual</span>
+          {{ estado_form.estado }}
+          {{ estado_form.estado.errors }}
+        </label>
+        <div class="acreditacion-form__actions">
+          <button class="btn btn-primary" type="submit">Guardar estado</button>
+        </div>
+      </form>
+    </article>
+
+    <article class="card acreditacion-panel ciclo-detail-card">
+      <div class="ciclo-detail-card__header">
+        <div>
+          <h3>Documento de autorizacion</h3>
+          <p class="text-muted">Revision central del archivo principal del ciclo.</p>
+        </div>
+      </div>
+
+      {% if ciclo.authorization_document %}
+        <dl class="acreditacion-detail-list">
+          <div>
+            <dt>Archivo</dt>
+            <dd>{{ ciclo.authorization_document.nombre_archivo }}</dd>
+          </div>
+          <div>
+            <dt>Fecha de carga</dt>
+            <dd>{{ ciclo.authorization_document.fecha_subida|date:"d/m/Y H:i" }}</dd>
+          </div>
+          <div>
+            <dt>Versiones registradas</dt>
+            <dd>{{ ciclo.authorization_document_count }} documento(s)</dd>
+          </div>
+          <div>
+            <dt>Disponibilidad</dt>
+            <dd>{% if ciclo.document_upload_enabled %}Habilitada para carga general{% else %}Pendiente de habilitacion{% endif %}</dd>
+          </div>
+        </dl>
+        <div class="ciclo-detail-card__actions">
+          {% if ciclo.authorization_document.graph_web_url %}
+            <a
+              class="btn btn-primary"
+              href="{% url 'documentos-protegidos-graph' ciclo.authorization_document.pk %}"
+              target="_blank"
+              rel="noopener"
+            >
+              Revision de documento
+            </a>
+          {% endif %}
+          <a
+            class="btn btn-ghost"
+            href="{% url 'documentos-protegidos-descargar' ciclo.authorization_document.pk %}"
+            target="_blank"
+            rel="noopener"
+          >
+            Descargar
+          </a>
+        </div>
+      {% else %}
+        <div class="ciclos-empty-state">
+          <strong>Sin documento asociado.</strong>
+          <p class="text-muted">Carga primero el documento de autorizacion para habilitar el resto del flujo.</p>
+        </div>
+      {% endif %}
+    </article>
+  </div>
+
+  <article class="card acreditacion-panel ciclo-upload-card">
+    <div class="ciclo-upload-card__header">
+      <div>
+        <p class="eyebrow">Versionamiento</p>
+        <h3>Cargar nueva version firmada</h3>
+        <p class="text-muted">Adjunta una nueva aprobacion o una version firmada sin reemplazar el historial existente.</p>
+      </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="acreditacion-form">
+      {% csrf_token %}
+      {{ authorization_revision_form.non_field_errors }}
+      <div class="ciclos-form-grid">
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Descripcion de la version</span>
+          {{ authorization_revision_form.descripcion_documento }}
+          {{ authorization_revision_form.descripcion_documento.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Documento firmado</span>
+          {{ authorization_revision_form.archivo }}
+          {{ authorization_revision_form.archivo.errors }}
+        </label>
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Cargar nueva version</button>
+      </div>
+    </form>
+  </article>
+</div>
+{% endblock %}

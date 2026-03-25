@@ -1,0 +1,48 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<article class="card acreditacion-panel acreditacion-panel--wide">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Matriz de acreditacion</h3>
+      <p class="text-muted">Lectura real de la jerarquia usando `criterio`, `subcriterio`, `indicador` e `indicador_elemento_fundamental`.</p>
+    </div>
+  </div>
+
+  <div class="acreditacion-matrix">
+    <div class="acreditacion-matrix__header">
+      <span>Criterio</span>
+      <span>Subcriterio</span>
+      <span>Indicador</span>
+      <span>Elemento</span>
+      <span>Tipo</span>
+      <span>Estado</span>
+    </div>
+    {% for row in matrix_rows %}
+      <div class="acreditacion-matrix__row">
+        <span>{{ row.criterio.codigo_criterio }}</span>
+        <span>{{ row.subcriterio.codigo_subcriterio }}</span>
+        <span>{{ row.indicador.codigo_indicador }} - {{ row.indicador.nombre_indicador }}</span>
+        <span>{% if row.elemento %}{{ row.elemento.codigo_elemento }} - {{ row.elemento.nombre_elemento }}{% else %}Sin elemento{% endif %}</span>
+        <span>{{ row.indicador.tipo_indicador.descripcion }}</span>
+        <span>
+          {% if row.indicador.activo %}
+            <strong class="acreditacion-status acreditacion-status--success">Activo</strong>
+          {% else %}
+            <strong class="acreditacion-status acreditacion-status--muted">Inactivo</strong>
+          {% endif %}
+        </span>
+      </div>
+    {% empty %}
+      <div class="acreditacion-matrix__row">
+        <span>No existe informacion registrada en la matriz.</span>
+        <span>--</span>
+        <span>--</span>
+        <span>--</span>
+        <span>--</span>
+        <span>--</span>
+      </div>
+    {% endfor %}
+  </div>
+</article>
+{% endblock %}

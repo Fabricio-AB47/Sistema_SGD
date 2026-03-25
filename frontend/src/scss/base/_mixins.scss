@@ -1,0 +1,18 @@
+@use "sass:map"; // Utilidades de mapas para evitar deprecaciones.
+
+// Breakpoints reutilizables para mantener el layout responsive
+$breakpoints: (
+  "xl": 1200px,
+  "lg": 992px,
+  "md": 768px,
+  "sm": 576px
+);
+
+@mixin respond($point) {
+  $size: map.get($breakpoints, $point); // Recupera el ancho del breakpoint solicitado.
+  @if $size {
+    @media (max-width: $size) {
+      @content;
+    }
+  }
+}

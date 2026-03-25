@@ -1,0 +1,55 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Nueva credencial API | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Nueva credencial</h1>
+    <p class="text-muted">El client ID, tenant ID y secret se cifran antes de guardarse y no se exponen en pantalla.</p>
+  </div>
+</div>
+
+<div class="card">
+  <form method="post" class="form-grid integraciones__form">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="form-group">
+      <span>Servicio</span>
+      {{ form.api_servicio }}{{ form.api_servicio.errors }}
+    </div>
+    <div class="form-group">
+      <span>Nombre de la aplicacion</span>
+      {{ form.nombre_aplicacion }}{{ form.nombre_aplicacion.errors }}
+    </div>
+    <div class="form-group">
+      <span>Client ID</span>
+      {{ form.client_id }}{{ form.client_id.errors }}
+      {% if form.client_id.help_text %}<small class="integraciones__note">{{ form.client_id.help_text }}</small>{% endif %}
+    </div>
+    <div class="form-group">
+      <span>Tenant ID</span>
+      {{ form.tenant_id }}{{ form.tenant_id.errors }}
+      {% if form.tenant_id.help_text %}<small class="integraciones__note">{{ form.tenant_id.help_text }}</small>{% endif %}
+    </div>
+    <div class="form-group form-group--full">
+      <span>Secret</span>
+      {{ form.secret }}{{ form.secret.errors }}
+      <small class="integraciones__note">{{ form.secret.help_text }}</small>
+    </div>
+    <div class="form-group">
+      <span>Fecha de expiracion</span>
+      {{ form.fecha_expiracion }}{{ form.fecha_expiracion.errors }}
+    </div>
+    <div class="form-check">
+      {{ form.activo }} <span>Activo</span>
+      {{ form.activo.errors }}
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">Guardar credencial</button>
+      <a class="btn btn-secondary" href="{% url 'integraciones-credenciales-lista' %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

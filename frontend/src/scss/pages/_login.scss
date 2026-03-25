@@ -1,0 +1,240 @@
+@use "sass:color";
+@use "../base/variables" as *;
+@use "../base/mixins" as *;
+
+// -------- Pantalla de login ----------
+.auth-page {
+  min-height: 100vh;                         // Cubre toda la pantalla.
+  padding: 3.5rem 2rem;                      // Espacio alrededor (recuperado).
+  background: $gradient_hero;                // Fondo degradado en grises de la paleta.
+  display: grid;
+  place-items: center;                       // Centra el panel.
+  justify-content: center;                   // Centro explícito horizontal.
+}
+
+.auth-shell { width: 100%; }
+
+.auth-panel {
+  width: min(1200px, 100%);                  // Ancho máximo controlado.
+  min-height: 560px;                         // Altura similar a la referencia.
+  background: $blanco;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: $panel_shadow;                 // Sombra marcada.
+  display: grid;
+  grid-template-columns: 440px 1fr;          // Form + hero.
+}
+
+.auth-left {
+  background: $blanco;
+  padding: 3rem 2.8rem;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1.5rem;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.auth-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  background: color.mix($secondary, $blanco, 85%);
+  display: grid;
+  place-items: center;
+  color: #0d1b2a;
+  font-weight: 800;
+  box-shadow: 0 12px 26px rgba($secondary, 0.35);
+  font-size: 1.05rem;
+}
+
+.auth-brand-text {
+  display: grid;
+  line-height: 1.2;
+  font-weight: 800;
+  color: $primary;
+}
+
+.auth-welcome h1 {
+  margin: 0;
+  font-size: 1.8rem;
+  color: $text;
+}
+
+.auth-welcome p {
+  margin: 0.45rem 0 0;
+  color: $text_muted;
+}
+
+.auth-form { display: grid; gap: 1rem; }
+
+.auth-input { position: relative; }
+
+.auth-input__icon {
+  position: absolute;
+  left: 1.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: $gris_oscuro;
+  font-size: 0.95rem;
+}
+
+.auth-input input {
+  width: 100%;
+  padding: 1.05rem 1.1rem 1.05rem 3.1rem;
+  border-radius: $radius_pill;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #f9fafb;
+  font-size: 1rem;
+  box-shadow: $pill_shadow;
+  transition: border 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  color: $text;                           // Texto oscuro para mayor contraste.
+  &::placeholder { color: rgba($text, 0.6); } // Placeholder legible sobre gris claro.
+  &:focus {
+    outline: none;
+    border-color: $primary;
+    box-shadow: 0 0 0 3px rgba($primary, 0.15);
+    background: $blanco;
+  }
+}
+
+.auth-links {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+  color: $text_muted;
+}
+
+.auth-links a {
+  color: $primary;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.auth-submit {
+  width: 100%;
+  border: none;
+  border-radius: $radius_pill;
+  padding: 1rem;
+  font-weight: 800;
+  color: $blanco;
+  background: $rojo;                     // Botón plano en rojo institucional.
+  cursor: pointer;
+  box-shadow: 0 16px 34px rgba($primary, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  &:hover { transform: translateY(-2px); box-shadow: 0 20px 40px rgba($primary, 0.35); }
+  &:active { transform: translateY(0); box-shadow: 0 10px 22px rgba($primary, 0.25); }
+}
+
+.auth-dots {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: center;
+}
+
+.auth-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d1d5db;
+}
+
+.auth-right {
+  position: relative;
+  overflow: hidden;
+  color: $text;                     // Texto oscuro sobre fondo claro gris.
+  padding: 3.4rem 3.6rem;
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+  background: $gradient_hero;       // Usa el mismo degradado gris institucional.
+}
+
+.auth-right::after {
+  // Capa decorativa con ondas suaves, sólo con colores de la paleta.
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 20%, rgba($celeste, 0.20), transparent 32%),
+              radial-gradient(circle at 80% 0%, rgba($gris_oscuro, 0.12), transparent 38%),
+              radial-gradient(circle at 60% 70%, rgba($gris, 0.20), transparent 35%);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.auth-hero {
+  position: relative; // Texto encima de la capa decorativa.
+  z-index: 1;
+  max-width: 520px;
+}
+
+.auth-hero .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.75rem;
+  color: rgba($text, 0.75);
+  margin: 0 0 0.8rem 0;
+}
+
+.auth-hero-title {
+  margin: 0 0 0.6rem 0;
+  font-size: clamp(2.2rem, 3vw, 2.9rem);
+  color: $text; // Asegura contraste sobre gris.
+}
+
+.auth-hero-text {
+  margin: 0;
+  color: rgba($text, 0.9); // Un poco más oscuro para ganar legibilidad.
+  line-height: 1.6;
+}
+
+.auth-hero-pill {
+  margin-top: 1.2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: $radius_pill;
+  background: rgba($blanco, 0.4);              // Pastilla clara para contraste.
+  border: 1px solid rgba($gris_oscuro, 0.22);
+  font-size: 0.95rem;
+  backdrop-filter: blur(4px);
+  color: $text;
+}
+
+.auth-meta {
+  margin-top: 1.4rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: rgba($text, 0.88); // Texto ligeramente más oscuro.
+  flex-wrap: wrap;
+}
+
+.form-error {
+  border-radius: $radius;
+  padding: 0.75rem;
+  border: 1px solid rgba($primary, 0.25);
+  background: rgba($primary, 0.08);
+  color: color.adjust($primary, $lightness: 8%);
+}
+
+@include respond("lg") {
+  .auth-panel {
+    grid-template-columns: 1fr; // Apila columnas en tablets.
+    min-height: auto;
+  }
+  .auth-right { display: none; }
+  .auth-page { padding: 2.5rem 1.5rem; }
+  .auth-left { padding: 2.2rem 1.8rem; }
+}
+
+@include respond("sm") {
+  .auth-left { padding: 2rem 1.5rem; }
+  .auth-input input { padding-left: 2.6rem; }
+}

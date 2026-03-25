@@ -1,0 +1,21 @@
+{% if messages %}
+  <div id="toast-stack" aria-live="polite" aria-atomic="true">
+    {% for message in messages %}
+      <div class="toast-item toast-{{ message.tags|default:'info' }}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  </div>
+  <script>
+    (() => {
+      const toasts = document.querySelectorAll("#toast-stack .toast-item");
+      if (!toasts.length) return;
+      setTimeout(() => {
+        toasts.forEach(t => {
+          t.classList.add("toast-hide");
+          setTimeout(() => t.remove(), 350);
+        });
+      }, 2000);
+    })();
+  </script>
+{% endif %}

@@ -1,0 +1,105 @@
+{% extends "permisos/_page_base.html" %}
+
+{% block permisos_content %}
+<div class="card permissions-filter">
+  <form method="get" class="filters__grid">
+    <div class="form-group">
+      <span>Rol</span>
+      <select name="rol">
+        {% for role in roles %}
+          <option value="{{ role.pk }}" {% if selected_role and selected_role.pk == role.pk %}selected{% endif %}>
+            {{ role.nombre_rol }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filters__actions">
+      <button class="btn btn-primary" type="submit">Cargar permisos</button>
+    </div>
+  </form>
+</div>
+
+<div class="permissions-grid">
+  <article class="card permissions-panel permissions-panel--wide">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Matriz rol-permiso</h2>
+        <p class="text-muted">Selecciona el rol y marca los permisos que quedarán vinculados en la tabla <code>rol_permiso</code>.</p>
+      </div>
+    </div>
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="sync_permissions">
+      <div class="form-grid">
+        <div class="form-group">
+          <span>{{ sync_form.rol.label }}</span>
+          {{ sync_form.rol }}
+          {{ sync_form.rol.errors }}
+        </div>
+      </div>
+
+      <div class="permissions-groups">
+        {% for modulo, permisos in permissions_grouped.items %}
+          <section class="permissions-group">
+            <h3>{{ modulo }}</h3>
+            <div class="permissions-checklist">
+              {% for permiso in permisos %}
+                <label class="permissions-checklist__item">
+                  <input type="checkbox" name="permisos" value="{{ permiso.pk }}" {% if permiso.pk in assigned_ids %}checked{% endif %}>
+                  <span>
+                    <strong>{{ permiso.codigo_permiso }}</strong>
+                    <small>{{ permiso.descripcion }}</small>
+                  </span>
+                </label>
+              {% endfor %}
+            </div>
+          </section>
+        {% empty %}
+          <p class="text-muted">No hay permisos activos. Registra permisos en el panel lateral de esta misma pantalla.</p>
+        {% endfor %}
+      </div>
+
+      <div class="form-actions permissions-actions">
+        <button class="btn btn-primary" type="submit">Guardar permisos del rol</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="card permissions-panel">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Nuevo permiso</h2>
+        <p class="text-muted">Carga el catalogo base de permisos para luego relacionarlo con roles.</p>
+      </div>
+    </div>
+    <form method="post" class="form-grid">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_permission">
+      <input type="hidden" name="rol" value="{% if selected_role %}{{ selected_role.pk }}{% endif %}">
+      <div class="form-group">
+        <span>{{ permission_form.codigo_permiso.label }}</span>
+        {{ permission_form.codigo_permiso }}
+        {{ permission_form.codigo_permiso.errors }}
+      </div>
+      <div class="form-group">
+        <span>{{ permission_form.descripcion.label }}</span>
+        {{ permission_form.descripcion }}
+        {{ permission_form.descripcion.errors }}
+      </div>
+      <div class="form-group">
+        <span>{{ permission_form.modulo.label }}</span>
+        {{ permission_form.modulo }}
+        {{ permission_form.modulo.errors }}
+      </div>
+      <div class="form-check">
+        {{ permission_form.activo }}
+        <span>{{ permission_form.activo.label }}</span>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" type="submit">Crear permiso</button>
+      </div>
+    </form>
+  </article>
+</div>
+{% endblock %}

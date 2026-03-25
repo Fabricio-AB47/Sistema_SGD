@@ -1,0 +1,80 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+{% if selected_indicator %}
+  <div class="acreditacion-detail-grid">
+    <article class="card acreditacion-panel">
+      <h3>Ficha del indicador</h3>
+      <dl class="acreditacion-detail-list">
+        <div><dt>Codigo</dt><dd>{{ selected_indicator.codigo_indicador }}</dd></div>
+        <div><dt>Nombre</dt><dd>{{ selected_indicator.nombre_indicador }}</dd></div>
+        <div><dt>Tipo</dt><dd>{{ selected_indicator.tipo_indicador.descripcion }}</dd></div>
+        <div><dt>Subcriterio</dt><dd>{{ selected_indicator.subcriterio.codigo_subcriterio }} - {{ selected_indicator.subcriterio.nombre_subcriterio }}</dd></div>
+        <div><dt>Criterio</dt><dd>{{ selected_indicator.subcriterio.criterio.codigo_criterio }} - {{ selected_indicator.subcriterio.criterio.nombre_criterio }}</dd></div>
+        <div><dt>Ponderacion</dt><dd>{{ selected_indicator.ponderacion|default:"--" }}</dd></div>
+      </dl>
+    </article>
+
+    <article class="card acreditacion-panel">
+      <h3>Relacionar elemento</h3>
+      <form method="post" class="acreditacion-form">
+        {% csrf_token %}
+        {{ relation_form.non_field_errors }}
+        <div class="acreditacion-form__grid">
+          <label class="acreditacion-form__field acreditacion-form__field--full">
+            <span>Indicador</span>
+            {{ relation_form.indicador }}
+            {{ relation_form.indicador.errors }}
+          </label>
+          <label class="acreditacion-form__field acreditacion-form__field--full">
+            <span>Elemento fundamental</span>
+            {{ relation_form.elemento_fundamental }}
+            {{ relation_form.elemento_fundamental.errors }}
+          </label>
+        </div>
+        <div class="acreditacion-form__actions">
+          <button class="btn btn-primary" type="submit">Vincular elemento</button>
+        </div>
+      </form>
+    </article>
+  </div>
+
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Elementos asociados</h3>
+        <p class="text-muted">Lectura real de `indicador_elemento_fundamental`.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Codigo</th>
+            <th>Elemento</th>
+            <th>Clasificacion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for relation in selected_indicator.elementos_detalle %}
+            <tr>
+              <td>{{ relation.elemento_fundamental.codigo_elemento }}</td>
+              <td>{{ relation.elemento_fundamental.nombre_elemento }}</td>
+              <td>{{ relation.elemento_fundamental.clasificacion.nombre }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-muted">Este indicador aun no tiene elementos relacionados.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+{% else %}
+  <article class="card acreditacion-panel">
+    <h3>Sin indicadores</h3>
+    <p class="text-muted">Primero registra al menos un indicador para consultar su detalle.</p>
+  </article>
+{% endif %}
+{% endblock %}

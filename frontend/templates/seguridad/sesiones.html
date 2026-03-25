@@ -1,0 +1,202 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Sesiones activas | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Sesiones activas</h1>
+    <p class="text-muted">Control operativo sobre `user_session` e `historial_login` con filtros reales y revocacion inmediata.</p>
+  </div>
+  <div class="page-header__actions">
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="revoke_other_sessions">
+      <button class="btn btn-secondary" type="submit">Cerrar otras sesiones</button>
+    </form>
+    <a class="btn btn-ghost" href="{% url 'seguridad-recuperar-password' %}?correo={{ current_user_session.correo|urlencode }}">Recuperar contrasena</a>
+  </div>
+</div>
+
+<div class="security-metrics">
+  <article class="security-metrics__card">
+    <span class="security-metrics__label">Sesiones totales</span>
+    <strong class="security-metrics__value">{{ session_metrics.total }}</strong>
+  </article>
+  <article class="security-metrics__card">
+    <span class="security-metrics__label">Activas</span>
+    <strong class="security-metrics__value">{{ session_metrics.activas }}</strong>
+  </article>
+  <article class="security-metrics__card">
+    <span class="security-metrics__label">Expiradas</span>
+    <strong class="security-metrics__value">{{ session_metrics.expiradas }}</strong>
+  </article>
+  <article class="security-metrics__card">
+    <span class="security-metrics__label">Usuarios con sesion</span>
+    <strong class="security-metrics__value">{{ session_metrics.usuarios }}</strong>
+  </article>
+  <article class="security-metrics__card">
+    <span class="security-metrics__label">Mis sesiones activas</span>
+    <strong class="security-metrics__value">{{ session_metrics.mias }}</strong>
+  </article>
+</div>
+
+<div class="security-grid">
+  <article class="card security-panel security-panel--compact">
+    <div class="security-panel__header">
+      <div>
+        <h2>Filtros</h2>
+        <p class="text-muted">Consulta por usuario, correo, IP, token o alcance.</p>
+      </div>
+    </div>
+    <form method="get" class="form-grid security-filter-form">
+      <div class="form-group">
+        <span>Busqueda</span>
+        {{ filter_form.q }}
+      </div>
+      <div class="form-group">
+        <span>Estado</span>
+        {{ filter_form.estado }}
+      </div>
+      <div class="form-group">
+        <span>Alcance</span>
+        {{ filter_form.alcance }}
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Aplicar filtros</button>
+        <a class="btn btn-ghost" href="{% url 'seguridad-sesiones' %}">Limpiar</a>
+      </div>
+    </form>
+  </article>
+
+  <article class="card security-panel">
+    <div class="security-panel__header">
+      <div>
+        <h2>Ultimos intentos de acceso</h2>
+        <p class="text-muted">Lectura directa de `historial_login` para trazabilidad inmediata.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Resultado</th>
+            <th>Motivo</th>
+            <th>IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for login in recent_logins %}
+            <tr>
+              <td>{{ login.fecha_intento|date:"d/m/Y H:i" }}</td>
+              <td>
+                {% if login.usuario %}
+                  {{ login.usuario.nombre_completo }}
+                {% else %}
+                  {{ login.correo_intento|default:"--" }}
+                {% endif %}
+              </td>
+              <td>
+                {% if login.exito %}
+                  <span class="status status-success">Exitoso</span>
+                {% else %}
+                  <span class="status status-danger">Fallido</span>
+                {% endif %}
+              </td>
+              <td>{{ login.motivo|default:"--" }}</td>
+              <td>{{ login.ip|default:"--" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="text-center text-muted">No existen intentos registrados.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div>
+
+<article class="card security-panel">
+  <div class="security-panel__header">
+    <div>
+      <h2>Sesiones registradas</h2>
+      <p class="text-muted">Cada fila corresponde a un registro real en `user_session`.</p>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Token</th>
+          <th>Inicio</th>
+          <th>Expira</th>
+          <th>IP</th>
+          <th>Agente</th>
+          <th>Estado</th>
+          <th class="text-right">Accion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for session in sessions_page %}
+          <tr>
+            <td>
+              <strong>{{ session.usuario.nombre_completo }}</strong>
+              <div class="text-muted">{{ session.usuario.correo }}</div>
+              {% if session.es_actual %}
+                <span class="status status-info">Sesion actual</span>
+              {% endif %}
+            </td>
+            <td><code>{{ session.token_sesion_hash|slice:":14" }}...</code></td>
+            <td>{{ session.fecha_inicio|date:"d/m/Y H:i" }}</td>
+            <td>{{ session.fecha_expiracion|date:"d/m/Y H:i" }}</td>
+            <td>{{ session.ip|default:"--" }}</td>
+            <td class="security-user-agent">{{ session.user_agent|default:"--" }}</td>
+            <td>
+              {% if session.esta_expirada %}
+                <span class="status status-warning">Expirada</span>
+              {% elif session.activa %}
+                <span class="status status-success">Activa</span>
+              {% else %}
+                <span class="status status-muted">Inactiva</span>
+              {% endif %}
+            </td>
+            <td class="text-right">
+              {% if session.activa %}
+                <form method="post" class="inline-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="revoke_session">
+                  <input type="hidden" name="session_id" value="{{ session.id_sesion }}">
+                  <button class="btn btn-danger" type="submit">
+                    {% if session.es_actual %}Cerrar actual{% else %}Revocar{% endif %}
+                  </button>
+                </form>
+              {% else %}
+                <span class="text-muted">Sin accion</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="8" class="text-center text-muted">No existen sesiones para los filtros seleccionados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if sessions_page.paginator.num_pages > 1 %}
+    <div class="security-pagination">
+      {% if sessions_page.has_previous %}
+        <a class="btn btn-ghost" href="?page={{ sessions_page.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado }}{% endif %}{% if request.GET.alcance %}&alcance={{ request.GET.alcance }}{% endif %}">Anterior</a>
+      {% endif %}
+      <span>Pagina {{ sessions_page.number }} de {{ sessions_page.paginator.num_pages }}</span>
+      {% if sessions_page.has_next %}
+        <a class="btn btn-ghost" href="?page={{ sessions_page.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.estado %}&estado={{ request.GET.estado }}{% endif %}{% if request.GET.alcance %}&alcance={{ request.GET.alcance }}{% endif %}">Siguiente</a>
+      {% endif %}
+    </div>
+  {% endif %}
+</article>
+{% endblock %}

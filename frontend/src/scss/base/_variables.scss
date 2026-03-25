@@ -1,0 +1,24 @@
+@use "sass:color"; // Utilidades de color modernas.
+
+// Paleta institucional base
+$rojo: #931913;        // Rojo principal
+$celeste: #8DBBC7;     // Celeste secundario
+$blanco: #ffffff;      // Blanco
+$gris: #C7C6C6;        // Gris claro
+$gris_oscuro: #777777; // Gris oscuro
+
+// Derivados y tokens globales (solo se definen aquí para un único origen de verdad)
+$primary: $rojo;                         // Color principal
+$secondary: $celeste;                    // Color de apoyo
+$text: #1f2933;                          // Texto primario
+$text_muted: #4b5563;                    // Texto secundario
+$bg_dark: color.mix($gris, $blanco, 80%);        // Fondo gris muy claro
+$bg_dark_alt: color.mix($gris, $gris_oscuro, 40%); // Variación gris medio
+$panel_shadow: 0 25px 60px rgba(0, 0, 0, 0.35); // Sombra para cards grandes
+$card_shadow: 0 12px 28px rgba(0, 0, 0, 0.16);  // Sombra media
+$pill_shadow: 0 10px 20px rgba(0, 0, 0, 0.12);  // Sombra para inputs/botones
+$radius: 12px;                           // Radio general
+$radius_pill: 999px;                     // Radio para inputs/botones tipo píldora
+$border_soft: 1px solid rgba(0, 0, 0, 0.06);    // Borde sutil
+$gradient_primary: linear-gradient(135deg, $rojo 0%, color.adjust($rojo, $lightness: 8%) 55%, $celeste 100%); // Degradado institucional
+$gradient_hero: linear-gradient(135deg, color.mix($gris, $blanco, 85%) 0%, color.mix($gris, $blanco, 65%) 45%, color.mix($gris_oscuro, $gris, 45%) 100%); // Degradado hero en grises

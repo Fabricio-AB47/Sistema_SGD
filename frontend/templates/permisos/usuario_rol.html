@@ -1,0 +1,90 @@
+{% extends "permisos/_page_base.html" %}
+
+{% block permisos_content %}
+<div class="permissions-grid">
+  <article class="card permissions-panel">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Asignar rol a usuario</h2>
+        <p class="text-muted">Crea o reactiva relaciones en <code>usuario_rol</code>.</p>
+      </div>
+    </div>
+    <form method="post" class="form-grid">
+      {% csrf_token %}
+      <div class="form-group">
+        <span>{{ form.usuario.label }}</span>
+        {{ form.usuario }}
+        {{ form.usuario.errors }}
+      </div>
+      <div class="form-group">
+        <span>{{ form.rol.label }}</span>
+        {{ form.rol }}
+        {{ form.rol.errors }}
+      </div>
+      <div class="form-check">
+        {{ form.activo }}
+        <span>{{ form.activo.label }}</span>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Guardar asignacion</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="card permissions-panel permissions-panel--wide">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Asignaciones actuales</h2>
+        <p class="text-muted">Consulta la trazabilidad de roles activos e inactivos por usuario.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Rol</th>
+            <th>Asignado</th>
+            <th>Revocacion</th>
+            <th>Estado</th>
+            <th class="text-right">Accion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for assignment in assignments %}
+            <tr>
+              <td>{{ assignment.usuario.nombre_completo }}</td>
+              <td>{{ assignment.rol.nombre_rol }}</td>
+              <td>{{ assignment.fecha_asignacion|date:"d/m/Y H:i"|default:"--" }}</td>
+              <td>{{ assignment.fecha_revocacion|date:"d/m/Y H:i"|default:"--" }}</td>
+              <td>
+                {% if assignment.activo %}
+                  <span class="status status-success">Activo</span>
+                {% else %}
+                  <span class="status status-muted">Inactivo</span>
+                {% endif %}
+              </td>
+              <td class="text-right">
+                {% if assignment.activo %}
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="revoke">
+                    <input type="hidden" name="assignment_id" value="{{ assignment.pk }}">
+                    <button class="btn btn-ghost" type="submit">Revocar</button>
+                  </form>
+                {% else %}
+                  <span class="text-muted">Sin accion</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted">No existen asignaciones usuario-rol.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div>
+{% endblock %}

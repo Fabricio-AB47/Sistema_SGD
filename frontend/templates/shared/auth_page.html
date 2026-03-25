@@ -1,0 +1,36 @@
+{% extends "base/auth_base.html" %}
+{% block title %}{{ page_title }} | SIG{% endblock %}
+
+{% block content %}
+<div class="auth-panel auth-panel--stack auth-panel--compact">
+  <div class="auth-panel__intro">
+    <p class="auth-panel__eyebrow">Seguridad</p>
+    <h1>{{ page_title }}</h1>
+    <p>{{ page_description }}</p>
+  </div>
+
+  {% if page_actions %}
+    <div class="auth-panel__actions">
+      {% for action in page_actions %}
+        <a class="btn {% if action.variant == 'secondary' %}btn-secondary{% else %}btn-primary{% endif %}" href="{% url action.url_name %}">{{ action.label }}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="auth-panel__grid">
+    {% for section in page_sections %}
+      <article class="auth-panel__card">
+        <h2>{{ section.title }}</h2>
+        {% if section.description %}<p>{{ section.description }}</p>{% endif %}
+        {% if section.items %}
+          <ul>
+            {% for item in section.items %}
+              <li>{{ item }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </article>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

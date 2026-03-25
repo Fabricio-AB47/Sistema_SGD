@@ -1,0 +1,135 @@
+.documentos-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.documentos-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.documentos-panel--wide {
+  min-width: 0;
+}
+
+.documentos-panel__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.documentos-panel__section-title {
+  margin-top: 1rem;
+}
+
+.documentos-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.documentos-form__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.documentos-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: var(--color-text);
+}
+
+.documentos-form__field span {
+  font-weight: 600;
+}
+
+.documentos-form__field input,
+.documentos-form__field select,
+.documentos-form__field textarea {
+  width: 100%;
+}
+
+.documentos-form__field--full {
+  grid-column: 1 / -1;
+}
+
+.documentos-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.documentos-empty-state {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border-radius: 14px;
+  background: rgba(147, 25, 19, 0.06);
+}
+
+.documentos-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.documentos-summary__label,
+.documentos-detail-list dt {
+  display: block;
+  color: var(--color-text-soft);
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.documentos-summary__value,
+.documentos-detail-list dd {
+  margin: 0;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.documentos-detail-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.documentos-links {
+  margin: 0;
+  padding-left: 1rem;
+}
+
+.documentos-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.documentos-table th,
+.documentos-table td {
+  padding: 0.85rem 0.75rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  vertical-align: top;
+  text-align: left;
+}
+
+.documentos-table__path {
+  word-break: break-word;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 960px) {
+  .documentos-grid,
+  .documentos-form__grid,
+  .documentos-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .documentos-panel__header {
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,49 @@
+{# Tabla de usuarios reutilizable #}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Correo</th>
+          <th>Identificación</th>
+          <th>Rol(es)</th>
+          <th>Estado</th>
+          <th class="text-right">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for usuario in usuarios %}
+          <tr>
+            <td>{{ usuario.primer_nombre }} {{ usuario.primer_apellido }}</td>
+            <td>{{ usuario.correo }}</td>
+            <td>{{ usuario.identificacion }}</td>
+            <td>
+              {% for ur in usuario.roles_asignados.all %}
+                {% if ur.activo %}<span class="badge">{{ ur.rol.nombre_rol }}</span>{% endif %}
+              {% empty %}
+                <span class="text-muted">Sin rol</span>
+              {% endfor %}
+            </td>
+            <td>
+              {% if usuario.activo %}
+                <span class="status status-success">Activo</span>
+              {% else %}
+                <span class="status status-muted">Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="text-right">
+              <div class="integraciones__actions">
+                <a class="btn btn-ghost" href="{% url 'usuarios-detalle' usuario.pk %}">Detalle</a>
+                <a class="btn btn-secondary" href="{% url 'usuarios-editar' usuario.pk %}">Editar</a>
+                <a class="btn btn-primary" href="{% url 'usuarios-asignar-roles' usuario.pk %}">Roles</a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="text-center text-muted">No se encontraron usuarios</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

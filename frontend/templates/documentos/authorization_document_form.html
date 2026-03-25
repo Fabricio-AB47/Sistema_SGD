@@ -1,0 +1,193 @@
+{% extends "documentos/_page_base.html" %}
+
+{% block documentos_content %}
+<div class="documentos-grid">
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Preparar carpeta del ciclo</h3>
+        <p class="text-muted">Crea la carpeta en Microsoft Graph dentro de `DOCUMENTOS CICLOS AUTH` antes de cargar el archivo.</p>
+      </div>
+      <a class="btn btn-secondary" href="{% url 'acreditacion-ciclos-lista' %}">Ir a ciclos y autorizacion</a>
+    </div>
+
+    <form method="post" class="documentos-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="prepare-folder">
+      {{ prepare_form.non_field_errors }}
+      <div class="documentos-form__grid">
+        <label class="documentos-form__field">
+          <span>Nombre del ciclo</span>
+          {{ prepare_form.nombre_ciclo }}
+          {{ prepare_form.nombre_ciclo.errors }}
+        </label>
+        <label class="documentos-form__field">
+          <span>Anio</span>
+          {{ prepare_form.anio }}
+          {{ prepare_form.anio.errors }}
+        </label>
+      </div>
+      <div class="documentos-form__actions">
+        <button class="btn btn-primary" type="submit">Preparar carpeta</button>
+        <a class="btn btn-ghost" href="{% url 'documentos-autorizacion-ciclo' %}?probe=1">Validar Graph</a>
+      </div>
+    </form>
+
+    {% if selected_status %}
+      <dl class="documentos-detail-list">
+        <div>
+          <dt>Documentos encontrados</dt>
+          <dd>{{ selected_status.document_count }}</dd>
+        </div>
+      </dl>
+    {% endif %}
+  </article>
+
+  <article class="card documentos-panel">
+    <h3>Estado de integracion</h3>
+    <div class="documentos-summary">
+      <div>
+        <span class="documentos-summary__label">Graph</span>
+        <strong class="documentos-summary__value">
+          {% if graph_summary.enabled %}Disponible{% else %}Sin validar{% endif %}
+        </strong>
+      </div>
+      <div>
+        <span class="documentos-summary__label">Origen</span>
+        <strong class="documentos-summary__value">{{ graph_summary.source|default:"--" }}</strong>
+      </div>
+      <div>
+        <span class="documentos-summary__label">App</span>
+        <strong class="documentos-summary__value">{{ graph_summary.app_name|default:"--" }}</strong>
+      </div>
+      <div>
+        <span class="documentos-summary__label">Drive</span>
+        <strong class="documentos-summary__value">{{ graph_summary.drive_id|default:"--" }}</strong>
+      </div>
+    </div>
+    <p class="text-muted">{{ graph_summary.message|default:"Sin diagnostico disponible." }}</p>
+    <dl class="documentos-detail-list">
+      {% if graph_summary.root_item_name %}
+        <div>
+          <dt>Root Graph</dt>
+          <dd>{{ graph_summary.root_item_name }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  </article>
+</div>
+
+<div class="documentos-grid">
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Cargar documento de autorizacion</h3>
+        <p class="text-muted">Cada carga crea o versiona el registro en `documento` y `version_documento`.</p>
+      </div>
+    </div>
+    <form method="post" enctype="multipart/form-data" class="documentos-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="upload-document">
+      {{ upload_form.non_field_errors }}
+      <div class="documentos-form__grid">
+        <label class="documentos-form__field">
+          <span>Nombre del ciclo</span>
+          {{ upload_form.nombre_ciclo }}
+          {{ upload_form.nombre_ciclo.errors }}
+        </label>
+        <label class="documentos-form__field">
+          <span>Anio</span>
+          {{ upload_form.anio }}
+          {{ upload_form.anio.errors }}
+        </label>
+        <label class="documentos-form__field documentos-form__field--full">
+          <span>Clasificacion</span>
+          {{ upload_form.clasificacion }}
+          {{ upload_form.clasificacion.errors }}
+        </label>
+        <label class="documentos-form__field documentos-form__field--full">
+          <span>Descripcion</span>
+          {{ upload_form.descripcion_documento }}
+          {{ upload_form.descripcion_documento.errors }}
+        </label>
+        <label class="documentos-form__field documentos-form__field--full">
+          <span>Archivo</span>
+          {{ upload_form.archivo }}
+          {{ upload_form.archivo.errors }}
+        </label>
+      </div>
+      <div class="documentos-form__actions">
+        <button class="btn btn-primary" type="submit">Cargar documento</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="card documentos-panel">
+    <h3>Regla operativa</h3>
+    <ul class="admin-sections__list">
+      <li>No se crea ni activa un ciclo sin documento de autorizacion previo.</li>
+      <li>La carpeta se construye bajo `DOCUMENTOS CICLOS AUTH`.</li>
+      <li>La carga registra version en `version_documento` y traza en `documento_acceso_log`.</li>
+      <li>Los enlaces publicos del documento no se exponen desde la UI.</li>
+    </ul>
+
+    <h3 class="documentos-panel__section-title">Ciclos recientes</h3>
+    <ul class="documentos-links">
+      {% for ciclo in recent_ciclos %}
+        <li>{{ ciclo.nombre }} - {{ ciclo.estado.descripcion }}</li>
+      {% empty %}
+        <li>No existen ciclos recientes.</li>
+      {% endfor %}
+    </ul>
+  </article>
+</div>
+
+<article class="card documentos-panel">
+  <div class="documentos-panel__header">
+    <div>
+      <h3>Documentos de autorizacion registrados</h3>
+      <p class="text-muted">Lectura real desde `documento` filtrada a la raiz documental de ciclos.</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="documentos-table">
+      <thead>
+        <tr>
+          <th>Archivo</th>
+          <th>Clasificacion</th>
+          <th>Versiones</th>
+          <th>Fecha</th>
+          <th>Subido por</th>
+          <th>Canal</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for documento in authorization_documents %}
+          <tr>
+            <td>
+              <strong>{{ documento.nombre_archivo }}</strong>
+              <div class="text-muted">{{ documento.descripcion_documento|default:"--" }}</div>
+            </td>
+            <td>{{ documento.clasificacion.codigo }}</td>
+            <td>{{ documento.versiones_count }}</td>
+            <td>{{ documento.fecha_subida|date:"Y-m-d H:i" }}</td>
+            <td>{{ documento.subido_por|default:"--" }}</td>
+            <td>
+              {% if documento.graph_item_id %}
+                Microsoft Graph
+              {% else %}
+                Pendiente de sincronizacion
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted">Todavia no existen documentos de autorizacion cargados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Crear usuario | SIG{% endblock %}
+
+{% block content %}
+  {# Cabecera simple de la vista #}
+  <div class="page-header">
+    <div>
+      <h1>Crear usuario</h1>
+      <p class="text-muted">Registra un nuevo usuario en el sistema.</p>
+    </div>
+  </div>
+
+  {# Formulario base reutilizable #}
+  <div class="card">
+    {% include "usuarios/_form.html" %}
+  </div>
+{% endblock %}

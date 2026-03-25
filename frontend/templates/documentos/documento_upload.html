@@ -1,0 +1,192 @@
+{% extends "documentos/_page_base.html" %}
+
+{% block documentos_content %}
+<div class="documentos-grid">
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Carga documental operativa</h3>
+        <p class="text-muted">La documentacion general solo se habilita para ciclos aprobados con autorizacion registrada.</p>
+      </div>
+    </div>
+
+    {% if can_upload_documents %}
+      <form method="post" enctype="multipart/form-data" class="documentos-form">
+        {% csrf_token %}
+        {{ upload_form.non_field_errors }}
+        <div class="documentos-form__grid">
+          <label class="documentos-form__field documentos-form__field--full">
+            <span>Ciclo aprobado</span>
+            {{ upload_form.ciclo }}
+            {{ upload_form.ciclo.errors }}
+          </label>
+          <label class="documentos-form__field documentos-form__field--full">
+            <span>Indicador</span>
+            {{ upload_form.indicador }}
+            {{ upload_form.indicador.errors }}
+          </label>
+          <label class="documentos-form__field documentos-form__field--full">
+            <span>Elemento fundamental</span>
+            {{ upload_form.elemento_fundamental }}
+            {{ upload_form.elemento_fundamental.errors }}
+          </label>
+          <label class="documentos-form__field documentos-form__field--full">
+            <span>Clasificacion</span>
+            {{ upload_form.clasificacion }}
+            {{ upload_form.clasificacion.errors }}
+          </label>
+          <label class="documentos-form__field documentos-form__field--full">
+            <span>Descripcion del documento</span>
+            {{ upload_form.descripcion_documento }}
+            {{ upload_form.descripcion_documento.errors }}
+          </label>
+          <label class="documentos-form__field documentos-form__field--full">
+            <span>Archivo</span>
+            {{ upload_form.archivo }}
+            {{ upload_form.archivo.errors }}
+          </label>
+        </div>
+        <div class="documentos-form__actions">
+          <button class="btn btn-primary" type="submit">Subir documento</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="documentos-empty-state">
+        <strong>La carga documental esta bloqueada.</strong>
+        <p class="text-muted">
+          {% if approved_cycles_count == 0 %}
+            Primero debes crear un ciclo con su documento de autorizacion y dejarlo en estado
+            <strong>APROBADO</strong>.
+          {% elif not has_upload_structure %}
+            Ya tienes ciclos aprobados, pero todavia no existe una relacion
+            <strong>indicador / elemento fundamental</strong> para construir la ruta documental.
+          {% endif %}
+        </p>
+        {% if approved_cycles_count == 0 %}
+          <a class="btn btn-primary" href="{% url 'acreditacion-ciclos-lista' %}">Crear ciclo y autorizacion</a>
+        {% else %}
+          <a class="btn btn-primary" href="{% url 'acreditacion-indicadores-detalle' %}">Configurar indicador y elemento</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  </article>
+
+  <article class="card documentos-panel">
+    <h3>Regla de habilitacion</h3>
+    <div class="documentos-summary">
+      <div>
+        <span class="documentos-summary__label">Ciclos aprobados</span>
+        <strong class="documentos-summary__value">{{ approved_cycles_count }}</strong>
+      </div>
+      <div>
+        <span class="documentos-summary__label">Carga documental</span>
+        <strong class="documentos-summary__value">
+          {% if can_upload_documents %}Habilitada{% else %}Bloqueada{% endif %}
+        </strong>
+      </div>
+      <div>
+        <span class="documentos-summary__label">Estructura indicador/elemento</span>
+        <strong class="documentos-summary__value">
+          {% if has_upload_structure %}Disponible{% else %}Pendiente{% endif %}
+        </strong>
+      </div>
+    </div>
+
+    <ul class="admin-sections__list">
+      <li>Se valida que el ciclo este en estado <strong>APROBADO</strong>.</li>
+      <li>Se valida que exista el documento de autorizacion del ciclo.</li>
+      <li>La ruta de Graph se construye por criterio / subcriterio / indicador / elemento / ciclo.</li>
+      <li>Cada nueva carga genera version en <code>version_documento</code>.</li>
+    </ul>
+  </article>
+</div>
+
+<div class="documentos-grid">
+  <article class="card documentos-panel">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Estado de ciclos</h3>
+        <p class="text-muted">Solo los ciclos aprobados con autorizacion cargada habilitan la subida.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="documentos-table">
+        <thead>
+          <tr>
+            <th>Ciclo</th>
+            <th>Estado</th>
+            <th>Autorizacion</th>
+            <th>Carga documental</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ciclo in cycle_statuses %}
+            <tr>
+              <td>{{ ciclo.nombre }}</td>
+              <td>{{ ciclo.estado.descripcion }}</td>
+              <td>
+                {% if ciclo.has_authorization_document %}
+                  {{ ciclo.authorization_document_count }} documento(s)
+                {% else %}
+                  Sin documento
+                {% endif %}
+              </td>
+              <td>
+                {% if ciclo.document_upload_enabled %}
+                  <a class="btn btn-ghost" href="{% url 'documentos-subir' %}?ciclo={{ ciclo.pk }}">Usar ciclo</a>
+                {% else %}
+                  Bloqueada
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="text-center text-muted">No existen ciclos registrados.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Documentos cargados</h3>
+        <p class="text-muted">Lectura real desde <code>documento</code> excluyendo la carpeta de autorizacion de ciclos.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="documentos-table">
+        <thead>
+          <tr>
+            <th>Archivo</th>
+            <th>Clasificacion</th>
+            <th>Versiones</th>
+            <th>Fecha</th>
+            <th>Subido por</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for documento in documents %}
+            <tr>
+              <td>
+                <strong>{{ documento.nombre_archivo }}</strong>
+                <div class="text-muted">{{ documento.descripcion_documento|default:"--" }}</div>
+              </td>
+              <td>{{ documento.clasificacion.codigo }}</td>
+              <td>{{ documento.versiones_count }}</td>
+              <td>{{ documento.fecha_subida|date:"Y-m-d H:i" }}</td>
+              <td>{{ documento.subido_por|default:"--" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="text-center text-muted">Todavia no existen documentos cargados en la estructura operativa.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div>
+{% endblock %}

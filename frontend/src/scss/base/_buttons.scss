@@ -1,0 +1,64 @@
+@use "sass:color";                // Utilidades de color para degradados.
+@use "../base/variables" as *;    // Paleta institucional y radios.
+
+// Botón base: ajusta tipografía, radio y transición.
+.btn {
+  display: inline-flex;              // Alinea iconos y texto.
+  align-items: center;               // Centra verticalmente el contenido.
+  justify-content: center;           // Centra horizontalmente.
+  gap: 0.5rem;                       // Espacio entre icono y texto.
+  padding: 0.85rem 1.2rem;           // Espaciado cómodo.
+  border-radius: $radius;            // Radio consistente.
+  border: 1px solid transparent;     // Bordes definidos.
+  font-weight: 700;                  // Peso destacado.
+  cursor: pointer;                   // Indicador de acción.
+  text-decoration: none;             // Sin subrayado en enlaces.
+  transition: transform 0.15s ease,  // Animación suave.
+              box-shadow 0.15s ease,
+              background-color 0.15s ease,
+              border-color 0.15s ease;
+
+  &:active {
+    transform: translateY(1px);      // Feedback en clic.
+  }
+}
+
+// Botón primario: rojo institucional.
+.btn-primary {
+  background: linear-gradient(135deg, $rojo, color.adjust($rojo, $lightness: 8%)); // Degradado rojo.
+  color: $blanco;                    // Texto claro para contraste.
+  box-shadow: 0 12px 24px rgba($rojo, 0.28); // Sombra sutil.
+
+  &:hover {
+    box-shadow: 0 16px 32px rgba($rojo, 0.32); // Sombra mayor al pasar.
+  }
+}
+
+// Botón secundario: celeste de apoyo.
+.btn-secondary {
+  background: linear-gradient(135deg, $celeste, color.adjust($celeste, $lightness: -6%)); // Degradado celeste.
+  color: #0f172a;                    // Texto oscuro para contraste.
+  box-shadow: 0 12px 24px rgba($celeste, 0.28); // Sombra celeste.
+
+  &:hover {
+    box-shadow: 0 16px 30px rgba($celeste, 0.32); // Realce en hover.
+  }
+}
+
+// Botón fantasma: sin relleno, usa borde y texto institucional.
+.btn-ghost {
+  background: transparent;           // Sin fondo.
+  color: $rojo;                      // Texto rojo.
+  border-color: rgba($rojo, 0.35);   // Borde tenue.
+
+  &:hover {
+    background: rgba($rojo, 0.06);   // Sutil fondo al pasar.
+  }
+}
+
+// Botón de alerta/peligro: reutiliza rojo con énfasis.
+.btn-danger {
+  background: linear-gradient(135deg, color.adjust($rojo, $lightness: -5%), color.adjust($rojo, $lightness: -12%)); // Rojo más profundo.
+  color: $blanco;                    // Texto claro.
+  box-shadow: 0 12px 26px rgba($rojo, 0.32); // Sombra más marcada.
+}

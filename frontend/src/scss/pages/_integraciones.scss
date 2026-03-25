@@ -1,0 +1,58 @@
+@use "../base/variables" as *;
+
+.integraciones__actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.integraciones__inline-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.integraciones__mask {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgba($primary, 0.07);
+  color: $primary;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.integraciones__note {
+  color: #6b7280;
+  font-size: 0.84rem;
+}
+
+.integraciones__detail {
+  max-width: 320px;
+  white-space: normal;
+  color: #4b5563;
+}
+
+.integraciones__form {
+  .form-group--wide,
+  .form-group--full {
+    grid-column: 1 / -1;
+  }
+
+  textarea,
+  input[type="datetime-local"] {
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+
+    &:focus {
+      outline: none;
+      border-color: rgba($primary, 0.55);
+      box-shadow: 0 0 0 3px rgba($primary, 0.14);
+    }
+  }
+}

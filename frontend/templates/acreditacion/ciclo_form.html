@@ -1,0 +1,85 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<div class="acreditacion-content-grid">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Alta de ciclo con documento de autorizacion</h3>
+        <p class="text-muted">El ciclo y su documento obligatorio se registran en una sola operacion.</p>
+      </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="acreditacion-form__grid">
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Nombre</span>
+          {{ form.nombre }}
+          {{ form.nombre.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Año</span>
+          {{ form.anio }}
+          {{ form.anio.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Estado</span>
+          {{ form.estado }}
+          {{ form.estado.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Fecha inicio</span>
+          {{ form.fecha_inicio }}
+          {{ form.fecha_inicio.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Fecha fin</span>
+          {{ form.fecha_fin }}
+          {{ form.fecha_fin.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Descripcion</span>
+          {{ form.descripcion }}
+          {{ form.descripcion.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Clasificacion del documento</span>
+          {{ form.clasificacion }}
+          {{ form.clasificacion.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Descripcion del documento</span>
+          {{ form.descripcion_documento }}
+          {{ form.descripcion_documento.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Documento de autorizacion</span>
+          {{ form.archivo }}
+          {{ form.archivo.errors }}
+        </label>
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar ciclo y documento</button>
+        <a class="btn btn-secondary" href="{% url 'acreditacion-ciclos-lista' %}">Volver a ciclos</a>
+      </div>
+    </form>
+  </article>
+
+  <article class="card acreditacion-panel">
+    <h3>Ciclos recientes</h3>
+    <ul class="acreditacion-links">
+      {% for ciclo in ciclos %}
+        <li>{{ ciclo.nombre }} - {{ ciclo.estado.descripcion }}</li>
+      {% empty %}
+        <li>No existen ciclos recientes.</li>
+      {% endfor %}
+    </ul>
+
+    <p class="text-muted">
+      Regla activa: el archivo de autorizacion es obligatorio y se carga en este mismo formulario.
+    </p>
+  </article>
+</div>
+{% endblock %}

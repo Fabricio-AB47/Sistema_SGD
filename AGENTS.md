@@ -1,0 +1,11 @@
+- Proyecto Django modular
+- No lógica compleja en views
+- Services para negocio
+- Selectors para lectura
+- Templates por módulo
+- Todos los templates internos extienden dashboard_base.html
+- No exponer documentos protegidos por URL pública
+- Las rutas documentales se construyen por criterio/subcriterio/indicador/elemento
+- No crear ni activar ciclo_evaluacion sin documento de autorización previo
+- Usar version_documento para cada nueva versión
+- Registrar accesos en documento_acceso_log

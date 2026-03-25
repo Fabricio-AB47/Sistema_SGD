@@ -1,0 +1,96 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<div class="acreditacion-content-grid">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Subcriterios por criterio</h3>
+        <p class="text-muted">Carga real sobre la tabla `subcriterio`.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Codigo</th>
+            <th>Criterio padre</th>
+            <th>Subcriterio</th>
+            <th>Indicadores</th>
+            <th>Orden</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for subcriterio in subcriterios %}
+            <tr>
+              <td>{{ subcriterio.codigo_subcriterio }}</td>
+              <td>{{ subcriterio.criterio.codigo_criterio }} - {{ subcriterio.criterio.nombre_criterio }}</td>
+              <td>
+                <strong>{{ subcriterio.nombre_subcriterio }}</strong>
+                <div class="text-muted">{{ subcriterio.descripcion|default:"--" }}</div>
+              </td>
+              <td>{{ subcriterio.indicadores_count }}</td>
+              <td>{{ subcriterio.orden_visual|default:"--" }}</td>
+              <td>
+                {% if subcriterio.activo %}
+                  <span class="acreditacion-status acreditacion-status--success">Activo</span>
+                {% else %}
+                  <span class="acreditacion-status acreditacion-status--muted">Inactivo</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted">No existen subcriterios registrados.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card acreditacion-panel">
+    <h3>Nuevo subcriterio</h3>
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="acreditacion-form__grid">
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Criterio</span>
+          {{ form.criterio }}
+          {{ form.criterio.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Codigo</span>
+          {{ form.codigo_subcriterio }}
+          {{ form.codigo_subcriterio.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Orden visual</span>
+          {{ form.orden_visual }}
+          {{ form.orden_visual.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Nombre</span>
+          {{ form.nombre_subcriterio }}
+          {{ form.nombre_subcriterio.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Descripcion</span>
+          {{ form.descripcion }}
+          {{ form.descripcion.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Activo</span>
+          {{ form.activo }}
+          {{ form.activo.errors }}
+        </label>
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar subcriterio</button>
+      </div>
+    </form>
+  </article>
+</div>
+{% endblock %}

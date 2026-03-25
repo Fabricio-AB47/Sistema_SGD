@@ -1,0 +1,97 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Tokens API | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Tokens API</h1>
+    <p class="text-muted">Consulta tokens generados por credencial sin exponer valores sensibles.</p>
+  </div>
+  <div class="page-header__actions">
+    <a class="btn btn-secondary" href="{% url 'integraciones-consumos-lista' %}">Logs</a>
+    <a class="btn btn-primary" href="{% url 'integraciones-credenciales-lista' %}">Credenciales</a>
+  </div>
+</div>
+
+<form method="get" class="filters">
+  <div class="filters__grid">
+    <div class="form-group">
+      <span>Servicio</span>
+      <select name="servicio">
+        <option value="">Todos</option>
+        {% for servicio in servicios %}
+          <option value="{{ servicio.pk }}" {% if request.GET.servicio == servicio.pk|stringformat:"s" %}selected{% endif %}>
+            {{ servicio.nombre_servicio }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <span>Credencial</span>
+      <select name="credencial">
+        <option value="">Todas</option>
+        {% for credencial in credenciales %}
+          <option value="{{ credencial.pk }}" {% if request.GET.credencial == credencial.pk|stringformat:"s" %}selected{% endif %}>
+            {{ credencial.nombre_aplicacion }} - {{ credencial.api_servicio.nombre_servicio }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filters__actions">
+      <button class="btn btn-primary" type="submit">Filtrar</button>
+      <a class="btn btn-secondary" href="{% url 'integraciones-tokens-lista' %}">Limpiar</a>
+    </div>
+  </div>
+</form>
+
+<div class="card table-responsive">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Servicio</th>
+        <th>Aplicacion</th>
+        <th>Access token</th>
+        <th>Refresh token</th>
+        <th>Expira</th>
+        <th>Estado</th>
+        <th class="text-right">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for token in tokens %}
+        <tr>
+          <td>{{ token.api_credencial.api_servicio.nombre_servicio }}</td>
+          <td>{{ token.api_credencial.nombre_aplicacion }}</td>
+          <td><span class="integraciones__mask">********{{ token.pk }}</span></td>
+          <td>
+            {% if token.refresh_token_encriptado %}
+              <span class="badge">Disponible</span>
+            {% else %}
+              <span class="text-muted">--</span>
+            {% endif %}
+          </td>
+          <td>{{ token.fecha_expiracion|date:"d/m/Y H:i"|default:"--" }}</td>
+          <td>
+            {% if token.activo %}
+              <span class="status status-success">Activo</span>
+            {% else %}
+              <span class="status status-muted">Inactivo</span>
+            {% endif %}
+          </td>
+          <td class="text-right">
+            <form method="post" action="{% url 'integraciones-generar-token' token.api_credencial.pk %}" class="integraciones__inline-form">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{% url 'integraciones-tokens-lista' %}?credencial={{ token.api_credencial.pk }}">
+              <button class="btn btn-primary" type="submit">Generar token</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted">No hay tokens generados.</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

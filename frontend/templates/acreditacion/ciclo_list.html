@@ -1,0 +1,276 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<div class="ciclos-page">
+  <section class="ciclos-summary">
+    <article class="card ciclos-summary__card">
+      <div class="ciclos-summary__head">
+        <span class="ciclos-summary__label">Ciclos registrados</span>
+        <span class="ciclos-summary__badge">Base total</span>
+      </div>
+      <strong class="ciclos-summary__value">{{ ciclos_summary.total }}</strong>
+      <p class="ciclos-summary__note">Periodos creados dentro del flujo unificado de ciclo y autorizacion.</p>
+    </article>
+    <article class="card ciclos-summary__card">
+      <div class="ciclos-summary__head">
+        <span class="ciclos-summary__label">Con autorizacion</span>
+        <span class="ciclos-summary__badge">Graph</span>
+      </div>
+      <strong class="ciclos-summary__value">{{ ciclos_summary.con_autorizacion }}</strong>
+      <p class="ciclos-summary__note">Ciclos que ya tienen documento de autorizacion asociado en Microsoft Graph.</p>
+    </article>
+    <article class="card ciclos-summary__card">
+      <div class="ciclos-summary__head">
+        <span class="ciclos-summary__label">Aprobados</span>
+        <span class="ciclos-summary__badge">Control</span>
+      </div>
+      <strong class="ciclos-summary__value">{{ ciclos_summary.aprobados }}</strong>
+      <p class="ciclos-summary__note">Ciclos listos para trabajo operativo y seguimiento formal.</p>
+    </article>
+    <article class="card ciclos-summary__card">
+      <div class="ciclos-summary__head">
+        <span class="ciclos-summary__label">Carga habilitada</span>
+        <span class="ciclos-summary__badge">Operacion</span>
+      </div>
+      <strong class="ciclos-summary__value">{{ ciclos_summary.habilitados }}</strong>
+      <p class="ciclos-summary__note">Pueden recibir documentacion general y continuar con evidencias.</p>
+    </article>
+  </section>
+
+  <div class="ciclos-layout">
+    <article class="card acreditacion-panel ciclos-composer">
+      <div class="ciclos-composer__header">
+        <div>
+          <p class="eyebrow">Registro unificado</p>
+          <h3>Alta de ciclo con autorizacion</h3>
+          <p class="text-muted">Organiza los datos del ciclo y el documento obligatorio en un solo flujo.</p>
+        </div>
+      </div>
+
+      <form method="post" enctype="multipart/form-data" class="acreditacion-form">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        {% if form.errors %}
+          <div class="acreditacion-form-errors">
+            <strong>Revisa la informacion del ciclo antes de guardar.</strong>
+            <ul>
+              {% for field in form %}
+                {% for error in field.errors %}
+                  <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                {% endfor %}
+              {% endfor %}
+              {% for error in form.non_field_errors %}
+                <li>{{ error }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <section class="ciclos-form-section">
+          <div class="ciclos-form-section__head">
+            <h4>Datos del ciclo</h4>
+            <p class="text-muted">Identifica el periodo, su vigencia y el estado inicial.</p>
+          </div>
+          <div class="ciclos-form-grid ciclos-form-grid--columns">
+            <div class="ciclos-form-grid__column">
+              <label class="acreditacion-form__field">
+                <span>Nombre</span>
+                {{ form.nombre }}
+                {{ form.nombre.errors }}
+              </label>
+              <label class="acreditacion-form__field">
+                <span>Año</span>
+                {{ form.anio }}
+                {{ form.anio.errors }}
+              </label>
+              <label class="acreditacion-form__field">
+                <span>Fecha inicio</span>
+                {{ form.fecha_inicio }}
+                {{ form.fecha_inicio.errors }}
+              </label>
+            </div>
+            <div class="ciclos-form-grid__column">
+              <label class="acreditacion-form__field">
+                <span>Estado</span>
+                {{ form.estado }}
+                {{ form.estado.errors }}
+              </label>
+              <label class="acreditacion-form__field">
+                <span>Fecha fin</span>
+                {{ form.fecha_fin }}
+                {{ form.fecha_fin.errors }}
+              </label>
+              <label class="acreditacion-form__field">
+                <span>Descripcion del ciclo</span>
+                {{ form.descripcion }}
+                {{ form.descripcion.errors }}
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section class="ciclos-form-section">
+          <div class="ciclos-form-section__head">
+            <h4>Documento de autorizacion</h4>
+            <p class="text-muted">Se almacena y versiona en Graph como base oficial del ciclo.</p>
+          </div>
+          <div class="ciclos-form-grid">
+            <label class="acreditacion-form__field">
+              <span>Clasificacion del documento</span>
+              {{ form.clasificacion }}
+              {{ form.clasificacion.errors }}
+            </label>
+            <label class="acreditacion-form__field acreditacion-form__field--full">
+              <span>Descripcion del documento</span>
+              {{ form.descripcion_documento }}
+              {{ form.descripcion_documento.errors }}
+            </label>
+            <label class="acreditacion-form__field acreditacion-form__field--full">
+              <span>Documento de autorizacion</span>
+              {{ form.archivo }}
+              {{ form.archivo.errors }}
+              <small class="acreditacion-form__hint">Adjunta el archivo obligatorio. Si el formulario falla, el navegador te pedira seleccionarlo de nuevo.</small>
+            </label>
+          </div>
+        </section>
+
+        <div class="acreditacion-form__actions">
+          <button class="btn btn-primary" type="submit">Guardar ciclo y documento</button>
+        </div>
+      </form>
+    </article>
+
+    <aside class="card acreditacion-panel ciclos-sidecard">
+      <div class="ciclos-sidecard__block">
+        <h3>Regla operativa</h3>
+        <ul class="acreditacion-links">
+          <li>El ciclo y el documento viven en el mismo flujo.</li>
+          <li>La carpeta se crea en Microsoft Graph bajo <strong>DOCUMENTOS CICLOS AUTH</strong>.</li>
+          <li>No se habilita la carga documental general sin autorizacion previa.</li>
+          <li>Cuando el ciclo esta <strong>APROBADO</strong> se habilita `Subir documento`.</li>
+        </ul>
+      </div>
+
+      <div class="ciclos-sidecard__block">
+        <h3>Secuencia recomendada</h3>
+        <div class="ciclos-checklist">
+          <div class="ciclos-checklist__item">
+            <span>1</span>
+            <div>
+              <strong>Registrar ciclo</strong>
+              <p class="text-muted">Completa nombre, fechas y estado inicial.</p>
+            </div>
+          </div>
+          <div class="ciclos-checklist__item">
+            <span>2</span>
+            <div>
+              <strong>Cargar autorizacion</strong>
+              <p class="text-muted">Sube el archivo oficial y deja trazabilidad desde el inicio.</p>
+            </div>
+          </div>
+          <div class="ciclos-checklist__item">
+            <span>3</span>
+            <div>
+              <strong>Revisar estado</strong>
+              <p class="text-muted">Usa la ficha del ciclo para aprobarlo o subir nuevas versiones.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <article class="card acreditacion-panel acreditacion-panel--wide ciclos-board">
+    <div class="ciclos-board__header">
+      <div>
+        <p class="eyebrow">Seguimiento</p>
+        <h3>Ciclos registrados</h3>
+        <p class="text-muted">Consulta la base registrada con el mismo orden operativo del panel y revisa cada ciclo desde su ficha.</p>
+      </div>
+      <span class="acreditacion-pill">{{ ciclos_summary.total }} registro{{ ciclos_summary.total|pluralize:"s" }}</span>
+    </div>
+
+    <div class="ciclos-board__table">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Año</th>
+            <th>Inicio</th>
+            <th>Fin</th>
+            <th>Estado</th>
+            <th>Documento asociado</th>
+            <th>Carga documental</th>
+            <th>Descripcion</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+      {% for ciclo in ciclos %}
+          <tr>
+            <td>
+              <div class="ciclos-table__name">
+                <strong>{{ ciclo.nombre }}</strong>
+                <span class="text-muted">Ciclo de trabajo</span>
+              </div>
+            </td>
+            <td>{{ ciclo.anio|default:"-" }}</td>
+            <td>{{ ciclo.fecha_inicio|date:"d/m/Y H:i" }}</td>
+            <td>{{ ciclo.fecha_fin|date:"d/m/Y H:i" }}</td>
+            <td>
+              {% with estado_desc=ciclo.estado.descripcion|upper %}
+                <span class="acreditacion-status {% if estado_desc == 'APROBADO' %}acreditacion-status--success{% elif estado_desc == 'ABIERTO' %}acreditacion-status--info{% elif estado_desc == 'EN_REVISION' %}acreditacion-status--warning{% else %}acreditacion-status--muted{% endif %}">
+                  {{ ciclo.estado.descripcion }}
+                </span>
+              {% endwith %}
+            </td>
+            <td>
+              <div class="ciclos-table__document">
+                {% if ciclo.authorization_document %}
+                  <strong>{{ ciclo.authorization_document.nombre_archivo }}</strong>
+                  <div class="ciclos-table__meta">
+                    <span>{{ ciclo.authorization_document.fecha_subida|date:"d/m/Y H:i" }}</span>
+                    <span>{{ ciclo.authorization_document_count }} documento(s)</span>
+                  </div>
+                {% else %}
+                  <strong>Pendiente de carga</strong>
+                  <span class="text-muted">Sin autorizacion asociada.</span>
+                {% endif %}
+              </div>
+            </td>
+            <td>
+              {% if ciclo.document_upload_enabled %}
+                <span class="acreditacion-status acreditacion-status--success">Habilitada</span>
+              {% else %}
+                <span class="acreditacion-status acreditacion-status--muted">Bloqueada</span>
+              {% endif %}
+            </td>
+            <td>
+              <span class="ciclos-table__description">{{ ciclo.descripcion|default:"Sin descripcion registrada." }}</span>
+            </td>
+            <td>
+              <div class="ciclos-table__actions">
+                <a class="btn btn-ghost" href="{% url 'acreditacion-ciclos-detalle' ciclo.pk %}">Revisar</a>
+                {% if ciclo.document_upload_enabled %}
+                  <a class="btn btn-secondary" href="{% url 'documentos-subir' %}?ciclo={{ ciclo.pk }}">Subir documento</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+      {% empty %}
+          <tr>
+            <td colspan="9">
+              <div class="ciclos-empty-state">
+                <strong>No existen ciclos registrados.</strong>
+                <p class="text-muted">Comienza creando el primer ciclo y cargando su documento de autorizacion desde el formulario superior.</p>
+              </div>
+            </td>
+          </tr>
+      {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div>
+{% endblock %}

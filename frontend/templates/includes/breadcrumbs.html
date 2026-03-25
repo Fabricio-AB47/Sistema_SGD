@@ -1,0 +1,8 @@
+{% if request.resolver_match %}
+  <nav class="breadcrumbs" aria-label="breadcrumb">
+    <ol>
+      <li><a href="{% url 'core-dashboard' %}">Inicio</a></li>
+      {% block breadcrumb_items %}{% endblock %}
+    </ol>
+  </nav>
+{% endif %}

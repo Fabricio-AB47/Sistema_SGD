@@ -1,0 +1,35 @@
+{% extends "base/dashboard_base.html" %}
+
+{% block title %}Dashboard | SIG{% endblock %}
+
+{% block content %}
+<div class="hero-card">
+  <div>
+    <p class="eyebrow">Bienvenido de nuevo</p>
+    <h1>Tablero principal</h1>
+    <p class="muted">Monitorea evidencias, evaluaciones e informes en un solo lugar.</p>
+  </div>
+  <div class="hero-badge">
+    <span class="dot dot-success"></span> Operativo
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <span class="kpi-label">Evidencias cargadas</span>
+    <strong class="kpi-value">--</strong>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Evaluaciones pendientes</span>
+    <strong class="kpi-value">--</strong>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Informes en revisión</span>
+    <strong class="kpi-value">--</strong>
+  </div>
+  <div class="kpi-card">
+    <span class="kpi-label">Planes de mejora activos</span>
+    <strong class="kpi-value">--</strong>
+  </div>
+</div>
+{% endblock %}

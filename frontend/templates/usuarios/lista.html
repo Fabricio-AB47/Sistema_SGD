@@ -1,0 +1,20 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Usuarios | SIG{% endblock %}
+
+{% block content %}
+  {# Cabecera de la página con CTA para crear usuario #}
+  <div class="page-header">
+    <div>
+      <h1>Usuarios</h1>
+      <p class="text-muted">Administración de cuentas y roles.</p>
+    </div>
+    <div>
+      <a class="btn btn-primary" href="{% url 'usuarios-crear' %}">Nuevo usuario</a>
+    </div>
+  </div>
+
+  {# Filtros reutilizables (parcial) #}
+  {% include "usuarios/_filtros.html" %}
+  {# Tabla reutilizable (parcial) #}
+  {% include "usuarios/_tabla.html" %}
+{% endblock %}

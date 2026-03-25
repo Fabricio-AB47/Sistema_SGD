@@ -1,0 +1,20 @@
+{# Formulario para asignar roles a un usuario #}
+<form method="post" class="form-grid">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+
+  <div class="form-group">
+    <span>Rol</span>
+    {{ form.rol }}
+    {{ form.rol.errors }}
+  </div>
+  <div class="form-check">
+    {{ form.activo }} <span>Activo</span>
+    {{ form.activo.errors }}
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Asignar rol</button>
+    <a class="btn btn-secondary" href="{% url 'usuarios-detalle' usuario.pk %}">Volver</a>
+  </div>
+</form>

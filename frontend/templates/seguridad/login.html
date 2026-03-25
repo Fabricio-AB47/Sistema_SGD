@@ -1,0 +1,63 @@
+{% extends "base/auth_base.html" %}
+
+{% block title %}Ingresar | SIG{% endblock %}
+
+{% block content %}
+<div class="auth-shell">
+  <section class="auth-panel">
+    <div class="auth-left">
+      <div class="auth-brand">
+        <div class="auth-logo">SIG</div>
+        <div class="auth-brand-text">
+          <span>Sistema Institucional</span>
+          <small>Acreditación</small>
+        </div>
+      </div>
+
+      <div class="auth-welcome">
+        <h1>Bienvenido de nuevo</h1>
+        <p>Inicia sesión para continuar</p>
+      </div>
+
+      <form method="post" class="auth-form">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <div class="auth-input">
+          <span class="auth-input__icon">@</span>
+          {{ form.correo }}
+        </div>
+        <div class="auth-input">
+          <span class="auth-input__icon">🔒</span>
+          {{ form.password }}
+        </div>
+        <div class="auth-links">
+          <label>
+            {{ form.remember }} Mantener sesión
+          </label>
+          <a href="{% url 'seguridad-recuperar-password' %}">¿Olvidaste tu contrasena?</a>
+        </div>
+        <button type="submit" class="auth-submit">Ingresar</button>
+      </form>
+    </div>
+
+    <div class="auth-right">
+      <div class="auth-hero">
+        <p class="eyebrow">Plataforma SIG</p>
+        <h2 class="auth-hero-title">Acceso seguro y centralizado</h2>
+        <p class="auth-hero-text">
+          Evidencias, evaluaciones e informes en un solo lugar. Mantén la trazabilidad y el control de tus procesos institucionales.
+        </p>
+        <div class="auth-hero-pill">
+          🔐 Sesiones protegidas
+        </div>
+        <div class="auth-meta">
+          <span>Backups y cifrado</span>
+          <span>Roles y permisos</span>
+          <span>Auditoría continua</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

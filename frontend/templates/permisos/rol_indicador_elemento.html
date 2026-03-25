@@ -1,0 +1,80 @@
+{% extends "permisos/_page_base.html" %}
+
+{% block permisos_content %}
+<div class="permissions-grid">
+  <article class="card permissions-panel">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Asignar acceso por elemento</h2>
+        <p class="text-muted">La asignacion respeta la relacion real entre indicador y elemento fundamental.</p>
+      </div>
+    </div>
+    <form method="post" class="form-grid">
+      {% csrf_token %}
+      <div class="form-group">
+        <span>{{ form.rol_indicador.label }}</span>
+        {{ form.rol_indicador }}
+        {{ form.rol_indicador.errors }}
+      </div>
+      <div class="form-group">
+        <span>{{ form.elemento_fundamental.label }}</span>
+        {{ form.elemento_fundamental }}
+        {{ form.elemento_fundamental.errors }}
+      </div>
+      {% if form.non_field_errors %}
+        <div class="text-muted">{{ form.non_field_errors }}</div>
+      {% endif %}
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Guardar acceso de elemento</button>
+      </div>
+    </form>
+  </article>
+
+  <article class="card permissions-panel permissions-panel--wide">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Elementos asignados</h2>
+        <p class="text-muted">Cada fila representa un registro en <code>rol_indicador_elemento</code>.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Rol</th>
+            <th>Ciclo</th>
+            <th>Indicador</th>
+            <th>Elemento</th>
+            <th>Asignacion</th>
+            <th class="text-right">Accion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for assignment in assignments %}
+            <tr>
+              <td>{{ assignment.rol_indicador.rol.nombre_rol }}</td>
+              <td>{{ assignment.rol_indicador.ciclo.nombre }}</td>
+              <td>{{ assignment.rol_indicador.indicador.codigo_indicador }}</td>
+              <td>{{ assignment.elemento_fundamental.codigo_elemento }} - {{ assignment.elemento_fundamental.nombre_elemento }}</td>
+              <td>{{ assignment.fecha_asignacion|date:"d/m/Y H:i"|default:"--" }}</td>
+              <td class="text-right">
+                <form method="post">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="rol_indicador_id" value="{{ assignment.rol_indicador.pk }}">
+                  <input type="hidden" name="elemento_id" value="{{ assignment.elemento_fundamental.pk }}">
+                  <button class="btn btn-ghost" type="submit">Eliminar</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted">No existen accesos por elemento.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "permisos/_page_base.html" %}
+
+{% block permisos_content %}
+<article class="card permissions-panel permissions-panel--wide">
+  <div class="permissions-panel__header">
+    <div>
+      <h2>Roles registrados</h2>
+      <p class="text-muted">La creacion del rol permanece centralizada y esta vista solo trabaja la relacion con permisos, usuarios e indicadores.</p>
+    </div>
+    <div class="integraciones__actions">
+      <a class="btn btn-primary" href="{% url 'roles-crear' %}">Nuevo rol</a>
+      <a class="btn btn-secondary" href="{% url 'roles-lista' %}">Catalogo</a>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Rol</th>
+          <th>Descripcion</th>
+          <th>Permisos</th>
+          <th>Usuarios</th>
+          <th>Indicadores</th>
+          <th>Estado</th>
+          <th class="text-right">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for role in roles %}
+          <tr>
+            <td>
+              <strong>{{ role.nombre_rol }}</strong>
+              {% if role.acceso_global %}<div class="text-muted">Acceso global</div>{% endif %}
+            </td>
+            <td>{{ role.descripcion|default:"--" }}</td>
+            <td>{{ role.permisos_count }}</td>
+            <td>{{ role.usuarios_count }}</td>
+            <td>{{ role.indicadores_count }}</td>
+            <td>
+              {% if role.activo %}
+                <span class="status status-success">Activo</span>
+              {% else %}
+                <span class="status status-muted">Inactivo</span>
+              {% endif %}
+            </td>
+            <td class="text-right">
+              <div class="integraciones__actions">
+                <a class="btn btn-secondary" href="{% url 'permisos-roles-detalle' %}?rol={{ role.pk }}">Detalle</a>
+                <a class="btn btn-primary" href="{% url 'permisos-roles-permisos' %}?rol={{ role.pk }}">Permisos</a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted">No existen roles registrados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}
