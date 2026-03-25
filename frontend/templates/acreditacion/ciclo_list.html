@@ -42,7 +42,7 @@
       <div class="ciclos-composer__header">
         <div>
           <p class="eyebrow">Registro unificado</p>
-          <h3>Alta de ciclo con autorizacion</h3>
+          <h3>Ciclo de evaluacion</h3>
           <p class="text-muted">Organiza los datos del ciclo y el documento obligatorio en un solo flujo.</p>
         </div>
       </div>
@@ -72,41 +72,37 @@
             <h4>Datos del ciclo</h4>
             <p class="text-muted">Identifica el periodo, su vigencia y el estado inicial.</p>
           </div>
-          <div class="ciclos-form-grid ciclos-form-grid--columns">
-            <div class="ciclos-form-grid__column">
-              <label class="acreditacion-form__field">
-                <span>Nombre</span>
-                {{ form.nombre }}
-                {{ form.nombre.errors }}
-              </label>
-              <label class="acreditacion-form__field">
-                <span>Año</span>
-                {{ form.anio }}
-                {{ form.anio.errors }}
-              </label>
-              <label class="acreditacion-form__field">
-                <span>Fecha inicio</span>
-                {{ form.fecha_inicio }}
-                {{ form.fecha_inicio.errors }}
-              </label>
-            </div>
-            <div class="ciclos-form-grid__column">
-              <label class="acreditacion-form__field">
-                <span>Estado</span>
-                {{ form.estado }}
-                {{ form.estado.errors }}
-              </label>
-              <label class="acreditacion-form__field">
-                <span>Fecha fin</span>
-                {{ form.fecha_fin }}
-                {{ form.fecha_fin.errors }}
-              </label>
-              <label class="acreditacion-form__field">
-                <span>Descripcion del ciclo</span>
-                {{ form.descripcion }}
-                {{ form.descripcion.errors }}
-              </label>
-            </div>
+          <div class="ciclos-form-grid">
+            <label class="acreditacion-form__field acreditacion-form__field--full">
+              <span>Nombre</span>
+              {{ form.nombre }}
+              {{ form.nombre.errors }}
+            </label>
+            <label class="acreditacion-form__field">
+              <span>Año</span>
+              {{ form.anio }}
+              {{ form.anio.errors }}
+            </label>
+            <label class="acreditacion-form__field">
+              <span>Estado</span>
+              {{ form.estado }}
+              {{ form.estado.errors }}
+            </label>
+            <label class="acreditacion-form__field">
+              <span>Fecha inicio</span>
+              {{ form.fecha_inicio }}
+              {{ form.fecha_inicio.errors }}
+            </label>
+            <label class="acreditacion-form__field">
+              <span>Fecha fin</span>
+              {{ form.fecha_fin }}
+              {{ form.fecha_fin.errors }}
+            </label>
+            <label class="acreditacion-form__field acreditacion-form__field--full">
+              <span>Descripcion del ciclo</span>
+              {{ form.descripcion }}
+              {{ form.descripcion.errors }}
+            </label>
           </div>
         </section>
 

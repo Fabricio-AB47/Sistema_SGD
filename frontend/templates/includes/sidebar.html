@@ -70,15 +70,15 @@
       </button>
 
       <div class="sidebar__submenu" data-sidebar-panel>
+        <span class="sidebar__subheading">Ciclos y acceso</span>
+        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-ciclos-lista' or current_url_name == 'acreditacion-ciclos-crear' %} is-active{% endif %}" href="{% url 'acreditacion-ciclos-lista' %}">Ciclos y autorizacion</a>
+
         <span class="sidebar__subheading">Estructura CACES</span>
         <a class="sidebar__sublink{% if current_url_name == 'acreditacion-criterios-lista' %} is-active{% endif %}" href="{% url 'acreditacion-criterios-lista' %}">Criterios</a>
         <a class="sidebar__sublink{% if current_url_name == 'acreditacion-subcriterios-lista' %} is-active{% endif %}" href="{% url 'acreditacion-subcriterios-lista' %}">Subcriterios</a>
         <a class="sidebar__sublink{% if current_url_name == 'acreditacion-indicadores-lista' or current_url_name == 'acreditacion-indicadores-detalle' %} is-active{% endif %}" href="{% url 'acreditacion-indicadores-lista' %}">Indicadores</a>
         <a class="sidebar__sublink{% if current_url_name == 'acreditacion-elementos-lista' %} is-active{% endif %}" href="{% url 'acreditacion-elementos-lista' %}">Elementos fundamentales</a>
         <a class="sidebar__sublink{% if current_url_name == 'acreditacion-matriz' %} is-active{% endif %}" href="{% url 'acreditacion-matriz' %}">Matriz de acreditacion</a>
-
-        <span class="sidebar__subheading">Ciclos y acceso</span>
-        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-ciclos-lista' or current_url_name == 'acreditacion-ciclos-crear' %} is-active{% endif %}" href="{% url 'acreditacion-ciclos-lista' %}">Ciclos y autorizacion</a>
 
         <span class="sidebar__subheading">Control documental</span>
         <a class="sidebar__sublink{% if current_url_name == 'documentos-clasificaciones-lista' %} is-active{% endif %}" href="{% url 'documentos-clasificaciones-lista' %}">Clasificaciones documentales</a>

@@ -10,6 +10,10 @@ from django.utils.dateparse import parse_datetime
 from django.utils.text import get_valid_filename
 
 from application.services import build_ciclo_auth_drive_path_for_values
+from apps.core.services.dependency_health import (
+    DependencyValidationError,
+    ensure_database_connection,
+)
 from apps.core.models import ClasificacionDocumento
 from apps.auditoria.services.auditoria_service import registrar_evento
 from apps.documentos.models import Documento, DocumentoAccesoLog, VersionDocumento
@@ -23,6 +27,17 @@ class AuthorizationServiceError(Exception):
 
 class AuthorizationDocumentRequiredError(AuthorizationServiceError):
     pass
+
+
+def validate_cycle_authorization_dependencies(
+    *,
+    nombre_ciclo: str,
+    anio: int | None = None,
+) -> tuple[dict, str]:
+    ensure_database_connection()
+    drive_path = build_ciclo_auth_drive_path_for_values(nombre_ciclo, anio)
+    graph_service.clear_graph_cache(drive_path)
+    return graph_service.get_graph_session()
 
 
 def _safe_file_name(filename: str) -> str:
@@ -185,7 +200,17 @@ def upload_cycle_authorization_document(
     file_content = uploaded_file.read()
     if not file_content:
         raise AuthorizationServiceError("El archivo enviado esta vacio.")
-    graph_payload, graph_access_token = graph_service.get_graph_session()
+    try:
+        graph_payload, graph_access_token = validate_cycle_authorization_dependencies(
+            nombre_ciclo=nombre_ciclo,
+            anio=anio,
+        )
+    except DependencyValidationError as exc:
+        raise AuthorizationServiceError(str(exc)) from exc
+    except graph_service.GraphServiceError as exc:
+        raise AuthorizationServiceError(
+            "No fue posible validar la conexion con OneDrive / Microsoft Graph."
+        ) from exc
 
     storage = prepare_cycle_authorization_storage(
         nombre_ciclo=nombre_ciclo,
@@ -206,6 +231,7 @@ def upload_cycle_authorization_document(
         ensure_folder=False,
         payload=graph_payload,
         access_token=graph_access_token,
+        refresh=True,
     )
 
     payload = _build_document_payload(

@@ -303,11 +303,14 @@ class CicloListView(AcreditacionBaseView):
             try:
                 crear_ciclo(form=form, actor=self._actor(), request=request)
             except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                user_message = str(exc).strip() or (
+                    "No fue posible registrar el ciclo y su documento. Verifica los datos, la conexion a SQL Server y Microsoft Graph."
+                )
                 _report_operation_error(
                     request=request,
                     exc=exc,
                     form=form,
-                    user_message="No fue posible registrar el ciclo y su documento. Verifica los datos, la conexion a SQL Server y Microsoft Graph.",
+                    user_message=user_message,
                 )
             else:
                 messages.success(request, "Ciclo y documento de autorizacion registrados correctamente.")
@@ -366,11 +369,12 @@ class CicloDetailView(AcreditacionBaseView):
                     request=request,
                 )
             except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                user_message = str(exc).strip() or "No fue posible registrar la nueva version del documento."
                 _report_operation_error(
                     request=request,
                     exc=exc,
                     form=form,
-                    user_message="No fue posible registrar la nueva version del documento.",
+                    user_message=user_message,
                 )
             else:
                 messages.success(request, "Nueva version del documento registrada correctamente.")

@@ -180,4 +180,4 @@ def get_ciclo_detail(ciclo_id):
 
 
 def get_estados_ciclo_queryset():
-    return EstadoCiclo.objects.filter(activo=True).order_by("descripcion")
+    return EstadoCiclo.objects.filter(activo=True).order_by("id_estado_ciclo")

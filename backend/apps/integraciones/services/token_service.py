@@ -3,6 +3,7 @@ import secrets
 from datetime import timedelta
 from urllib import error, parse, request
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -14,6 +15,10 @@ from . import credential_service
 TOKEN_LIFETIME_MINUTES = 55
 GRAPH_SCOPE = "https://graph.microsoft.com/.default"
 TOKEN_SAFETY_MARGIN_SECONDS = 60
+
+
+def _token_timeout() -> int:
+    return int(getattr(settings, "GRAPH_REQUEST_TIMEOUT_SECONDS", 10) or 10)
 
 
 def validar_expiracion(token: ApiToken) -> bool:
@@ -59,7 +64,7 @@ def _request_graph_token(credencial):
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     try:
-        with request.urlopen(req, timeout=30) as response:
+        with request.urlopen(req, timeout=_token_timeout()) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except error.HTTPError as exc:
         details = exc.read().decode("utf-8", errors="ignore")

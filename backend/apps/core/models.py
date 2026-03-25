@@ -85,7 +85,7 @@ class EstadoCiclo(models.Model):
         managed = False
         verbose_name = "Estado de ciclo"
         verbose_name_plural = "Estados de ciclo"
-        ordering = ("descripcion",)
+        ordering = ("id_estado_ciclo",)
 
     def __str__(self) -> str:
         return self.descripcion

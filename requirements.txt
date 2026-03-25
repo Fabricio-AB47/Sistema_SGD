@@ -1,0 +1,48 @@
+# SIG - manifiesto de dependencias del proyecto
+#
+# Backend / Python
+# Instalar con:
+#   pip install -r requirements.txt
+#
+# Frontend / Node.js
+# Instalar con:
+#   cd frontend
+#   npm install
+#
+# Nota:
+# - `requirements.txt` solo puede ser instalado por `pip`.
+# - Las dependencias de frontend se documentan aqui para dejar el proyecto
+#   completo en un solo archivo de referencia.
+
+# =========================================================
+# Backend - Python
+# =========================================================
+Django==6.0.3
+mssql-django>=1.4.2
+pyodbc>=5.1.0
+python-dotenv>=1.0.1
+argon2-cffi>=23.1.0
+cryptography>=44.0.0
+django-debug-toolbar>=4.3.0
+ipython>=8.21.0
+gunicorn>=21.2.0
+whitenoise>=6.6.0
+
+# =========================================================
+# Frontend - Node.js / npm
+# =========================================================
+# autoprefixer@^10.4.19
+# cssnano@^6.1.2
+# del@^7.1.0
+# gulp@^4.0.2
+# gulp-concat@^2.6.1
+# gulp-if@^3.0.0
+# gulp-imagemin@^8.0.0
+# gulp-postcss@^9.0.1
+# gulp-rename@^2.0.0
+# gulp-sass@^5.1.0
+# gulp-sourcemaps@^3.0.0
+# gulp-terser@^2.1.0
+# sass@^1.74.1
+# through2@^4.0.2
+# vinyl-sourcemaps-apply@^0.2.1

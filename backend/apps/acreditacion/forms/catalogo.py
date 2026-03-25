@@ -163,7 +163,7 @@ class CicloEvaluacionForm(forms.ModelForm):
             "id_estado_ciclo",
             "descripcion",
             "activo",
-        ).order_by("descripcion"),
+        ).order_by("id_estado_ciclo"),
         label="Estado del ciclo",
     )
     clasificacion = forms.ModelChoiceField(
@@ -237,7 +237,7 @@ class CicloEstadoUpdateForm(forms.Form):
             "id_estado_ciclo",
             "descripcion",
             "activo",
-        ).order_by("descripcion"),
+        ).order_by("id_estado_ciclo"),
         label="Estado",
     )
 

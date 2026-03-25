@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from dataclasses import dataclass
@@ -38,7 +39,10 @@ class GraphConnectionSummary:
 
 def _cache_key(kind: str, value: str) -> str:
     drive_id = getattr(settings, "GRAPH_DRIVE_ID", "").strip() or "default"
-    return f"sig:graph:{drive_id}:{kind}:{value}"
+    raw_key = f"{drive_id}|{kind}|{value}"
+    digest = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+    safe_kind = "".join(char for char in str(kind).lower() if char.isalnum() or char in {"_", "-"})
+    return f"sig.graph.{safe_kind}.{digest}"
 
 
 def _normalized_graph_path(relative_path: str | PurePosixPath) -> str:
@@ -47,6 +51,14 @@ def _normalized_graph_path(relative_path: str | PurePosixPath) -> str:
         for part in str(relative_path).replace("\\", "/").split("/")
         if part
     )
+
+
+def _request_timeout() -> int:
+    return int(getattr(settings, "GRAPH_REQUEST_TIMEOUT_SECONDS", 10) or 10)
+
+
+def _upload_timeout() -> int:
+    return int(getattr(settings, "GRAPH_UPLOAD_TIMEOUT_SECONDS", 30) or 30)
 
 
 def _mask_value(value: str | None) -> str | None:
@@ -75,6 +87,32 @@ def _find_graph_credential() -> ApiCredencial | None:
         .order_by("-fecha_creacion", "-id_api_credencial")
         .first()
     )
+
+
+def _iter_graph_credential_payloads():
+    seen_pairs: set[tuple[str, str]] = set()
+
+    credencial = _find_graph_credential()
+    if credencial:
+        payload = {
+            "source": "api_credencial",
+            "app_name": credencial.nombre_aplicacion,
+            "credential_id": credencial.pk,
+            "tenant_id": credencial.tenant_id_plain,
+            "client_id": credencial.client_id_plain,
+            "client_secret": credential_service.decrypt_secret(
+                credencial.secret_encriptado,
+                credencial.iv_secret,
+            ),
+            "credential": credencial,
+            "api_servicio": credencial.api_servicio,
+        }
+        seen_pairs.add((payload["tenant_id"], payload["client_id"]))
+        yield payload
+
+    env_payload = _env_graph_credential()
+    if env_payload and (env_payload["tenant_id"], env_payload["client_id"]) not in seen_pairs:
+        yield env_payload
 
 
 def _env_graph_credential() -> dict[str, Any] | None:
@@ -109,25 +147,8 @@ def require_graph_configuration() -> None:
 
 
 def get_graph_credential_payload() -> dict[str, Any]:
-    credencial = _find_graph_credential()
-    if credencial:
-        return {
-            "source": "api_credencial",
-            "app_name": credencial.nombre_aplicacion,
-            "credential_id": credencial.pk,
-            "tenant_id": credencial.tenant_id_plain,
-            "client_id": credencial.client_id_plain,
-            "client_secret": credential_service.decrypt_secret(
-                credencial.secret_encriptado,
-                credencial.iv_secret,
-            ),
-            "credential": credencial,
-            "api_servicio": credencial.api_servicio,
-        }
-
-    env_payload = _env_graph_credential()
-    if env_payload:
-        return env_payload
+    for payload in _iter_graph_credential_payloads():
+        return payload
 
     raise GraphServiceError(
         "No existe una credencial activa de Microsoft Graph en `api_credencial` ni variables MS_* en entorno."
@@ -173,7 +194,7 @@ def _graph_json_request(
 
     req = request.Request(url, data=data, method=method.upper(), headers=headers)
     try:
-        with request.urlopen(req, timeout=30) as response:
+        with request.urlopen(req, timeout=_request_timeout()) as response:
             body = response.read().decode("utf-8") or "{}"
             if response.status not in expected_status:
                 raise GraphServiceError(
@@ -214,7 +235,7 @@ def _graph_binary_request(
     }
     req = request.Request(url, data=body, method=method.upper(), headers=headers)
     try:
-        with request.urlopen(req, timeout=60) as response:
+        with request.urlopen(req, timeout=_upload_timeout()) as response:
             raw_body = response.read().decode("utf-8") or "{}"
             if response.status not in expected_status:
                 raise GraphServiceError(
@@ -249,7 +270,7 @@ def _graph_content_request(
     headers = {"Authorization": f"Bearer {access_token}"}
     req = request.Request(url, method=method.upper(), headers=headers)
     try:
-        with request.urlopen(req, timeout=60) as response:
+        with request.urlopen(req, timeout=_upload_timeout()) as response:
             if response.status not in expected_status:
                 raise GraphServiceError(
                     f"Respuesta inesperada de Graph ({response.status}) para {api_path}."
@@ -280,11 +301,25 @@ def get_graph_access_token(payload: dict[str, Any] | None = None) -> str:
     return _request_env_token(payload)
 
 
-def get_graph_session() -> tuple[dict[str, Any], str]:
+def get_graph_session(*, validate_root: bool = False, refresh: bool = False) -> tuple[dict[str, Any], str]:
     require_graph_configuration()
-    payload = get_graph_credential_payload()
-    access_token = get_graph_access_token(payload)
-    return payload, access_token
+    last_error: Exception | None = None
+    for payload in _iter_graph_credential_payloads():
+        try:
+            access_token = get_graph_access_token(payload)
+            if validate_root:
+                get_drive_root_item(
+                    payload=payload,
+                    access_token=access_token,
+                    refresh=refresh,
+                )
+            return payload, access_token
+        except Exception as exc:
+            last_error = exc
+            continue
+    raise GraphServiceError(
+        "No fue posible validar la conexion con Microsoft Graph."
+    ) from last_error
 
 
 def _request_env_token(payload: dict[str, Any]) -> str:
@@ -306,7 +341,7 @@ def _request_env_token(payload: dict[str, Any]) -> str:
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     try:
-        with request.urlopen(req, timeout=30) as response:
+        with request.urlopen(req, timeout=_request_timeout()) as response:
             body = json.loads(response.read().decode("utf-8"))
             access_token = body.get("access_token")
             if not access_token:
@@ -321,13 +356,14 @@ def get_drive_root_item(
     *,
     payload: dict[str, Any] | None = None,
     access_token: str | None = None,
+    refresh: bool = False,
 ) -> dict[str, Any]:
-    cached_root_item = cache.get(_cache_key("root-item", "root"))
+    cached_root_item = None if refresh else cache.get(_cache_key("root-item", "root"))
     if cached_root_item is not None:
         return cached_root_item
 
-    payload = payload or get_graph_credential_payload()
-    access_token = access_token or get_graph_access_token(payload)
+    if payload is None or access_token is None:
+        payload, access_token = get_graph_session()
     drive_id = parse.quote(_configured_drive_id(), safe="")
     root_item = _graph_json_request(
         "GET",
@@ -341,7 +377,7 @@ def get_drive_root_item(
 
 def get_connection_summary(*, validate: bool = False) -> GraphConnectionSummary:
     try:
-        payload = get_graph_credential_payload()
+        payload, access_token = get_graph_session(validate_root=validate, refresh=validate)
         summary = GraphConnectionSummary(
             enabled=True,
             source=payload["source"],
@@ -354,7 +390,7 @@ def get_connection_summary(*, validate: bool = False) -> GraphConnectionSummary:
             message="Configuracion lista.",
         )
         if validate:
-            root_item = get_drive_root_item()
+            root_item = get_drive_root_item(payload=payload, access_token=access_token, refresh=True)
             summary.root_item_name = root_item.get("name")
             summary.root_item_id = root_item.get("id")
             summary.root_web_url = root_item.get("webUrl")
@@ -412,6 +448,46 @@ def _create_child_folder(
     )
 
 
+def _get_item_by_path(
+    *,
+    relative_path: str | PurePosixPath,
+    access_token: str,
+    log_payload: dict[str, Any],
+) -> dict[str, Any] | None:
+    drive_id = parse.quote(_configured_drive_id(), safe="")
+    api_path = (
+        f"/drives/{drive_id}/root:/{_quote_graph_path(relative_path)}"
+        "?$select=id,name,folder,webUrl,parentReference"
+    )
+    url = f"{GRAPH_API_BASE}{api_path}"
+    req = request.Request(
+        url,
+        method="GET",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with request.urlopen(req, timeout=_request_timeout()) as response:
+            body = response.read().decode("utf-8") or "{}"
+            parsed = json.loads(body)
+            _log_graph_call(log_payload, api_path=api_path, method="GET", result=str(response.status))
+            return parsed
+    except error.HTTPError as exc:
+        if exc.code == 404:
+            _log_graph_call(log_payload, api_path=api_path, method="GET", result="404")
+            return None
+        details = exc.read().decode("utf-8", errors="ignore")
+        _log_graph_call(log_payload, api_path=api_path, method="GET", result=str(exc.code), detail=details)
+        raise GraphServiceError(
+            f"Graph devolvio {exc.code} en {api_path}. {details}"
+        ) from exc
+    except error.URLError as exc:
+        _log_graph_call(log_payload, api_path=api_path, method="GET", result="ERROR", detail=str(exc.reason))
+        raise GraphServiceError(f"No fue posible conectar con Microsoft Graph: {exc.reason}") from exc
+
+
 def _normalize_graph_path_parts(relative_path: str | PurePosixPath) -> list[str]:
     path_parts = [
         part
@@ -428,32 +504,26 @@ def _ensure_drive_folder(
     relative_path: str | PurePosixPath,
     payload: dict[str, Any],
     access_token: str,
+    refresh: bool = False,
 ) -> dict[str, Any]:
     path_parts = _normalize_graph_path_parts(relative_path)
-    current_item = get_drive_root_item(payload=payload, access_token=access_token)
+    current_item = get_drive_root_item(payload=payload, access_token=access_token, refresh=refresh)
     current_path_parts: list[str] = []
 
     for part in path_parts:
         current_path_parts.append(part)
         current_path = "/".join(current_path_parts)
-        cached_item = cache.get(_cache_key("folder-item", _normalized_graph_path(current_path)))
+        cached_item = None if refresh else cache.get(
+            _cache_key("folder-item", _normalized_graph_path(current_path))
+        )
         if cached_item is not None:
             current_item = cached_item
             continue
 
-        children = _list_children(
-            parent_item_id=current_item["id"],
+        next_item = _get_item_by_path(
+            relative_path=current_path,
             access_token=access_token,
             log_payload=payload,
-        )
-        next_item = next(
-            (
-                child
-                for child in children
-                if child.get("name", "").casefold() == part.casefold()
-                and child.get("folder") is not None
-            ),
-            None,
         )
         if next_item is None:
             next_item = _create_child_folder(
@@ -477,6 +547,7 @@ def ensure_drive_folder(
     *,
     payload: dict[str, Any] | None = None,
     access_token: str | None = None,
+    refresh: bool = False,
 ) -> dict[str, Any]:
     if payload is None or access_token is None:
         payload, access_token = get_graph_session()
@@ -484,6 +555,7 @@ def ensure_drive_folder(
         relative_path=relative_path,
         payload=payload,
         access_token=access_token,
+        refresh=refresh,
     )
 
 
@@ -496,6 +568,7 @@ def upload_file(
     ensure_folder: bool = True,
     payload: dict[str, Any] | None = None,
     access_token: str | None = None,
+    refresh: bool = False,
 ) -> dict[str, Any]:
     if not file_name:
         raise GraphServiceError("El nombre del archivo Graph es obligatorio.")
@@ -507,6 +580,7 @@ def upload_file(
             relative_path=relative_folder_path,
             payload=payload,
             access_token=access_token,
+            refresh=refresh,
         )
 
     drive_id = parse.quote(_configured_drive_id(), safe="")
@@ -529,9 +603,7 @@ def download_file_by_item_id(item_id: str) -> tuple[bytes, dict[str, str]]:
     if not item_id:
         raise GraphServiceError("El item_id de Graph es obligatorio para descargar el archivo.")
 
-    require_graph_configuration()
-    payload = get_graph_credential_payload()
-    access_token = get_graph_access_token(payload)
+    payload, access_token = get_graph_session()
     drive_id = parse.quote(_configured_drive_id(), safe="")
     api_path = f"/drives/{drive_id}/items/{parse.quote(item_id, safe='')}/content"
     return _graph_content_request(
@@ -541,3 +613,15 @@ def download_file_by_item_id(item_id: str) -> tuple[bytes, dict[str, str]]:
         expected_status=(200, 302),
         log_payload=payload,
     )
+
+
+def clear_graph_cache(relative_path: str | PurePosixPath | None = None) -> None:
+    if relative_path is None:
+        cache.delete(_cache_key("root-item", "root"))
+        return
+
+    parts = _normalize_graph_path_parts(relative_path)
+    prefix: list[str] = []
+    for part in parts:
+        prefix.append(part)
+        cache.delete(_cache_key("folder-item", _normalized_graph_path("/".join(prefix))))
