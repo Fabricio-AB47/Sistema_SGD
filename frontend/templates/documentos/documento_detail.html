@@ -1,1 +1,165 @@
-{% extends "shared/admin_page.html" %}
+{% extends "documentos/_page_base.html" %}
+
+{% block documentos_content %}
+<div class="documentos-grid">
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Documento seleccionado</h3>
+        <p class="text-muted">Consulta la metadata real del documento, su ruta y sus datos de Microsoft Graph.</p>
+      </div>
+    </div>
+
+    <form method="get" class="documentos-form">
+      <div class="documentos-form__grid">
+        <label class="documentos-form__field documentos-form__field--full">
+          <span>Documento</span>
+          <select name="documento">
+            <option value="">Selecciona un documento</option>
+            {% for item in document_options %}
+              <option value="{{ item.pk }}" {% if selected_document and item.pk == selected_document.pk %}selected{% endif %}>{{ item.nombre_archivo }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="documentos-form__actions">
+        <button class="btn btn-primary" type="submit">Ver detalle</button>
+      </div>
+    </form>
+
+    {% if selected_document %}
+      <dl class="documentos-detail-list">
+        <div><dt>Archivo</dt><dd>{{ selected_document.nombre_archivo }}</dd></div>
+        <div><dt>Descripcion</dt><dd>{{ selected_document.descripcion_documento|default:"--" }}</dd></div>
+        <div><dt>Clasificacion</dt><dd>{{ selected_document.clasificacion.codigo }} - {{ selected_document.clasificacion.nombre }}</dd></div>
+        <div><dt>Mime type</dt><dd>{{ selected_document.mime_type|default:"--" }}</dd></div>
+        <div><dt>Extension</dt><dd>{{ selected_document.extension_archivo|default:"--" }}</dd></div>
+        <div><dt>Tamano</dt><dd>{{ selected_document.tamano_archivo|default:"--" }}</dd></div>
+        <div><dt>Ruta registrada</dt><dd class="documentos-table__path">{{ selected_document.ruta_local|default:"--" }}</dd></div>
+        <div><dt>Hash</dt><dd>{{ selected_document.hash_documento }}</dd></div>
+        <div><dt>Checksum</dt><dd>{{ selected_document.checksum_archivo|default:"--" }}</dd></div>
+        <div><dt>Cifrado</dt><dd>{% if selected_document.esta_cifrado %}Si{% else %}No{% endif %}</dd></div>
+        <div><dt>Clave cifrado</dt><dd>{{ selected_document.referencia_clave_cifrado|default:"--" }}</dd></div>
+        <div><dt>Graph item</dt><dd>{{ selected_document.graph_item_id|default:"--" }}</dd></div>
+        <div><dt>Graph drive</dt><dd>{{ selected_document.graph_drive_id|default:"--" }}</dd></div>
+        <div><dt>Fecha subida</dt><dd>{{ selected_document.fecha_subida|date:"Y-m-d H:i"|default:"--" }}</dd></div>
+        <div><dt>Subido por</dt><dd>{{ selected_document.subido_por|default:"--" }}</dd></div>
+      </dl>
+    {% else %}
+      <div class="documentos-empty-state">
+        <strong>No hay documento seleccionado.</strong>
+        <p class="text-muted">Selecciona un documento para ver su metadata completa y trazabilidad.</p>
+      </div>
+    {% endif %}
+  </article>
+
+  <article class="card documentos-panel">
+    <h3>Acciones protegidas</h3>
+    {% if selected_document %}
+      <div class="documentos-summary">
+        <div>
+          <span class="documentos-summary__label">Versiones</span>
+          <strong class="documentos-summary__value">{{ selected_document.versiones_count }}</strong>
+        </div>
+        <div>
+          <span class="documentos-summary__label">Accesos</span>
+          <strong class="documentos-summary__value">{{ selected_document.accesos_count }}</strong>
+        </div>
+        <div>
+          <span class="documentos-summary__label">Evidencias</span>
+          <strong class="documentos-summary__value">{{ selected_document.evidencias_count }}</strong>
+        </div>
+        <div>
+          <span class="documentos-summary__label">Estado</span>
+          <strong class="documentos-summary__value">{% if selected_document.activo %}Activo{% else %}Inactivo{% endif %}</strong>
+        </div>
+      </div>
+      <div class="documentos-form__actions">
+        <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' selected_document.pk %}">Abrir</a>
+        <a class="btn btn-secondary" href="{% url 'documentos-protegidos-descargar' selected_document.pk %}">Descargar</a>
+        {% if selected_document.graph_item_id %}
+          <a class="btn btn-primary" href="{% url 'documentos-protegidos-graph' selected_document.pk %}" target="_blank" rel="noopener">Revisar en Graph</a>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="text-muted">Selecciona un documento para habilitar sus acciones protegidas.</p>
+    {% endif %}
+  </article>
+</div>
+
+<div class="documentos-grid">
+  <article class="card documentos-panel">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Versiones recientes</h3>
+        <p class="text-muted">Ultimas versiones registradas para el documento seleccionado.</p>
+      </div>
+      {% if selected_document %}
+        <a class="btn btn-ghost" href="{% url 'documentos-versiones' %}?documento={{ selected_document.pk }}">Ver todas</a>
+      {% endif %}
+    </div>
+    <div class="table-responsive">
+      <table class="documentos-table">
+        <thead>
+          <tr>
+            <th>Version</th>
+            <th>Fecha</th>
+            <th>Usuario</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for version in recent_versions %}
+            <tr>
+              <td>v{{ version.numero_version }}</td>
+              <td>{{ version.fecha_version|date:"Y-m-d H:i"|default:"--" }}</td>
+              <td>{{ version.subido_por|default:"--" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-muted">No existen versiones registradas.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Accesos recientes</h3>
+        <p class="text-muted">Trazabilidad reciente de consulta, descarga y revision del documento.</p>
+      </div>
+      {% if selected_document %}
+        <a class="btn btn-ghost" href="{% url 'documentos-accesos' %}?documento={{ selected_document.pk }}">Ver todos</a>
+      {% endif %}
+    </div>
+    <div class="table-responsive">
+      <table class="documentos-table">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Accion</th>
+            <th>Usuario</th>
+            <th>Resultado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for access in recent_access_logs %}
+            <tr>
+              <td>{{ access.fecha_evento|date:"Y-m-d H:i"|default:"--" }}</td>
+              <td>{{ access.accion }}</td>
+              <td>{{ access.usuario|default:"--" }}</td>
+              <td>{{ access.resultado|default:"--" }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="text-center text-muted">No existen accesos registrados.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div>
+{% endblock %}

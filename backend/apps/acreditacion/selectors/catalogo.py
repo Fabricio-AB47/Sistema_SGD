@@ -1,32 +1,22 @@
 from django.db.models import Count, Prefetch
-from django.core.cache import cache
-
 from apps.acreditacion.models import (
     CicloEvaluacion,
     Criterio,
     ElementoFundamental,
     Indicador,
-    IndicadorElementoFundamental,
     Subcriterio,
 )
 from apps.core.models import EstadoCiclo
 
 
 def get_acreditacion_metrics():
-    cache_key = "sig:acreditacion:metrics"
-    cached_metrics = cache.get(cache_key)
-    if cached_metrics is not None:
-        return cached_metrics
-
-    metrics = {
+    return {
         "criterios": Criterio.objects.count(),
         "subcriterios": Subcriterio.objects.count(),
         "indicadores": Indicador.objects.count(),
         "elementos": ElementoFundamental.objects.count(),
         "ciclos": CicloEvaluacion.objects.count(),
     }
-    cache.set(cache_key, metrics, 60)
-    return metrics
 
 
 def get_criterios_queryset():
@@ -50,12 +40,7 @@ def get_subcriterios_queryset():
 def get_indicadores_queryset():
     return (
         Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador")
-        .annotate(
-            elementos_count=Count(
-                "elementos_fundamentales__elemento_fundamental",
-                distinct=True,
-            )
-        )
+        .annotate(elementos_count=Count("elementos", distinct=True))
         .order_by(
             "subcriterio__criterio__codigo_criterio",
             "subcriterio__codigo_subcriterio",
@@ -68,28 +53,32 @@ def get_indicadores_queryset():
 def get_indicator_detail(indicador_id=None):
     queryset = Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador").prefetch_related(
         Prefetch(
-            "elementos_fundamentales",
-            queryset=IndicadorElementoFundamental.objects.select_related(
-                "elemento_fundamental__clasificacion"
-            ).order_by("elemento_fundamental__codigo_elemento"),
+            "elementos",
+            queryset=ElementoFundamental.objects.order_by("codigo_elemento"),
             to_attr="elementos_detalle",
         )
     )
     if indicador_id:
-        return queryset.filter(pk=indicador_id).first()
-    return queryset.order_by("codigo_indicador").first()
+        indicator = queryset.filter(pk=indicador_id).first()
+    else:
+        indicator = queryset.order_by("codigo_indicador").first()
+
+    if indicator is None:
+        return None
+
+    return indicator
 
 
 def get_elementos_queryset():
     return (
-        ElementoFundamental.objects.select_related("clasificacion")
-        .annotate(
-            indicadores_count=Count(
-                "indicadores__indicador",
-                distinct=True,
-            )
+        ElementoFundamental.objects.select_related("indicador__subcriterio__criterio")
+        .order_by(
+            "indicador__subcriterio__criterio__codigo_criterio",
+            "indicador__subcriterio__codigo_subcriterio",
+            "indicador__codigo_indicador",
+            "orden_visual",
+            "codigo_elemento",
         )
-        .order_by("clasificacion__codigo", "orden_visual", "codigo_elemento")
     )
 
 
@@ -99,10 +88,8 @@ def get_matrix_rows():
         Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador")
         .prefetch_related(
             Prefetch(
-                "elementos_fundamentales",
-                queryset=IndicadorElementoFundamental.objects.select_related(
-                    "elemento_fundamental"
-                ).order_by("elemento_fundamental__codigo_elemento"),
+                "elementos",
+                queryset=ElementoFundamental.objects.order_by("codigo_elemento"),
                 to_attr="matrix_elements",
             )
         )
@@ -132,7 +119,7 @@ def get_matrix_rows():
                     "criterio": indicador.subcriterio.criterio,
                     "subcriterio": indicador.subcriterio,
                     "indicador": indicador,
-                    "elemento": relacion.elemento_fundamental,
+                    "elemento": relacion,
                 }
             )
     return rows

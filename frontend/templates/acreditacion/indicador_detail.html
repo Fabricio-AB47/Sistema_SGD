@@ -14,36 +14,13 @@
         <div><dt>Ponderacion</dt><dd>{{ selected_indicator.ponderacion|default:"--" }}</dd></div>
       </dl>
     </article>
-
-    <article class="card acreditacion-panel">
-      <h3>Relacionar elemento</h3>
-      <form method="post" class="acreditacion-form">
-        {% csrf_token %}
-        {{ relation_form.non_field_errors }}
-        <div class="acreditacion-form__grid">
-          <label class="acreditacion-form__field acreditacion-form__field--full">
-            <span>Indicador</span>
-            {{ relation_form.indicador }}
-            {{ relation_form.indicador.errors }}
-          </label>
-          <label class="acreditacion-form__field acreditacion-form__field--full">
-            <span>Elemento fundamental</span>
-            {{ relation_form.elemento_fundamental }}
-            {{ relation_form.elemento_fundamental.errors }}
-          </label>
-        </div>
-        <div class="acreditacion-form__actions">
-          <button class="btn btn-primary" type="submit">Vincular elemento</button>
-        </div>
-      </form>
-    </article>
   </div>
 
   <article class="card acreditacion-panel acreditacion-panel--wide">
     <div class="acreditacion-panel__header">
       <div>
         <h3>Elementos asociados</h3>
-        <p class="text-muted">Lectura real de `indicador_elemento_fundamental`.</p>
+        <p class="text-muted">Lectura real de `elemento_fundamental` usando `id_indicador`.</p>
       </div>
     </div>
     <div class="table-responsive">
@@ -52,19 +29,27 @@
           <tr>
             <th>Codigo</th>
             <th>Elemento</th>
-            <th>Clasificacion</th>
+            <th>Orden</th>
+            <th>Estado</th>
           </tr>
         </thead>
         <tbody>
-          {% for relation in selected_indicator.elementos_detalle %}
+          {% for elemento in selected_indicator.elementos_detalle %}
             <tr>
-              <td>{{ relation.elemento_fundamental.codigo_elemento }}</td>
-              <td>{{ relation.elemento_fundamental.nombre_elemento }}</td>
-              <td>{{ relation.elemento_fundamental.clasificacion.nombre }}</td>
+              <td>{{ elemento.codigo_elemento }}</td>
+              <td>{{ elemento.nombre_elemento }}</td>
+              <td>{{ elemento.orden_visual|default:"--" }}</td>
+              <td>
+                {% if elemento.activo %}
+                  <span class="acreditacion-status acreditacion-status--success">Activo</span>
+                {% else %}
+                  <span class="acreditacion-status acreditacion-status--muted">Inactivo</span>
+                {% endif %}
+              </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="3" class="text-center text-muted">Este indicador aun no tiene elementos relacionados.</td>
+              <td colspan="4" class="text-center text-muted">Este indicador aun no tiene elementos relacionados.</td>
             </tr>
           {% endfor %}
         </tbody>

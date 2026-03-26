@@ -6,12 +6,13 @@ from application.services.storage_path_service import (
     build_elemento_drive_path,
     build_indicador_drive_path,
     build_subcriterio_drive_path,
+    get_criterio_drive_root,
 )
 from apps.auditoria.services.auditoria_service import registrar_evento
-from apps.acreditacion.models import IndicadorElementoFundamental
 from apps.documentos.selectors import authorization_document_exists
 from apps.documentos.services import upload_cycle_authorization_document
 from apps.integraciones.services.graph_service import (
+    clear_graph_cache,
     ensure_drive_folder,
     require_graph_configuration,
 )
@@ -37,7 +38,11 @@ def _registrar_evento_catalogo(*, actor, request, accion, descripcion, tabla, re
 
 def _provision_storage(*, drive_path):
     require_graph_configuration()
-    graph_item = ensure_drive_folder(drive_path)
+    criterio_root = get_criterio_drive_root()
+    clear_graph_cache(criterio_root)
+    ensure_drive_folder(criterio_root, refresh=True)
+    clear_graph_cache(drive_path)
+    graph_item = ensure_drive_folder(drive_path, refresh=True)
     return {
         "drive_path": drive_path,
         "graph_item": graph_item,
@@ -144,6 +149,11 @@ def crear_indicador(*, form, actor=None, request=None):
 def crear_elemento(*, form, actor=None, request=None):
     elemento = form.save()
     _invalidate_acreditacion_metrics_cache()
+    storage = None
+    if elemento.indicador_id:
+        storage = _provision_storage(
+            drive_path=build_elemento_drive_path(elemento.indicador, elemento),
+        )
     _registrar_evento_catalogo(
         actor=actor,
         request=request,
@@ -152,15 +162,30 @@ def crear_elemento(*, form, actor=None, request=None):
         tabla="elemento_fundamental",
         registro=elemento,
     )
+    if storage is not None:
+        registrar_evento(
+            accion="CREAR_CARPETA_ELEMENTO",
+            descripcion=f"Se creo la carpeta Graph del elemento {elemento.codigo_elemento}.",
+            usuario=actor,
+            tipo_evento="ALMACENAMIENTO",
+            tabla_afectada="elemento_fundamental",
+            id_registro=elemento.pk,
+            valores_nuevos={
+                "indicador_id": elemento.indicador_id,
+                "ruta_drive": storage["drive_path"].as_posix(),
+                "graph_web_url": (storage["graph_item"] or {}).get("webUrl"),
+            },
+            criticidad="MEDIA",
+            request=request,
+        )
     return elemento
 
 
 @transaction.atomic
 def vincular_indicador_elemento(*, indicador, elemento_fundamental, actor=None, request=None):
-    relacion = IndicadorElementoFundamental.objects.create(
-        indicador=indicador,
-        elemento_fundamental=elemento_fundamental,
-    )
+    indicador_anterior_id = elemento_fundamental.indicador_id
+    elemento_fundamental.indicador = indicador
+    elemento_fundamental.save(update_fields=["indicador"])
     storage = _provision_storage(
         drive_path=build_elemento_drive_path(indicador, elemento_fundamental),
     )
@@ -169,8 +194,11 @@ def vincular_indicador_elemento(*, indicador, elemento_fundamental, actor=None, 
         descripcion=f"Se vinculo el elemento {elemento_fundamental.codigo_elemento} al indicador {indicador.codigo_indicador}.",
         usuario=actor,
         tipo_evento="ACREDITACION",
-        tabla_afectada="indicador_elemento_fundamental",
-        id_registro=indicador.pk,
+        tabla_afectada="elemento_fundamental",
+        id_registro=elemento_fundamental.pk,
+        valores_anteriores={
+            "indicador_id": indicador_anterior_id,
+        },
         valores_nuevos={
             "indicador_id": indicador.pk,
             "elemento_id": elemento_fundamental.pk,
@@ -180,7 +208,7 @@ def vincular_indicador_elemento(*, indicador, elemento_fundamental, actor=None, 
         criticidad="MEDIA",
         request=request,
     )
-    return relacion
+    return elemento_fundamental
 
 
 @transaction.atomic

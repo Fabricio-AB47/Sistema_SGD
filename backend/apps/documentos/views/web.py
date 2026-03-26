@@ -9,12 +9,19 @@ from django.views import View
 from django.views.generic import RedirectView, TemplateView
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 
-from apps.acreditacion.models import IndicadorElementoFundamental
+from apps.acreditacion.models import ElementoFundamental
 from apps.core.mixins import SigLoginRequiredMixin
 from apps.core.views.admin_page import AdminPageView
 from apps.documentos.forms import StructuredDocumentUploadForm
 from apps.documentos.selectors import (
     get_documento_for_access,
+    get_document_access_logs_queryset,
+    get_document_classifications_queryset,
+    get_document_filter_queryset,
+    get_document_management_summary,
+    get_document_versions_queryset,
+    get_documento_admin_detail,
+    get_documentos_admin_queryset,
     get_approved_cycles_queryset,
     get_recent_cycle_upload_statuses,
     get_structured_documents_queryset,
@@ -87,9 +94,83 @@ class DocumentosBaseView(SigLoginRequiredMixin, TemplateView):
                 "page_status": self.page_status,
                 "page_actions": self.page_actions,
                 "current_url_name": self.request.resolver_match.url_name if self.request.resolver_match else "",
+                "documentos_summary": get_document_management_summary(),
             }
         )
         context.update(kwargs)
+        return context
+
+
+class DocumentClassificationListView(DocumentosBaseView):
+    template_name = "documentos/clasificacion_documento_list.html"
+    page_title = "Clasificaciones documentales"
+    page_description = "Consulta la configuracion real de clasificaciones documentales y su uso en el repositorio."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["classifications"] = get_document_classifications_queryset()
+        return context
+
+
+class DocumentListView(DocumentosBaseView):
+    template_name = "documentos/documento_list.html"
+    page_title = "Documentos"
+    page_description = "Consulta el inventario documental real, su clasificacion, versionamiento y uso operativo."
+    page_actions = [
+        {"label": "Subir documento", "url_name": "documentos-subir", "variant": "primary"},
+    ]
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["documents"] = get_documentos_admin_queryset()[:100]
+        return context
+
+
+class DocumentDetailView(DocumentosBaseView):
+    template_name = "documentos/documento_detail.html"
+    page_title = "Detalle de documento"
+    page_description = "Visualiza metadata documental, estado de proteccion, versionamiento y accesos recientes."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        documento_id = self.request.GET.get("documento")
+        selected_document = get_documento_admin_detail(documento_id)
+        context["document_options"] = get_document_filter_queryset()
+        context["selected_document"] = selected_document
+        context["recent_versions"] = (
+            get_document_versions_queryset(selected_document.pk)[:10] if selected_document else []
+        )
+        context["recent_access_logs"] = (
+            get_document_access_logs_queryset(selected_document.pk)[:10] if selected_document else []
+        )
+        return context
+
+
+class DocumentVersionListView(DocumentosBaseView):
+    template_name = "documentos/version_documento_list.html"
+    page_title = "Historial de versiones"
+    page_description = "Consulta el versionamiento real de los documentos almacenados en el sistema."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        documento_id = self.request.GET.get("documento")
+        context["document_options"] = get_document_filter_queryset()
+        context["selected_document"] = get_documento_admin_detail(documento_id) if documento_id else None
+        context["versions"] = get_document_versions_queryset(documento_id)[:100]
+        return context
+
+
+class DocumentAccessLogListView(DocumentosBaseView):
+    template_name = "documentos/documento_acceso_log.html"
+    page_title = "Historial de accesos"
+    page_description = "Revisa la trazabilidad real de accesos sobre documentos protegidos."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        documento_id = self.request.GET.get("documento")
+        context["document_options"] = get_document_filter_queryset()
+        context["selected_document"] = get_documento_admin_detail(documento_id) if documento_id else None
+        context["access_logs"] = get_document_access_logs_queryset(documento_id)[:100]
         return context
 
 
@@ -118,7 +199,7 @@ class DocumentUploadView(DocumentosBaseView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         approved_cycles = get_approved_cycles_queryset()
-        has_structure = IndicadorElementoFundamental.objects.exists()
+        has_structure = ElementoFundamental.objects.exclude(indicador_id__isnull=True).exists()
         context["upload_form"] = kwargs.get("upload_form") or StructuredDocumentUploadForm(
             ciclo_initial=self._get_cycle_initial()
         )

@@ -4,7 +4,6 @@ from apps.acreditacion.models import (
     CicloEvaluacion,
     ElementoFundamental,
     Indicador,
-    IndicadorElementoFundamental,
 )
 from apps.core.services.upload_security import validate_uploaded_file
 from apps.core.models import ClasificacionDocumento
@@ -47,13 +46,13 @@ class StructuredDocumentUploadForm(forms.Form):
         label="Indicador",
     )
     elemento_fundamental = forms.ModelChoiceField(
-        queryset=ElementoFundamental.objects.select_related("clasificacion").only(
+        queryset=ElementoFundamental.objects.select_related("indicador").only(
             "id_elemento_fundamental",
             "codigo_elemento",
             "nombre_elemento",
-            "clasificacion",
-            "clasificacion__codigo",
-        ).order_by("codigo_elemento"),
+            "indicador",
+            "indicador__codigo_indicador",
+        ).filter(indicador_id__isnull=False).order_by("codigo_elemento"),
         label="Elemento fundamental",
     )
     clasificacion = forms.ModelChoiceField(
@@ -78,6 +77,12 @@ class StructuredDocumentUploadForm(forms.Form):
         super().__init__(*args, **kwargs)
         if ciclo_initial:
             self.fields["ciclo"].initial = ciclo_initial
+        self.fields["elemento_fundamental"].label_from_instance = (
+            lambda elemento: (
+                f"{elemento.codigo_elemento} - {elemento.nombre_elemento} | "
+                f"{getattr(getattr(elemento, 'indicador', None), 'codigo_indicador', 'SIN INDICADOR')}"
+            )
+        )
 
     def clean_descripcion_documento(self):
         return _normalize_optional_text(self.cleaned_data.get("descripcion_documento"))
@@ -97,11 +102,7 @@ class StructuredDocumentUploadForm(forms.Form):
             self.add_error("ciclo", "Solo se puede cargar documentacion en ciclos aprobados.")
 
         if indicador and elemento:
-            relation_exists = IndicadorElementoFundamental.objects.filter(
-                indicador=indicador,
-                elemento_fundamental=elemento,
-            ).exists()
-            if not relation_exists:
+            if elemento.indicador_id != indicador.pk:
                 self.add_error(
                     "elemento_fundamental",
                     "El elemento fundamental no pertenece al indicador seleccionado.",

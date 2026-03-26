@@ -3,8 +3,9 @@ import logging
 from django.contrib import messages
 from django.db import DatabaseError, IntegrityError, OperationalError
 from django.http import Http404
-from django.shortcuts import redirect
+from django.shortcuts import redirect, resolve_url
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.generic import RedirectView, TemplateView
 
@@ -68,6 +69,21 @@ def _report_operation_error(*, request, exc: Exception, form=None, user_message:
     messages.error(request, user_message)
     if form is not None:
         form.add_error(None, user_message)
+
+
+def _safe_redirect_response(*, request, redirect_to: str | None, fallback: str):
+    candidate = (redirect_to or "").strip()
+    if candidate and url_has_allowed_host_and_scheme(
+        url=candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(candidate)
+
+    if candidate:
+        logger.warning("Se bloqueo una redireccion no confiable en acreditacion: %s", candidate)
+
+    return redirect(resolve_url(fallback))
 
 
 class AcreditacionBaseView(SigLoginRequiredMixin, TemplateView):
@@ -205,13 +221,19 @@ class IndicadorDetailView(AcreditacionBaseView):
         context["selected_indicator"] = selected_indicator
         context["indicadores"] = get_indicadores_queryset()
         context["relation_form"] = kwargs.get("relation_form") or IndicadorElementoForm(
-            initial={"indicador": selected_indicator} if selected_indicator else None
+            initial={"indicador": selected_indicator} if selected_indicator else None,
+            fixed_indicador=selected_indicator,
         )
         return context
 
     def post(self, request, *args, **kwargs):
         form = IndicadorElementoForm(request.POST)
         selected_indicator = get_indicator_detail(request.POST.get("indicador"))
+        if selected_indicator is not None:
+            form = IndicadorElementoForm(
+                request.POST,
+                fixed_indicador=selected_indicator,
+            )
         if form.is_valid():
             try:
                 vincular_indicador_elemento(
@@ -421,13 +443,15 @@ class CicloEstadoUpdateView(SigLoginRequiredMixin, View):
                     )
                 else:
                     messages.success(request, f"Estado actualizado a {form.cleaned_data['estado'].descripcion}.")
-                redirect_to = request.POST.get("next_url", "").strip()
-                if redirect_to:
-                    return redirect(redirect_to)
-                return redirect("acreditacion-ciclos-lista")
+                return _safe_redirect_response(
+                    request=request,
+                    redirect_to=request.POST.get("next_url"),
+                    fallback="acreditacion-ciclos-lista",
+                )
 
         messages.error(request, "No fue posible actualizar el estado del ciclo.")
-        redirect_to = request.POST.get("next_url", "").strip()
-        if redirect_to:
-            return redirect(redirect_to)
-        return redirect("acreditacion-ciclos-lista")
+        return _safe_redirect_response(
+            request=request,
+            redirect_to=request.POST.get("next_url"),
+            fallback="acreditacion-ciclos-lista",
+        )

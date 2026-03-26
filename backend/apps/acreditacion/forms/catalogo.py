@@ -5,7 +5,6 @@ from apps.acreditacion.models import (
     Criterio,
     ElementoFundamental,
     Indicador,
-    IndicadorElementoFundamental,
     Subcriterio,
 )
 from apps.core.services.upload_security import validate_uploaded_file
@@ -105,7 +104,7 @@ class ElementoFundamentalForm(forms.ModelForm):
     class Meta:
         model = ElementoFundamental
         fields = [
-            "clasificacion",
+            "indicador",
             "codigo_elemento",
             "nombre_elemento",
             "descripcion",
@@ -113,6 +112,25 @@ class ElementoFundamentalForm(forms.ModelForm):
             "orden_visual",
             "activo",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["indicador"].required = False
+        self.fields["indicador"].empty_label = "Seleccione el indicador"
+        self.fields["indicador"].queryset = Indicador.objects.select_related(
+            "subcriterio__criterio"
+        ).order_by(
+            "subcriterio__criterio__codigo_criterio",
+            "subcriterio__codigo_subcriterio",
+            "codigo_indicador",
+        )
+        self.fields["indicador"].label_from_instance = (
+            lambda indicador: (
+                f"{indicador.subcriterio.criterio.codigo_criterio} / "
+                f"{indicador.subcriterio.codigo_subcriterio} / "
+                f"{indicador.codigo_indicador} - {indicador.nombre_indicador}"
+            )
+        )
 
     def clean_codigo_elemento(self):
         codigo = _normalize_code(self.cleaned_data["codigo_elemento"])
@@ -139,21 +157,50 @@ class IndicadorElementoForm(forms.Form):
         label="Indicador",
     )
     elemento_fundamental = forms.ModelChoiceField(
-        queryset=ElementoFundamental.objects.select_related("clasificacion").order_by("codigo_elemento"),
+        queryset=ElementoFundamental.objects.select_related("indicador").order_by("codigo_elemento"),
         label="Elemento fundamental",
     )
+
+    def __init__(self, *args, **kwargs):
+        fixed_indicador = kwargs.pop("fixed_indicador", None)
+        super().__init__(*args, **kwargs)
+        self.fields["elemento_fundamental"].label_from_instance = self._elemento_label
+        if fixed_indicador is not None:
+            self.fields["elemento_fundamental"].queryset = self.fields[
+                "elemento_fundamental"
+            ].queryset.filter(indicador_id__isnull=True)
+            self.fields["indicador"].queryset = Indicador.objects.filter(pk=fixed_indicador.pk)
+            self.fields["indicador"].initial = fixed_indicador
+            self.fields["indicador"].widget = forms.HiddenInput()
+
+    @staticmethod
+    def _elemento_label(elemento):
+        indicador = getattr(elemento, "indicador", None)
+        if indicador is None:
+            indicador_text = "SIN INDICADOR"
+        else:
+            indicador_text = (
+                f"{getattr(indicador, 'codigo_indicador', '')} - "
+                f"{getattr(indicador, 'nombre_indicador', '')}"
+            )
+        return (
+            f"IND {getattr(elemento, 'indicador_id', None) or 'NULL'} | "
+            f"{indicador_text} | "
+            f"{elemento.codigo_elemento} - {elemento.nombre_elemento}"
+        )
 
     def clean(self):
         cleaned_data = super().clean()
         indicador = cleaned_data.get("indicador")
         elemento_fundamental = cleaned_data.get("elemento_fundamental")
         if indicador and elemento_fundamental:
-            exists = IndicadorElementoFundamental.objects.filter(
-                indicador=indicador,
-                elemento_fundamental=elemento_fundamental,
-            ).exists()
-            if exists:
+            if elemento_fundamental.indicador_id == indicador.pk:
                 self.add_error("elemento_fundamental", "La relacion ya existe.")
+            elif elemento_fundamental.indicador_id and elemento_fundamental.indicador_id != indicador.pk:
+                self.add_error(
+                    "elemento_fundamental",
+                    "El elemento fundamental ya pertenece a otro indicador.",
+                )
         return cleaned_data
 
 

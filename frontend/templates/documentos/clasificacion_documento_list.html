@@ -1,1 +1,64 @@
-{% extends "shared/admin_page.html" %}
+{% extends "documentos/_page_base.html" %}
+
+{% block documentos_content %}
+<div class="documentos-grid">
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Clasificaciones disponibles</h3>
+        <p class="text-muted">Lectura real de `clasificacion_documento` con conteo de uso en `documento`.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="documentos-table">
+        <thead>
+          <tr>
+            <th>Codigo</th>
+            <th>Nombre</th>
+            <th>Nivel</th>
+            <th>Cifrado</th>
+            <th>Documentos</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for clasificacion in classifications %}
+            <tr>
+              <td><strong>{{ clasificacion.codigo }}</strong></td>
+              <td>{{ clasificacion.nombre }}</td>
+              <td>{{ clasificacion.nivel_confidencialidad }}</td>
+              <td>{% if clasificacion.requiere_cifrado %}Requerido{% else %}No{% endif %}</td>
+              <td>{{ clasificacion.documentos_activos_count }} activos / {{ clasificacion.documentos_count }} total</td>
+              <td>{% if clasificacion.activo %}Activa{% else %}Inactiva{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted">No existen clasificaciones documentales registradas.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card documentos-panel">
+    <h3>Resumen operativo</h3>
+    <div class="documentos-summary">
+      <div>
+        <span class="documentos-summary__label">Clasificaciones</span>
+        <strong class="documentos-summary__value">{{ documentos_summary.clasificaciones }}</strong>
+      </div>
+      <div>
+        <span class="documentos-summary__label">Documentos activos</span>
+        <strong class="documentos-summary__value">{{ documentos_summary.documentos_activos }}</strong>
+      </div>
+    </div>
+
+    <ul class="documentos-links">
+      <li>El codigo de clasificacion es unico.</li>
+      <li>El nivel de confidencialidad define el tratamiento documental.</li>
+      <li>La marca de cifrado se refleja en `documento` y `version_documento`.</li>
+    </ul>
+  </article>
+</div>
+{% endblock %}

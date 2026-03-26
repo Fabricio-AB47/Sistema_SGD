@@ -1,1 +1,86 @@
-{% extends "shared/admin_page.html" %}
+{% extends "documentos/_page_base.html" %}
+
+{% block documentos_content %}
+<div class="documentos-grid">
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Versionamiento documental</h3>
+        <p class="text-muted">Lectura real de `version_documento` con opcion de filtrar por documento.</p>
+      </div>
+    </div>
+
+    <form method="get" class="documentos-form">
+      <div class="documentos-form__grid">
+        <label class="documentos-form__field documentos-form__field--full">
+          <span>Documento</span>
+          <select name="documento">
+            <option value="">Todos los documentos</option>
+            {% for item in document_options %}
+              <option value="{{ item.pk }}" {% if selected_document and item.pk == selected_document.pk %}selected{% endif %}>{{ item.nombre_archivo }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="documentos-form__actions">
+        <button class="btn btn-primary" type="submit">Filtrar</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="documentos-table">
+        <thead>
+          <tr>
+            <th>Documento</th>
+            <th>Version</th>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Descripcion cambio</th>
+            <th>Hash</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for version in versions %}
+            <tr>
+              <td>
+                <strong>{{ version.documento.nombre_archivo }}</strong>
+                <div class="text-muted">{{ version.documento.clasificacion.codigo }}</div>
+              </td>
+              <td>v{{ version.numero_version }}</td>
+              <td>{{ version.fecha_version|date:"Y-m-d H:i"|default:"--" }}</td>
+              <td>{{ version.subido_por|default:"--" }}</td>
+              <td>{{ version.descripcion_cambio|default:"--" }}</td>
+              <td>{{ version.hash_documento }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted">No existen versiones registradas.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card documentos-panel">
+    <h3>Contexto</h3>
+    {% if selected_document %}
+      <div class="documentos-summary">
+        <div>
+          <span class="documentos-summary__label">Documento</span>
+          <strong class="documentos-summary__value">{{ selected_document.nombre_archivo }}</strong>
+        </div>
+        <div>
+          <span class="documentos-summary__label">Clasificacion</span>
+          <strong class="documentos-summary__value">{{ selected_document.clasificacion.codigo }}</strong>
+        </div>
+      </div>
+      <div class="documentos-form__actions">
+        <a class="btn btn-ghost" href="{% url 'documentos-detalle' %}?documento={{ selected_document.pk }}">Ver detalle</a>
+      </div>
+    {% else %}
+      <p class="text-muted">Sin filtro activo. Se muestran las versiones mas recientes de todo el repositorio.</p>
+    {% endif %}
+  </article>
+</div>
+{% endblock %}

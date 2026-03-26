@@ -95,11 +95,13 @@ class ClasificacionElementoFundamental(CoreClasificacionElementoFundamental):
 
 class ElementoFundamental(models.Model):
     id_elemento_fundamental = models.AutoField(primary_key=True)
-    clasificacion = models.ForeignKey(
-        ClasificacionElementoFundamental,
+    indicador = models.ForeignKey(
+        Indicador,
         on_delete=models.PROTECT,
         related_name="elementos",
-        db_column="id_clasificacion",
+        db_column="id_indicador",
+        null=True,
+        blank=True,
     )
     codigo_elemento = models.CharField(max_length=20, unique=True)
     nombre_elemento = models.CharField(max_length=200)

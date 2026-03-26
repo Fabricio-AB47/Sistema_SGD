@@ -117,8 +117,12 @@ def get_ciclo_auth_local_root() -> Path:
     return _local_path_from_drive_path(get_ciclo_auth_drive_root())
 
 
+def get_criterio_drive_root() -> PurePosixPath:
+    return get_drive_root_path() / "CRITERIO"
+
+
 def build_criterio_drive_path(criterio) -> PurePosixPath:
-    return get_drive_root_path() / "CRITERIO" / _named_segment(
+    return get_criterio_drive_root() / _named_segment(
         criterio.codigo_criterio,
         criterio.nombre_criterio,
     )
@@ -129,7 +133,7 @@ def build_criterio_path(criterio) -> Path:
 
 
 def build_subcriterio_drive_path(subcriterio) -> PurePosixPath:
-    return build_criterio_drive_path(subcriterio.criterio) / "SUBCRITERIO" / _named_segment(
+    return build_criterio_drive_path(subcriterio.criterio) / _named_segment(
         subcriterio.codigo_subcriterio,
         subcriterio.nombre_subcriterio,
     )
@@ -140,7 +144,7 @@ def build_subcriterio_path(subcriterio) -> Path:
 
 
 def build_indicador_drive_path(indicador) -> PurePosixPath:
-    return build_subcriterio_drive_path(indicador.subcriterio) / "INDICADOR" / _named_segment(
+    return build_subcriterio_drive_path(indicador.subcriterio) / _named_segment(
         indicador.codigo_indicador,
         indicador.nombre_indicador,
     )
@@ -151,7 +155,8 @@ def build_indicador_path(indicador) -> Path:
 
 
 def build_elemento_drive_path(indicador, elemento) -> PurePosixPath:
-    return build_indicador_drive_path(indicador) / "ELEMENTO" / _named_segment(
+    # El elemento cuelga directamente del indicador; ahi se organiza la evidencia por ciclo.
+    return build_indicador_drive_path(indicador) / _named_segment(
         elemento.codigo_elemento,
         elemento.nombre_elemento,
     )

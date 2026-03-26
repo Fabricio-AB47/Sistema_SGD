@@ -4,7 +4,6 @@ from apps.acreditacion.models import (
     CicloEvaluacion,
     ElementoFundamental,
     Indicador,
-    IndicadorElementoFundamental,
     RolIndicador,
 )
 from apps.permisos.models import Permiso, Rol
@@ -128,11 +127,7 @@ class RolIndicadorElementoGestionForm(forms.Form):
         if not rol_indicador or not elemento:
             return cleaned
 
-        existe_relacion = IndicadorElementoFundamental.objects.filter(
-            indicador=rol_indicador.indicador,
-            elemento_fundamental=elemento,
-        ).exists()
-        if not existe_relacion:
+        if elemento.indicador_id != rol_indicador.indicador_id:
             raise forms.ValidationError(
                 "El elemento fundamental seleccionado no pertenece al indicador elegido."
             )
