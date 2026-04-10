@@ -22,8 +22,21 @@ urlpatterns = [
         EmailVerificationConfirmView.as_view(),
         name="seguridad-verificar-cuenta",
     ),
-    path("recuperar-password/", PasswordRecoveryView.as_view(), name="seguridad-recuperar-password"),
-    path("cambiar-password/", PasswordChangeView.as_view(), name="seguridad-cambiar-password"),
+    path(
+        "recuperar-password/",
+        PasswordRecoveryView.as_view(),
+        name="seguridad-recuperar-password",
+    ),
+    path(
+        "cambiar-password/",
+        PasswordChangeView.as_view(),
+        name="seguridad-cambiar-password",
+    ),
+    path(
+        "cambiar-password/token/<str:token>/",
+        PasswordChangeView.as_view(),
+        name="seguridad-cambiar-password-token",
+    ),
     path("otp/", OTPVerificationView.as_view(), name="seguridad-otp"),
     path("otp/reenviar/", resend_login_otp_view, name="seguridad-otp-reenviar"),
     path("seguridad/sesiones/", SessionManagementView.as_view(), name="seguridad-sesiones"),

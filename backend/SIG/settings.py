@@ -96,13 +96,13 @@ WSGI_APPLICATION = "SIG.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "mssql",
-        "NAME": os.getenv("DB_NAME", "SIG"),
-        "USER": os.getenv("DB_USER", "sa"),
-        "PASSWORD": os.getenv("DB_PASSWORD", "change_me"),
-        "HOST": os.getenv("DB_HOST", "localhost"),
-        "PORT": os.getenv("DB_PORT", "1433"),
+        "NAME": os.getenv("DB_NAME" ),
+        "USER": os.getenv("DB_USER"),
+        "PASSWORD": os.getenv("DB_PASSWORD"),
+        "HOST": os.getenv("DB_HOST"),
+        "PORT": os.getenv("DB_PORT"),
         "OPTIONS": {
-            "driver": os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server"),
+            "driver": os.getenv("DB_DRIVER"),
             "extra_params": "Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30;",
         },
     }

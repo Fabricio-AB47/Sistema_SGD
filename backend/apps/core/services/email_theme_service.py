@@ -7,7 +7,7 @@ from pathlib import Path
 from django.conf import settings
 
 
-SCSS_VAR_PATTERN = re.compile(r"^\$([a-zA-Z0-9_-]+):\s*(.+?)\s*;\s*$")
+VALID_VAR_NAME = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 DEFAULT_THEME = {
     "rojo": "#931913",
@@ -31,18 +31,60 @@ def _variables_path() -> Path:
 
 
 def _strip_comment(line: str) -> str:
-    return line.split("//", 1)[0].strip()
+    in_single = False
+    in_double = False
+
+    for i in range(len(line) - 1):
+        char = line[i]
+        nxt = line[i + 1]
+
+        if char == "'" and not in_double:
+            in_single = not in_single
+        elif char == '"' and not in_single:
+            in_double = not in_double
+        elif char == "/" and nxt == "/" and not in_single and not in_double:
+            return line[:i].strip()
+
+    return line.strip()
+
+
+def _parse_scss_variable(line: str) -> tuple[str, str] | None:
+    clean = _strip_comment(line)
+    if not clean or not clean.startswith("$") or not clean.endswith(";"):
+        return None
+
+    body = clean[:-1].strip()  # quita ';'
+    name_part, sep, value_part = body.partition(":")
+    if not sep:
+        return None
+
+    name = name_part[1:].strip()  # quita '$'
+    value = value_part.strip()
+
+    if not name or not value:
+        return None
+
+    if not VALID_VAR_NAME.fullmatch(name):
+        return None
+
+    return name, value
 
 
 def _is_scalar(value: str) -> bool:
-    value = (value or "").strip()
+    value = (value or "").strip().lower()
+
     return bool(
         value.startswith("#")
-        or value.startswith("rgb")
-        or value.endswith("px")
-        or value.endswith("rem")
-        or value.endswith("em")
-        or value.isdigit()
+        or value.startswith("rgb(")
+        or value.startswith("rgba(")
+        or value.startswith("hsl(")
+        or value.startswith("hsla(")
+        or value.startswith("var(")
+        or value.startswith("calc(")
+        or value.endswith(("px", "rem", "em", "%"))
+        or value.replace(".", "", 1).isdigit()
+        or (value.startswith('"') and value.endswith('"'))
+        or (value.startswith("'") and value.endswith("'"))
     )
 
 
@@ -50,19 +92,22 @@ def _is_scalar(value: str) -> bool:
 def get_email_theme_tokens() -> dict[str, str]:
     raw: dict[str, str] = {}
     variables_file = _variables_path()
-    if variables_file.exists():
-        for line in variables_file.read_text(encoding="utf-8").splitlines():
-            clean = _strip_comment(line)
-            if not clean:
-                continue
-            match = SCSS_VAR_PATTERN.match(clean)
-            if match:
-                raw[match.group(1)] = match.group(2).strip()
+
+    try:
+        if variables_file.exists():
+            for line in variables_file.read_text(encoding="utf-8").splitlines():
+                parsed = _parse_scss_variable(line)
+                if parsed:
+                    name, value = parsed
+                    raw[name] = value
+    except OSError:
+        raw = {}
 
     def resolve(name: str, *, visited: set[str] | None = None) -> str:
         visited = visited or set()
         if name in visited:
             return DEFAULT_THEME.get(name, "")
+
         visited.add(name)
 
         value = raw.get(name, DEFAULT_THEME.get(name, ""))
@@ -76,6 +121,7 @@ def get_email_theme_tokens() -> dict[str, str]:
     secondary = resolve("secondary")
     surface = resolve("blanco")
     line = resolve("gris")
+
     return {
         "primary": primary,
         "secondary": secondary,
