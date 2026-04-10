@@ -13,12 +13,32 @@ from apps.core.services.upload_security import validate_uploaded_file
 
 DATETIME_LOCAL_FORMAT = "%Y-%m-%dT%H:%M"
 DATETIME_LOCAL_FORMAT_WITH_SECONDS = "%Y-%m-%dT%H:%M:%S"
-DATETIME_INPUT_FORMATS = [DATETIME_LOCAL_FORMAT, DATETIME_LOCAL_FORMAT_WITH_SECONDS]
-TEXTAREA_ROWS_3 = {"rows": 3}
+DATETIME_INPUT_FORMATS = [
+    DATETIME_LOCAL_FORMAT,
+    DATETIME_LOCAL_FORMAT_WITH_SECONDS,
+]
+
+TEXTAREA_ROWS = 3
+TEXTAREA_ATTRS = {"rows": TEXTAREA_ROWS}
+
 AUTHORIZED_DOCUMENT_LABEL = "documento de autorizacion"
+AUTHORIZED_DOCUMENT_FIELD_LABEL = "Documento de autorizacion"
 AUTHORIZED_DOCUMENT_DESCRIPTION_LABEL = "Descripcion del documento"
 SIGNED_DOCUMENT_LABEL = "documento firmado"
+SIGNED_DOCUMENT_FIELD_LABEL = "Nuevo documento firmado"
+
 ALLOWED_DOCUMENT_TYPES = ".pdf,.doc,.docx,.xls,.xlsx,.csv"
+
+ERROR_DUPLICATE_CRITERIO_CODE = "Ya existe un criterio con ese codigo."
+ERROR_DUPLICATE_SUBCRITERIO_CODE = "Ya existe un subcriterio con ese codigo."
+ERROR_DUPLICATE_INDICADOR_CODE = "Ya existe un indicador con ese codigo."
+ERROR_DUPLICATE_ELEMENTO_CODE = "Ya existe un elemento con ese codigo."
+ERROR_ELEMENT_ALREADY_LINKED = "El elemento ya pertenece al indicador seleccionado."
+ERROR_END_DATE_BEFORE_START = "La fecha fin no puede ser menor a la fecha inicio."
+
+CLASIFICACION_AUT_CICLO = "AUT_CICLO"
+CLASIFICACION_ACTA = "ACTA"
+ESTADO_ENVIADO = "ENVIADO"
 
 
 def _normalize_required_text(value: str) -> str:
@@ -52,7 +72,7 @@ class CriterioForm(forms.ModelForm):
         if self.instance.pk:
             queryset = queryset.exclude(pk=self.instance.pk)
         if queryset.exists():
-            raise forms.ValidationError("Ya existe un criterio con ese codigo.")
+            raise forms.ValidationError(ERROR_DUPLICATE_CRITERIO_CODE)
         return codigo
 
     def clean_nombre_criterio(self):
@@ -81,7 +101,7 @@ class SubcriterioForm(forms.ModelForm):
         if self.instance.pk:
             queryset = queryset.exclude(pk=self.instance.pk)
         if queryset.exists():
-            raise forms.ValidationError("Ya existe un subcriterio con ese codigo.")
+            raise forms.ValidationError(ERROR_DUPLICATE_SUBCRITERIO_CODE)
         return codigo
 
     def clean_nombre_subcriterio(self):
@@ -112,7 +132,7 @@ class IndicadorForm(forms.ModelForm):
         if self.instance.pk:
             queryset = queryset.exclude(pk=self.instance.pk)
         if queryset.exists():
-            raise forms.ValidationError("Ya existe un indicador con ese codigo.")
+            raise forms.ValidationError(ERROR_DUPLICATE_INDICADOR_CODE)
         return codigo
 
     def clean_nombre_indicador(self):
@@ -164,7 +184,7 @@ class ElementoFundamentalForm(forms.ModelForm):
         if self.instance.pk:
             queryset = queryset.exclude(pk=self.instance.pk)
         if queryset.exists():
-            raise forms.ValidationError("Ya existe un elemento con ese codigo.")
+            raise forms.ValidationError(ERROR_DUPLICATE_ELEMENTO_CODE)
         return codigo
 
     def clean_nombre_elemento(self):
@@ -232,7 +252,7 @@ class IndicadorElementoForm(forms.Form):
         ):
             self.add_error(
                 "elemento_fundamental",
-                "El elemento ya pertenece al indicador seleccionado.",
+                ERROR_ELEMENT_ALREADY_LINKED,
             )
         return cleaned_data
 
@@ -254,9 +274,9 @@ class CicloEvaluacionForm(forms.ModelForm):
         max_length=500,
         required=False,
         label=AUTHORIZED_DOCUMENT_DESCRIPTION_LABEL,
-        widget=forms.Textarea(attrs=TEXTAREA_ROWS_3),
+        widget=forms.Textarea(attrs=TEXTAREA_ATTRS),
     )
-    archivo = forms.FileField(label="Documento de autorizacion")
+    archivo = forms.FileField(label=AUTHORIZED_DOCUMENT_FIELD_LABEL)
 
     class Meta:
         model = CicloEvaluacion
@@ -277,10 +297,7 @@ class CicloEvaluacionForm(forms.ModelForm):
         fecha_inicio = cleaned_data.get("fecha_inicio")
         fecha_fin = cleaned_data.get("fecha_fin")
         if fecha_inicio and fecha_fin and fecha_fin < fecha_inicio:
-            self.add_error(
-                "fecha_fin",
-                "La fecha fin no puede ser menor a la fecha inicio.",
-            )
+            self.add_error("fecha_fin", ERROR_END_DATE_BEFORE_START)
         return cleaned_data
 
     def __init__(self, *args, **kwargs):
@@ -291,17 +308,17 @@ class CicloEvaluacionForm(forms.ModelForm):
         self.fields["archivo"].widget.attrs.update({"accept": ALLOWED_DOCUMENT_TYPES})
 
         clasificacion = self.fields["clasificacion"].queryset.filter(
-            codigo="AUT_CICLO"
+            codigo=CLASIFICACION_AUT_CICLO
         ).first()
         if clasificacion is None:
             clasificacion = self.fields["clasificacion"].queryset.filter(
-                codigo="ACTA"
+                codigo=CLASIFICACION_ACTA
             ).first()
         if clasificacion:
             self.fields["clasificacion"].initial = clasificacion
 
         estado_inicial = self.fields["estado"].queryset.filter(
-            descripcion__iexact="ENVIADO"
+            descripcion__iexact=ESTADO_ENVIADO
         ).first()
         if estado_inicial and not self.instance.pk:
             self.fields["estado"].initial = estado_inicial
@@ -333,7 +350,7 @@ class CicloEstadoUpdateForm(forms.Form):
         max_length=1000,
         required=False,
         label="Observacion",
-        widget=forms.Textarea(attrs=TEXTAREA_ROWS_3),
+        widget=forms.Textarea(attrs=TEXTAREA_ATTRS),
     )
 
     def clean_observacion_aprobacion(self):
@@ -345,9 +362,9 @@ class CicloAuthorizationRevisionForm(forms.Form):
         max_length=500,
         required=False,
         label="Descripcion de la nueva version",
-        widget=forms.Textarea(attrs=TEXTAREA_ROWS_3),
+        widget=forms.Textarea(attrs=TEXTAREA_ATTRS),
     )
-    archivo = forms.FileField(label="Nuevo documento firmado")
+    archivo = forms.FileField(label=SIGNED_DOCUMENT_FIELD_LABEL)
 
     def clean_descripcion_documento(self):
         return _normalize_optional_text(self.cleaned_data.get("descripcion_documento"))

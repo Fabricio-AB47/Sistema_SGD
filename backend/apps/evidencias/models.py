@@ -56,7 +56,7 @@ class Documento(models.Model):
             models.Index(fields=["graph_item_id"], name="ix_documento_graph_item"),
             models.Index(
                 fields=["clasificacion", "-fecha_subida"],
-                name="ix_documento_clasificacion_fecha",
+                name="ix_doc_clasif_fecha",
             ),
         ]
 
@@ -166,7 +166,7 @@ class RegistroEvidencia(models.Model):
         indexes = [
             models.Index(
                 fields=["indicador", "elemento_fundamental", "ciclo"],
-                name="ix_registro_evidencia_indicador_elemento_ciclo",
+                name="ix_reg_evi_ind_ele_cic",
             ),
         ]
 
@@ -203,6 +203,6 @@ class DocumentoAccesoLog(models.Model):
         indexes = [
             models.Index(
                 fields=["documento", "-fecha_evento"],
-                name="ix_documento_acceso_log_doc_fecha",
+                name="ix_doc_acc_log_doc_fec",
             )
         ]

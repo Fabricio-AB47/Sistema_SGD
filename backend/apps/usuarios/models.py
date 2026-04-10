@@ -300,7 +300,7 @@ class UserSession(models.Model):
         indexes = [
             models.Index(
                 fields=["usuario", "activa", "fecha_expiracion"],
-                name="ix_user_session_usuario_activa_exp",
+                name="ix_usr_sess_usr_act_exp",
             ),
         ]
 
@@ -331,7 +331,7 @@ class HistorialLogin(models.Model):
         indexes = [
             models.Index(
                 fields=["usuario", "-fecha_intento"],
-                name="ix_historial_login_usuario_fecha",
+                name="ix_hist_login_usr_fecha",
             ),
         ]
 
