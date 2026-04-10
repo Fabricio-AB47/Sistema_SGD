@@ -10,6 +10,5 @@ const sourcemaps = require("gulp-sourcemaps");
 const rename = require("gulp-rename");
 const concat = require("gulp-concat");
 const terser = require("gulp-terser");
-const imagemin = require("gulp-imagemin").default || require("gulp-imagemin");
 const gulpIf = require("gulp-if");
 const { deleteAsync } = require("del");
