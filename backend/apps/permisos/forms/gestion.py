@@ -60,13 +60,17 @@ class RolPermisoForm(forms.Form):
         if role is not None:
             self.fields["rol"].initial = role
             self.fields["permisos"].initial = role.permisos_asignados.values_list(
-                "permiso_id", flat=True
+                "permiso_id",
+                flat=True,
             )
 
 
 class UsuarioRolGestionForm(forms.Form):
     usuario = forms.ModelChoiceField(
-        queryset=Usuario.objects.filter(activo=True).order_by("primer_apellido", "primer_nombre"),
+        queryset=Usuario.objects.filter(activo=True).order_by(
+            "primer_apellido",
+            "primer_nombre",
+        ),
         label="Usuario",
     )
     rol = forms.ModelChoiceField(
@@ -108,7 +112,6 @@ class RolIndicadorElementoGestionForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Show enough context in the selector to avoid assigning an element to the wrong cycle.
         self.fields["rol_indicador"].label_from_instance = (
             lambda acceso: (
                 f"{acceso.rol.nombre_rol} | "
@@ -121,17 +124,21 @@ class RolIndicadorElementoGestionForm(forms.Form):
         )
 
     def clean(self):
-        cleaned = super().clean()
-        rol_indicador = cleaned.get("rol_indicador")
-        elemento = cleaned.get("elemento_fundamental")
-        if not rol_indicador or not elemento:
-            return cleaned
+        cleaned_data = super().clean()
+        rol_indicador = cleaned_data.get("rol_indicador")
+        elemento = cleaned_data.get("elemento_fundamental")
 
-        if elemento.indicador_id != rol_indicador.indicador_id:
-            raise forms.ValidationError(
-                "El elemento fundamental seleccionado no pertenece al indicador elegido."
+        if (
+            rol_indicador
+            and elemento
+            and elemento.indicador_id != rol_indicador.indicador_id
+        ):
+            self.add_error(
+                "elemento_fundamental",
+                "El elemento fundamental seleccionado no pertenece al indicador elegido.",
             )
-        return cleaned
+
+        return cleaned_data
 
 
 class RolEstructuraAccesoForm(forms.Form):
@@ -168,15 +175,18 @@ class RolEstructuraAccesoForm(forms.Form):
 
         indicator_choices = []
         element_choices = []
+
         for group in indicator_groups:
             indicador = group["indicator"]
             self._indicator_map[indicador.pk] = indicador
             indicator_choices.append((str(indicador.pk), indicador.codigo_indicador))
+
             element_ids = set()
             for elemento in group["elements"]:
                 element_choices.append((str(elemento.pk), elemento.codigo_elemento))
                 self._element_indicator_map[elemento.pk] = indicador.pk
                 element_ids.add(elemento.pk)
+
             self._indicator_element_map[indicador.pk] = element_ids
 
         self.fields["indicadores"].choices = indicator_choices
@@ -196,10 +206,10 @@ class RolEstructuraAccesoForm(forms.Form):
         total_ids &= valid_indicator_ids
         element_ids &= valid_element_ids
 
-        for element_id in list(element_ids):
+        for element_id in element_ids:
             indicator_ids.add(self._element_indicator_map[element_id])
 
-        for indicator_id in list(total_ids):
+        for indicator_id in total_ids:
             indicator_ids.add(indicator_id)
             element_ids.update(self._indicator_element_map.get(indicator_id, set()))
 

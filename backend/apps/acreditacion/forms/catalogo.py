@@ -7,8 +7,18 @@ from apps.acreditacion.models import (
     Indicador,
     Subcriterio,
 )
-from apps.core.services.upload_security import validate_uploaded_file
 from apps.core.models import ClasificacionDocumento, EstadoCiclo
+from apps.core.services.upload_security import validate_uploaded_file
+
+
+DATETIME_LOCAL_FORMAT = "%Y-%m-%dT%H:%M"
+DATETIME_LOCAL_FORMAT_WITH_SECONDS = "%Y-%m-%dT%H:%M:%S"
+DATETIME_INPUT_FORMATS = [DATETIME_LOCAL_FORMAT, DATETIME_LOCAL_FORMAT_WITH_SECONDS]
+TEXTAREA_ROWS_3 = {"rows": 3}
+AUTHORIZED_DOCUMENT_LABEL = "documento de autorizacion"
+AUTHORIZED_DOCUMENT_DESCRIPTION_LABEL = "Descripcion del documento"
+SIGNED_DOCUMENT_LABEL = "documento firmado"
+ALLOWED_DOCUMENT_TYPES = ".pdf,.doc,.docx,.xls,.xlsx,.csv"
 
 
 def _normalize_required_text(value: str) -> str:
@@ -169,11 +179,15 @@ class ElementoFundamentalForm(forms.ModelForm):
 
 class IndicadorElementoForm(forms.Form):
     indicador = forms.ModelChoiceField(
-        queryset=Indicador.objects.select_related("subcriterio__criterio").order_by("codigo_indicador"),
+        queryset=Indicador.objects.select_related("subcriterio__criterio").order_by(
+            "codigo_indicador"
+        ),
         label="Indicador",
     )
     elemento_fundamental = forms.ModelChoiceField(
-        queryset=ElementoFundamental.objects.select_related("indicador").order_by("codigo_elemento"),
+        queryset=ElementoFundamental.objects.select_related("indicador").order_by(
+            "codigo_elemento"
+        ),
         label="Elemento fundamental",
     )
 
@@ -185,7 +199,9 @@ class IndicadorElementoForm(forms.Form):
             self.fields["elemento_fundamental"].queryset = self.fields[
                 "elemento_fundamental"
             ].queryset.exclude(indicador_id=fixed_indicador.pk)
-            self.fields["indicador"].queryset = Indicador.objects.filter(pk=fixed_indicador.pk)
+            self.fields["indicador"].queryset = Indicador.objects.filter(
+                pk=fixed_indicador.pk
+            )
             self.fields["indicador"].initial = fixed_indicador
             self.fields["indicador"].widget = forms.HiddenInput()
 
@@ -209,34 +225,36 @@ class IndicadorElementoForm(forms.Form):
         cleaned_data = super().clean()
         indicador = cleaned_data.get("indicador")
         elemento_fundamental = cleaned_data.get("elemento_fundamental")
-        if indicador and elemento_fundamental and elemento_fundamental.indicador_id == indicador.pk:
-            self.add_error("elemento_fundamental", "El elemento ya pertenece al indicador seleccionado.")
+        if (
+            indicador
+            and elemento_fundamental
+            and elemento_fundamental.indicador_id == indicador.pk
+        ):
+            self.add_error(
+                "elemento_fundamental",
+                "El elemento ya pertenece al indicador seleccionado.",
+            )
         return cleaned_data
 
 
 class CicloEvaluacionForm(forms.ModelForm):
     estado = forms.ModelChoiceField(
-        queryset=EstadoCiclo.objects.filter(activo=True).only(
-            "id_estado_ciclo",
-            "descripcion",
-            "activo",
-        ).order_by("id_estado_ciclo"),
+        queryset=EstadoCiclo.objects.filter(activo=True)
+        .only("id_estado_ciclo", "descripcion", "activo")
+        .order_by("id_estado_ciclo"),
         label="Estado del ciclo",
     )
     clasificacion = forms.ModelChoiceField(
-        queryset=ClasificacionDocumento.objects.filter(activo=True).only(
-            "id_clasificacion_documento",
-            "codigo",
-            "nombre",
-            "activo",
-        ).order_by("codigo"),
+        queryset=ClasificacionDocumento.objects.filter(activo=True)
+        .only("id_clasificacion_documento", "codigo", "nombre", "activo")
+        .order_by("codigo"),
         label="Clasificacion del documento",
     )
     descripcion_documento = forms.CharField(
         max_length=500,
         required=False,
-        label="Descripcion del documento",
-        widget=forms.Textarea(attrs={"rows": 3}),
+        label=AUTHORIZED_DOCUMENT_DESCRIPTION_LABEL,
+        widget=forms.Textarea(attrs=TEXTAREA_ROWS_3),
     )
     archivo = forms.FileField(label="Documento de autorizacion")
 
@@ -245,11 +263,11 @@ class CicloEvaluacionForm(forms.ModelForm):
         fields = ["nombre", "descripcion", "anio", "fecha_inicio", "fecha_fin", "estado"]
         widgets = {
             "fecha_inicio": forms.DateTimeInput(
-                format="%Y-%m-%dT%H:%M",
+                format=DATETIME_LOCAL_FORMAT,
                 attrs={"type": "datetime-local"},
             ),
             "fecha_fin": forms.DateTimeInput(
-                format="%Y-%m-%dT%H:%M",
+                format=DATETIME_LOCAL_FORMAT,
                 attrs={"type": "datetime-local"},
             ),
         }
@@ -259,21 +277,32 @@ class CicloEvaluacionForm(forms.ModelForm):
         fecha_inicio = cleaned_data.get("fecha_inicio")
         fecha_fin = cleaned_data.get("fecha_fin")
         if fecha_inicio and fecha_fin and fecha_fin < fecha_inicio:
-            self.add_error("fecha_fin", "La fecha fin no puede ser menor a la fecha inicio.")
+            self.add_error(
+                "fecha_fin",
+                "La fecha fin no puede ser menor a la fecha inicio.",
+            )
         return cleaned_data
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["anio"].label = "Año"
-        self.fields["fecha_inicio"].input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"]
-        self.fields["fecha_fin"].input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"]
-        self.fields["archivo"].widget.attrs.update({"accept": ".pdf,.doc,.docx,.xls,.xlsx,.csv"})
-        clasificacion = self.fields["clasificacion"].queryset.filter(codigo="AUT_CICLO").first()
+        self.fields["fecha_inicio"].input_formats = DATETIME_INPUT_FORMATS
+        self.fields["fecha_fin"].input_formats = DATETIME_INPUT_FORMATS
+        self.fields["archivo"].widget.attrs.update({"accept": ALLOWED_DOCUMENT_TYPES})
+
+        clasificacion = self.fields["clasificacion"].queryset.filter(
+            codigo="AUT_CICLO"
+        ).first()
         if clasificacion is None:
-            clasificacion = self.fields["clasificacion"].queryset.filter(codigo="ACTA").first()
+            clasificacion = self.fields["clasificacion"].queryset.filter(
+                codigo="ACTA"
+            ).first()
         if clasificacion:
             self.fields["clasificacion"].initial = clasificacion
-        estado_inicial = self.fields["estado"].queryset.filter(descripcion__iexact="ENVIADO").first()
+
+        estado_inicial = self.fields["estado"].queryset.filter(
+            descripcion__iexact="ENVIADO"
+        ).first()
         if estado_inicial and not self.instance.pk:
             self.fields["estado"].initial = estado_inicial
 
@@ -288,25 +317,23 @@ class CicloEvaluacionForm(forms.ModelForm):
 
     def clean_archivo(self):
         archivo = self.cleaned_data.get("archivo")
-        validate_uploaded_file(archivo, label="documento de autorizacion")
+        validate_uploaded_file(archivo, label=AUTHORIZED_DOCUMENT_LABEL)
         return archivo
 
 
 class CicloEstadoUpdateForm(forms.Form):
     ciclo_id = forms.IntegerField(widget=forms.HiddenInput)
     estado = forms.ModelChoiceField(
-        queryset=EstadoCiclo.objects.filter(activo=True).only(
-            "id_estado_ciclo",
-            "descripcion",
-            "activo",
-        ).order_by("id_estado_ciclo"),
+        queryset=EstadoCiclo.objects.filter(activo=True)
+        .only("id_estado_ciclo", "descripcion", "activo")
+        .order_by("id_estado_ciclo"),
         label="Estado",
     )
     observacion_aprobacion = forms.CharField(
         max_length=1000,
         required=False,
         label="Observacion",
-        widget=forms.Textarea(attrs={"rows": 3}),
+        widget=forms.Textarea(attrs=TEXTAREA_ROWS_3),
     )
 
     def clean_observacion_aprobacion(self):
@@ -318,7 +345,7 @@ class CicloAuthorizationRevisionForm(forms.Form):
         max_length=500,
         required=False,
         label="Descripcion de la nueva version",
-        widget=forms.Textarea(attrs={"rows": 3}),
+        widget=forms.Textarea(attrs=TEXTAREA_ROWS_3),
     )
     archivo = forms.FileField(label="Nuevo documento firmado")
 
@@ -327,5 +354,5 @@ class CicloAuthorizationRevisionForm(forms.Form):
 
     def clean_archivo(self):
         archivo = self.cleaned_data.get("archivo")
-        validate_uploaded_file(archivo, label="documento firmado")
+        validate_uploaded_file(archivo, label=SIGNED_DOCUMENT_LABEL)
         return archivo
