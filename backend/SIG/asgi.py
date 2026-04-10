@@ -8,6 +8,17 @@ https://docs.djangoproject.com/en/6.0/howto/deployment/asgi/
 """
 
 import os
+from pathlib import Path
+
+try:
+	from dotenv import load_dotenv
+
+	BASE_DIR = Path(__file__).resolve().parent.parent
+	env_path = BASE_DIR / ".env"
+	if env_path.exists():
+		load_dotenv(env_path, override=True)
+except Exception:
+	pass
 
 from django.core.asgi import get_asgi_application
 

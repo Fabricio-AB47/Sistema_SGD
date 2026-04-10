@@ -1,0 +1,23 @@
+{% extends "seguridad/emails/base.html" %}
+
+{% block hero_text %}Codigo temporal de verificacion para completar tu ingreso{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 16px;">Hola <strong>{{ usuario.nombre_completo|default:usuario.correo }}</strong>,</p>
+<p style="margin:0 0 20px;">
+  Detectamos un intento valido de inicio de sesion en tu cuenta. Para completar el acceso,
+  ingresa el siguiente codigo temporal:
+</p>
+
+<div style="margin:0 0 20px;padding:20px 24px;border:2px dashed {{ theme.code_border }};border-radius:{{ theme.radius }};background:{{ theme.code_background }};text-align:center;">
+  <div style="font-size:13px;text-transform:uppercase;letter-spacing:1px;color:{{ theme.text_muted }};margin-bottom:8px;">Codigo OTP</div>
+  <div style="font-size:40px;font-weight:700;letter-spacing:6px;color:{{ theme.primary }};">{{ codigo }}</div>
+</div>
+
+<div style="margin:0 0 20px;padding:14px 16px;border-radius:{{ theme.radius }};background:{{ theme.canvas }};color:{{ theme.text_muted }};">
+  Este codigo tiene una vigencia maxima de <strong>{{ otp_minutes }} minutos</strong>{% if fecha_expiracion %}, hasta {{ fecha_expiracion|date:"d/m/Y H:i" }}{% endif %}.
+</div>
+
+<p style="margin:0 0 12px;">No compartas este codigo con nadie.</p>
+<p style="margin:0;">Si no fuiste tu quien intento ingresar, cambia tu contrasena de inmediato.</p>
+{% endblock %}

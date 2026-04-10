@@ -1,4 +1,6 @@
 from django.db.models import Count, Prefetch
+from django.core.cache import cache
+
 from apps.acreditacion.models import (
     CicloEvaluacion,
     Criterio,
@@ -10,13 +12,20 @@ from apps.core.models import EstadoCiclo
 
 
 def get_acreditacion_metrics():
-    return {
+    cache_key = "sig:acreditacion:metrics"
+    cached_metrics = cache.get(cache_key)
+    if cached_metrics is not None:
+        return cached_metrics
+
+    metrics = {
         "criterios": Criterio.objects.count(),
         "subcriterios": Subcriterio.objects.count(),
         "indicadores": Indicador.objects.count(),
         "elementos": ElementoFundamental.objects.count(),
         "ciclos": CicloEvaluacion.objects.count(),
     }
+    cache.set(cache_key, metrics, 60)
+    return metrics
 
 
 def get_criterios_queryset():
@@ -54,7 +63,10 @@ def get_indicator_detail(indicador_id=None):
     queryset = Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador").prefetch_related(
         Prefetch(
             "elementos",
-            queryset=ElementoFundamental.objects.order_by("codigo_elemento"),
+            queryset=ElementoFundamental.objects.select_related("clasificacion").order_by(
+                "orden_visual",
+                "codigo_elemento",
+            ),
             to_attr="elementos_detalle",
         )
     )
@@ -71,7 +83,10 @@ def get_indicator_detail(indicador_id=None):
 
 def get_elementos_queryset():
     return (
-        ElementoFundamental.objects.select_related("indicador__subcriterio__criterio")
+        ElementoFundamental.objects.select_related(
+            "indicador__subcriterio__criterio",
+            "clasificacion",
+        )
         .order_by(
             "indicador__subcriterio__criterio__codigo_criterio",
             "indicador__subcriterio__codigo_subcriterio",
@@ -89,7 +104,10 @@ def get_matrix_rows():
         .prefetch_related(
             Prefetch(
                 "elementos",
-                queryset=ElementoFundamental.objects.order_by("codigo_elemento"),
+                queryset=ElementoFundamental.objects.select_related("clasificacion").order_by(
+                    "orden_visual",
+                    "codigo_elemento",
+                ),
                 to_attr="matrix_elements",
             )
         )
@@ -127,7 +145,11 @@ def get_matrix_rows():
 
 def get_ciclos_queryset():
     return (
-        CicloEvaluacion.objects.select_related("estado")
+        CicloEvaluacion.objects.select_related(
+            "estado",
+            "documento_autorizacion",
+            "aprobado_por",
+        )
         .only(
             "id_ciclo",
             "nombre",
@@ -137,6 +159,12 @@ def get_ciclos_queryset():
             "fecha_fin",
             "estado",
             "estado__descripcion",
+            "documento_autorizacion",
+            "aprobado_por",
+            "aprobado_por__primer_nombre",
+            "aprobado_por__primer_apellido",
+            "fecha_aprobacion",
+            "observacion_aprobacion",
         )
         .order_by("-fecha_inicio", "-id_ciclo")
     )
@@ -144,7 +172,11 @@ def get_ciclos_queryset():
 
 def get_ciclo_detail(ciclo_id):
     ciclo = (
-        CicloEvaluacion.objects.select_related("estado")
+        CicloEvaluacion.objects.select_related(
+            "estado",
+            "documento_autorizacion",
+            "aprobado_por",
+        )
         .only(
             "id_ciclo",
             "nombre",
@@ -154,6 +186,12 @@ def get_ciclo_detail(ciclo_id):
             "fecha_fin",
             "estado",
             "estado__descripcion",
+            "documento_autorizacion",
+            "aprobado_por",
+            "aprobado_por__primer_nombre",
+            "aprobado_por__primer_apellido",
+            "fecha_aprobacion",
+            "observacion_aprobacion",
         )
         .filter(pk=ciclo_id)
         .first()

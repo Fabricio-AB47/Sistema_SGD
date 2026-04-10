@@ -1,86 +1,64 @@
 {% extends "documentos/_page_base.html" %}
 
 {% block documentos_content %}
-<div class="documentos-grid">
-  <article class="card documentos-panel documentos-panel--wide">
-    <div class="documentos-panel__header">
-      <div>
-        <h3>Inventario documental</h3>
-        <p class="text-muted">Lectura real de `documento` con clasificacion, versionamiento y trazabilidad.</p>
-      </div>
-      <a class="btn btn-primary" href="{% url 'documentos-subir' %}">Subir documento</a>
+<div class="card documentos-panel documentos-panel--wide">
+  <div class="documentos-panel__header">
+    <div>
+      <h3>Inventario documental</h3>
+      <p class="text-muted">Lectura real desde <code>documento</code> con conteos de versiones, evidencias y accesos protegidos.</p>
     </div>
-    <div class="table-responsive">
-      <table class="documentos-table">
-        <thead>
+  </div>
+
+  <div class="table-responsive">
+    <table class="documentos-table">
+      <thead>
+        <tr>
+          <th>Archivo</th>
+          <th>Clasificacion</th>
+          <th>Versiones</th>
+          <th>Evidencias</th>
+          <th>Fecha subida</th>
+          <th>Subido por</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for document in documents %}
           <tr>
-            <th>Archivo</th>
-            <th>Clasificacion</th>
-            <th>Versiones</th>
-            <th>Evidencias</th>
-            <th>Fecha</th>
-            <th>Subido por</th>
-            <th>Estado</th>
-            <th>Acciones</th>
+            <td>
+              <strong>{{ document.nombre_archivo }}</strong>
+              <div class="text-muted">{{ document.descripcion_documento|default:"--" }}</div>
+              <div class="documentos-table__path">{{ document.ruta_local|default:"Ruta no registrada" }}</div>
+              <div class="text-muted">Nube: {{ document.cloud_status|default:"Pendiente" }}</div>
+            </td>
+            <td>
+              {% if document.clasificacion %}
+                {{ document.clasificacion.codigo }} - {{ document.clasificacion.nombre }}
+              {% else %}
+                --
+              {% endif %}
+            </td>
+            <td>{{ document.versiones_count }}</td>
+            <td>{{ document.evidencias_count }}</td>
+            <td>{{ document.fecha_subida|date:"Y-m-d H:i"|default:"--" }}</td>
+            <td>{{ document.subido_por.nombre_completo|default:document.subido_por|default:"--" }}</td>
+            <td>{% if document.activo %}Activo{% else %}Inactivo{% endif %}</td>
+            <td>
+              <div class="documentos-form__actions">
+                <a class="btn btn-ghost" href="{% url 'documentos-detalle' %}?documento={{ document.id_documento }}">Detalle</a>
+                <a class="btn btn-ghost" href="{% url 'documentos-versiones' %}?documento={{ document.id_documento }}">Versiones</a>
+                <a class="btn btn-ghost" href="{% url 'documentos-accesos' %}?documento={{ document.id_documento }}">Accesos</a>
+              </div>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {% for documento in documents %}
-            <tr>
-              <td>
-                <strong>{{ documento.nombre_archivo }}</strong>
-                <div class="text-muted">{{ documento.descripcion_documento|default:"--" }}</div>
-              </td>
-              <td>{{ documento.clasificacion.codigo }} - {{ documento.clasificacion.nombre }}</td>
-              <td>{{ documento.versiones_count }}</td>
-              <td>{{ documento.evidencias_count }}</td>
-              <td>{{ documento.fecha_subida|date:"Y-m-d H:i"|default:"--" }}</td>
-              <td>{{ documento.subido_por|default:"--" }}</td>
-              <td>{% if documento.activo %}Activo{% else %}Inactivo{% endif %}</td>
-              <td>
-                <div class="documentos-form__actions">
-                  <a class="btn btn-ghost" href="{% url 'documentos-detalle' %}?documento={{ documento.pk }}">Detalle</a>
-                  <a class="btn btn-ghost" href="{% url 'documentos-versiones' %}?documento={{ documento.pk }}">Versiones</a>
-                  <a class="btn btn-ghost" href="{% url 'documentos-accesos' %}?documento={{ documento.pk }}">Accesos</a>
-                </div>
-              </td>
-            </tr>
-          {% empty %}
-            <tr>
-              <td colspan="8" class="text-center text-muted">No existen documentos registrados.</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </article>
-
-  <article class="card documentos-panel">
-    <h3>Resumen documental</h3>
-    <div class="documentos-summary">
-      <div>
-        <span class="documentos-summary__label">Documentos</span>
-        <strong class="documentos-summary__value">{{ documentos_summary.documentos }}</strong>
-      </div>
-      <div>
-        <span class="documentos-summary__label">Documentos activos</span>
-        <strong class="documentos-summary__value">{{ documentos_summary.documentos_activos }}</strong>
-      </div>
-      <div>
-        <span class="documentos-summary__label">Versiones</span>
-        <strong class="documentos-summary__value">{{ documentos_summary.versiones }}</strong>
-      </div>
-      <div>
-        <span class="documentos-summary__label">Accesos</span>
-        <strong class="documentos-summary__value">{{ documentos_summary.accesos }}</strong>
-      </div>
-    </div>
-
-    <ul class="documentos-links">
-      <li>Los accesos protegidos se sirven por vistas internas, no por URL publica.</li>
-      <li>Cada version vive en `version_documento`.</li>
-      <li>La trazabilidad de acceso se registra en `documento_acceso_log`.</li>
-    </ul>
-  </article>
+        {% empty %}
+          <tr>
+            <td colspan="8" class="text-center text-muted">No existen documentos registrados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

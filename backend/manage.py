@@ -10,7 +10,7 @@ try:
     BASE_DIR = Path(__file__).resolve().parent
     env_path = BASE_DIR / ".env"
     if env_path.exists():
-        load_dotenv(env_path)
+        load_dotenv(env_path, override=True)
 except Exception:
     # Si python-dotenv no está instalado, continuamos sin detener la app.
     pass

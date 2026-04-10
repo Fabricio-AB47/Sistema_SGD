@@ -144,7 +144,7 @@
           <li>El ciclo y el documento viven en el mismo flujo.</li>
           <li>La carpeta se crea en Microsoft Graph bajo <strong>DOCUMENTOS CICLOS AUTH</strong>.</li>
           <li>No se habilita la carga documental general sin autorizacion previa.</li>
-          <li>Cuando el ciclo esta <strong>APROBADO</strong> se habilita `Subir documento`.</li>
+          <li>Cuando el ciclo esta <strong>APROBADO</strong> se habilita la <strong>Matriz de registro</strong>.</li>
         </ul>
       </div>
 
@@ -216,7 +216,7 @@
             <td>{{ ciclo.fecha_fin|date:"d/m/Y H:i" }}</td>
             <td>
               {% with estado_desc=ciclo.estado.descripcion|upper %}
-                <span class="acreditacion-status {% if estado_desc == 'APROBADO' %}acreditacion-status--success{% elif estado_desc == 'ABIERTO' %}acreditacion-status--info{% elif estado_desc == 'EN_REVISION' %}acreditacion-status--warning{% else %}acreditacion-status--muted{% endif %}">
+                <span class="acreditacion-status {% if estado_desc == 'APROBADO' or estado_desc == 'EN_EJECUCION' %}acreditacion-status--success{% elif estado_desc == 'ENVIADO' %}acreditacion-status--info{% elif estado_desc == 'RECHAZADO' %}acreditacion-status--danger{% else %}acreditacion-status--muted{% endif %}">
                   {{ ciclo.estado.descripcion }}
                 </span>
               {% endwith %}
@@ -244,12 +244,18 @@
             </td>
             <td>
               <span class="ciclos-table__description">{{ ciclo.descripcion|default:"Sin descripcion registrada." }}</span>
+              {% if ciclo.aprobado_por %}
+                <div class="text-muted">
+                  Aprobado por {{ ciclo.aprobado_por.nombre_completo|default:ciclo.aprobado_por }}
+                  {% if ciclo.fecha_aprobacion %}el {{ ciclo.fecha_aprobacion|date:"d/m/Y H:i" }}{% endif %}
+                </div>
+              {% endif %}
             </td>
             <td>
               <div class="ciclos-table__actions">
                 <a class="btn btn-ghost" href="{% url 'acreditacion-ciclos-detalle' ciclo.pk %}">Revisar</a>
                 {% if ciclo.document_upload_enabled %}
-                  <a class="btn btn-secondary" href="{% url 'documentos-subir' %}?ciclo={{ ciclo.pk }}">Subir documento</a>
+                  <a class="btn btn-secondary" href="{% url 'acreditacion-matriz-registro' %}?ciclo={{ ciclo.pk }}">Matriz de registro</a>
                 {% endif %}
               </div>
             </td>

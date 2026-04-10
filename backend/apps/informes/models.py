@@ -17,7 +17,7 @@ class InformeAutoevaluacion(models.Model):
     fecha_generacion = models.DateTimeField(null=True, blank=True)
     resumen = models.CharField(max_length=2000, null=True, blank=True)
     conclusiones = models.CharField(max_length=4000, null=True, blank=True)
-    ruta_archivo = models.CharField(max_length=500, null=True, blank=True)
+    ruta_archivo = models.CharField(max_length=1000, null=True, blank=True)
     documento = models.ForeignKey(
         Documento,
         on_delete=models.SET_NULL,
@@ -40,12 +40,15 @@ class InformeAutoevaluacion(models.Model):
         related_name="informes_aprobados",
         db_column="aprobado_por",
     )
+    fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+    observacion_aprobacion = models.CharField(max_length=1000, null=True, blank=True)
     estado = models.ForeignKey(
         EstadoInforme,
         on_delete=models.PROTECT,
         related_name="informes",
         db_column="id_estado_informe",
     )
+    version_fila = models.BinaryField(null=True, blank=True, editable=False)
 
     class Meta:
         db_table = "informe_autoevaluacion"

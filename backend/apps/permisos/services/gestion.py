@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 
-from apps.acreditacion.models import RolIndicador, RolIndicadorElemento
+from apps.acreditacion.models import ElementoFundamental, RolIndicador, RolIndicadorElemento
 from apps.auditoria.services import registrar_evento
 from apps.permisos.models import Permiso, Rol
 from apps.usuarios.models import RolPermiso, UsuarioRol
@@ -162,6 +162,7 @@ def revocar_usuario_rol(*, asignacion, actor=None, request=None):
 def asignar_rol_indicador(
     *, rol, indicador, ciclo, acceso_total=False, actor=None, request=None
 ):
+    assigned_at = timezone.now()
     acceso = RolIndicador.objects.filter(rol=rol, indicador=indicador, ciclo=ciclo).first()
     if acceso:
         acceso.acceso_total = acceso_total
@@ -175,6 +176,7 @@ def asignar_rol_indicador(
             ciclo=ciclo,
             acceso_total=acceso_total,
             activo=True,
+            fecha_asignacion=assigned_at,
             asignado_por=actor,
         )
 
@@ -226,6 +228,7 @@ def asignar_rol_indicador_elemento(*, rol_indicador, elemento_fundamental, actor
     acceso = RolIndicadorElemento.objects.create(
         rol_indicador=rol_indicador,
         elemento_fundamental=elemento_fundamental,
+        fecha_asignacion=timezone.now(),
         asignado_por=actor,
     )
     registrar_evento(
@@ -264,3 +267,138 @@ def eliminar_rol_indicador_elemento(*, acceso, actor=None, request=None):
         criticidad="MEDIA",
         request=request,
     )
+
+
+@transaction.atomic
+def sincronizar_acceso_estructura(
+    *,
+    rol,
+    ciclo,
+    indicator_ids,
+    total_indicator_ids,
+    element_ids,
+    actor=None,
+    request=None,
+):
+    assigned_at = timezone.now()
+    selected_indicator_ids = {int(value) for value in indicator_ids}
+    selected_total_ids = {int(value) for value in total_indicator_ids}
+    selected_element_ids = {int(value) for value in element_ids}
+
+    element_map = {}
+    for element in ElementoFundamental.objects.filter(
+        activo=True,
+        indicador_id__in=selected_indicator_ids,
+    ).only("id_elemento_fundamental", "indicador"):
+        element_map.setdefault(element.indicador_id, set()).add(element.pk)
+
+    existing_accesses = {
+        access.indicador_id: access
+        for access in RolIndicador.objects.filter(rol=rol, ciclo=ciclo).select_related(
+            "indicador"
+        )
+    }
+
+    activated_count = 0
+    deactivated_count = 0
+    synced_element_count = 0
+
+    for indicator_id, access in existing_accesses.items():
+        if indicator_id not in selected_indicator_ids:
+            RolIndicadorElemento.objects.filter(rol_indicador=access).delete()
+            if access.activo or access.acceso_total:
+                access.activo = False
+                access.acceso_total = False
+                access.asignado_por = actor
+                access.save(update_fields=["activo", "acceso_total", "asignado_por"])
+                deactivated_count += 1
+
+    for indicator_id in selected_indicator_ids:
+        desired_total = indicator_id in selected_total_ids
+        access = existing_accesses.get(indicator_id)
+        if access is None:
+            access = RolIndicador.objects.create(
+                rol=rol,
+                indicador_id=indicator_id,
+                ciclo=ciclo,
+                acceso_total=desired_total,
+                activo=True,
+                fecha_asignacion=assigned_at,
+                asignado_por=actor,
+            )
+            existing_accesses[indicator_id] = access
+            activated_count += 1
+        else:
+            update_fields = []
+            if not access.activo:
+                access.activo = True
+                update_fields.append("activo")
+                activated_count += 1
+            if access.acceso_total != desired_total:
+                access.acceso_total = desired_total
+                update_fields.append("acceso_total")
+            if access.asignado_por_id != getattr(actor, "pk", None):
+                access.asignado_por = actor
+                update_fields.append("asignado_por")
+            if update_fields:
+                access.save(update_fields=update_fields)
+
+        desired_element_ids = (
+            element_map.get(indicator_id, set())
+            if desired_total
+            else {
+                element_id
+                for element_id in selected_element_ids
+                if element_id in element_map.get(indicator_id, set())
+            }
+        )
+        current_element_ids = set(
+            RolIndicadorElemento.objects.filter(rol_indicador=access).values_list(
+                "elemento_fundamental_id", flat=True
+            )
+        )
+        create_ids = desired_element_ids - current_element_ids
+        delete_ids = current_element_ids - desired_element_ids
+
+        for element_id in create_ids:
+            RolIndicadorElemento.objects.create(
+                rol_indicador=access,
+                elemento_fundamental_id=element_id,
+                fecha_asignacion=assigned_at,
+                asignado_por=actor,
+            )
+        if delete_ids:
+            RolIndicadorElemento.objects.filter(
+                rol_indicador=access,
+                elemento_fundamental_id__in=delete_ids,
+            ).delete()
+        synced_element_count += len(desired_element_ids)
+
+    registrar_evento(
+        usuario=actor,
+        accion="SINCRONIZAR ACCESO ESTRUCTURAL",
+        tipo_evento="PERMISOS",
+        tabla_afectada="rol_indicador / rol_indicador_elemento",
+        id_registro=rol.pk,
+        descripcion=(
+            f"Se sincronizo el acceso estructural del rol {rol.nombre_rol} "
+            f"para el ciclo {ciclo.nombre}."
+        ),
+        valores_nuevos={
+            "rol_id": rol.pk,
+            "ciclo_id": ciclo.pk,
+            "indicator_ids": sorted(selected_indicator_ids),
+            "total_indicator_ids": sorted(selected_total_ids),
+            "element_ids": sorted(selected_element_ids),
+            "activated_count": activated_count,
+            "deactivated_count": deactivated_count,
+            "synced_element_count": synced_element_count,
+        },
+        criticidad="MEDIA",
+        request=request,
+    )
+    return {
+        "activated_count": activated_count,
+        "deactivated_count": deactivated_count,
+        "synced_element_count": synced_element_count,
+    }

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ subject|default:site_name }}</title>
+  </head>
+  <body style="margin:0;padding:0;background:{{ theme.canvas }};font-family:Segoe UI,Arial,sans-serif;color:{{ theme.text }};">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:{{ theme.canvas }};padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:{{ theme.surface }};border:1px solid {{ theme.panel_border }};border-radius:{{ theme.radius }};overflow:hidden;">
+            <tr>
+              <td style="background:{{ theme.hero_background }};padding:24px 32px;color:{{ theme.hero_text }};">
+                <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;opacity:.9;">Sistema Institucional</div>
+                <div style="font-size:28px;font-weight:700;margin-top:8px;">{{ site_name }}</div>
+                <div style="font-size:15px;line-height:1.5;margin-top:10px;opacity:.95;">{% block hero_text %}{% endblock %}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                <div style="font-size:16px;line-height:1.6;color:{{ theme.text }};">
+                  {% block content %}{% endblock %}
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px;background:{{ theme.meta_background }};font-size:13px;line-height:1.6;color:{{ theme.text_muted }};">
+                Este correo fue generado automaticamente por {{ site_name }}.<br>
+                Si no reconoces esta actividad, ignora el mensaje y revisa tus credenciales.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

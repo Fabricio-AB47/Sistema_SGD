@@ -5,6 +5,7 @@ from .panel import (
     get_role_indicator_assignments,
     get_role_indicator_element_assignments,
     get_role_permissions,
+    get_role_structure_access_context,
     get_roles_queryset,
     get_user_role_assignments,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "get_role_indicator_assignments",
     "get_role_indicator_element_assignments",
     "get_role_permissions",
+    "get_role_structure_access_context",
     "get_roles_queryset",
     "get_user_role_assignments",
 ]

@@ -1,1 +1,77 @@
-{% extends "shared/auth_page.html" %}
+{% extends "base/auth_base.html" %}
+{% block title %}{{ page_title }} | SIG{% endblock %}
+
+{% block content %}
+{% include "includes/messages.html" %}
+<div class="auth-shell">
+  <section class="auth-panel">
+    <div class="auth-left">
+      <div class="auth-brand">
+        <div class="auth-logo">SIG</div>
+        <div class="auth-brand-text">
+          <span>Verificacion de acceso</span>
+          <small>usuario_otp</small>
+        </div>
+      </div>
+
+      <div class="auth-welcome">
+        <h1>{{ page_title }}</h1>
+        <p>{{ page_description }}</p>
+      </div>
+
+      {% if pending_user %}
+        <div class="auth-hero-pill">
+          Usuario: {{ pending_user.nombre_completo }} ({{ pending_user.correo }})
+        </div>
+      {% endif %}
+
+      {% if debug_otp_code %}
+        <div class="form-error">
+          DEBUG: codigo OTP actual <strong>{{ debug_otp_code }}</strong>
+        </div>
+      {% endif %}
+
+      <form method="post" class="auth-form">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <div class="auth-input">
+          <span class="auth-input__icon">#</span>
+          {{ form.codigo }}
+          {{ form.codigo.errors }}
+        </div>
+
+        <button type="submit" class="auth-submit">Validar codigo</button>
+
+        <div class="auth-links">
+          <span class="text-muted">Si el codigo expiro</span>
+          <a href="{% url 'seguridad-login' %}">Volver al login</a>
+        </div>
+      </form>
+
+      <form method="post" action="{% url 'seguridad-otp-reenviar' %}" class="auth-form">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost">Generar nuevo codigo</button>
+      </form>
+    </div>
+
+    <div class="auth-right">
+      <div class="auth-hero">
+        <p class="eyebrow">Seguridad</p>
+        <h2 class="auth-hero-title">Segundo paso en cada login</h2>
+        <p class="auth-hero-text">
+          Cada acceso valida correo y contrasena primero, luego exige un codigo temporal aleatorio antes de crear la sesion real en <code>user_session</code>.
+        </p>
+        <div class="auth-hero-pill">
+          OTP aleatorio por login
+        </div>
+        <div class="auth-meta">
+          <span>Intentos controlados</span>
+          <span>Expiracion automatica</span>
+          <span>Auditoria del evento</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

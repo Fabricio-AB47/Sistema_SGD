@@ -1,6 +1,8 @@
 from pathlib import Path
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Directorio del frontend (templates y estáticos viven allí)
@@ -94,17 +96,42 @@ WSGI_APPLICATION = "SIG.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "mssql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT"),
+        "NAME": os.getenv("DB_NAME", "SIG"),
+        "USER": os.getenv("DB_USER", "sa"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "change_me"),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", "1433"),
         "OPTIONS": {
             "driver": os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server"),
             "extra_params": "Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30;",
         },
     }
 }
+
+
+def _validate_runtime_security_settings():
+    if DEBUG:
+        return
+
+    if not SECRET_KEY or SECRET_KEY == "change-me-in-env":
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY debe configurarse con un valor seguro fuera del codigo."
+        )
+
+    allowed_hosts = [host.strip() for host in ALLOWED_HOSTS if host.strip()]
+    if not allowed_hosts:
+        raise ImproperlyConfigured(
+            "DJANGO_ALLOWED_HOSTS debe definir al menos un host en entornos no DEBUG."
+        )
+
+    db_password = DATABASES["default"].get("PASSWORD")
+    if not db_password or db_password == "change_me":
+        raise ImproperlyConfigured(
+            "DB_PASSWORD debe configurarse con un valor valido fuera del codigo."
+        )
+
+
+_validate_runtime_security_settings()
 
 
 # Password validation
@@ -151,6 +178,7 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # Baseline de endurecimiento para reducir riesgo de misconfiguracion y fuga de sesion.
+SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
 SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", not DEBUG)
@@ -200,5 +228,32 @@ GRAPH_CICLO_AUTH_FOLDER = os.getenv("GRAPH_CICLO_AUTH_FOLDER", "DOCUMENTOS CICLO
 GRAPH_CICLO_AUTH_FOLDER_URL = os.getenv("GRAPH_CICLO_AUTH_FOLDER_URL", "").strip()
 GRAPH_REQUEST_TIMEOUT_SECONDS = int(os.getenv("GRAPH_REQUEST_TIMEOUT_SECONDS", "10") or "10")
 GRAPH_UPLOAD_TIMEOUT_SECONDS = int(os.getenv("GRAPH_UPLOAD_TIMEOUT_SECONDS", "30") or "30")
+
+# Seguridad de acceso: exigir correo verificado antes de permitir login.
+SIG_REQUIRE_EMAIL_VERIFICATION = _env_bool("SIG_REQUIRE_EMAIL_VERIFICATION", False)
+SIG_REQUIRE_OTP_EVERY_LOGIN = _env_bool("SIG_REQUIRE_OTP_EVERY_LOGIN", True)
+SIG_OTP_CODE_LENGTH = int(os.getenv("SIG_OTP_CODE_LENGTH", "6") or "6")
+SIG_OTP_EXPIRATION_MINUTES = int(os.getenv("SIG_OTP_EXPIRATION_MINUTES", "10") or "10")
+SIG_OTP_MAX_ATTEMPTS = int(os.getenv("SIG_OTP_MAX_ATTEMPTS", "5") or "5")
+SIG_EXPOSE_DEBUG_OTP = _env_bool("SIG_EXPOSE_DEBUG_OTP", False)
+SIG_USE_GRAPH_EMAIL = _env_bool("SIG_USE_GRAPH_EMAIL", True)
+
+# Correo transaccional para OTP, verificacion y recuperacion.
+EMAIL_BACKEND = os.getenv("EMAIL_BACKEND", "django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "25") or "25")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "").strip()
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS", False)
+EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL", False)
+EMAIL_TIMEOUT = int(os.getenv("EMAIL_TIMEOUT", "10") or "10")
+DEFAULT_FROM_EMAIL = (
+    os.getenv("DEFAULT_FROM_EMAIL", "").strip()
+    or EMAIL_HOST_USER
+    or "no-reply@sig.local"
+)
+SIG_SITE_NAME = os.getenv("SIG_SITE_NAME", "SIG").strip() or "SIG"
+SIG_MAIL_SENDER = os.getenv("SIG_MAIL_SENDER", "").strip() or GRAPH_DRIVE_USER
+OTP_URL = "/otp/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

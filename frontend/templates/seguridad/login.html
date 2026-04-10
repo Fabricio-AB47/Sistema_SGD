@@ -3,6 +3,7 @@
 {% block title %}Ingresar | SIG{% endblock %}
 
 {% block content %}
+{% include "includes/messages.html" %}
 <div class="auth-shell">
   <section class="auth-panel">
     <div class="auth-left">
@@ -21,6 +22,7 @@
 
       <form method="post" class="auth-form">
         {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next|default:'' }}">
         {{ form.non_field_errors }}
 
         <div class="auth-input">

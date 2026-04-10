@@ -1,0 +1,70 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Areas institucionales | SIG{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <div>
+      <h1>Areas institucionales</h1>
+      <p class="text-muted">Catalogo de areas para estructurar cargos y jerarquia interna.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <form method="post" class="form-grid">
+      {% csrf_token %}
+      {{ area_form.non_field_errors }}
+
+      <div class="form-group">
+        <span>Codigo area</span>
+        {{ area_form.codigo_area }}
+        {{ area_form.codigo_area.errors }}
+      </div>
+      <div class="form-group">
+        <span>Nombre area</span>
+        {{ area_form.nombre_area }}
+        {{ area_form.nombre_area.errors }}
+      </div>
+      <div class="form-check">
+        {{ area_form.activo }} <span>Activo</span>
+        {{ area_form.activo.errors }}
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Guardar area</button>
+        <a href="{% url 'usuarios-cargos' %}" class="btn btn-secondary">Ir a cargos</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Listado de areas</h3>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Codigo</th>
+            <th>Area</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for area in areas %}
+            <tr>
+              <td>{{ area.codigo_area }}</td>
+              <td>{{ area.nombre_area }}</td>
+              <td>
+                {% if area.activo %}
+                  <span class="status status-success">Activo</span>
+                {% else %}
+                  <span class="status status-muted">Inactivo</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="3" class="text-muted text-center">No hay areas registradas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

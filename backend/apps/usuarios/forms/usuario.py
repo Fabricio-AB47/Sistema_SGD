@@ -5,10 +5,8 @@ Incluyen validaciones básicas alineadas al esquema de la base de datos.
 
 from django import forms
 
-from apps.usuarios.models import Usuario, UsuarioRol, Rol, TipoIdentificacion
-from apps.seguridad.models import UsuarioCredencial
-from apps.seguridad.services import password_service
-from apps.seguridad.models import UsuarioOTP, TokenVerificacion
+from apps.usuarios.models import TipoIdentificacion, Rol, Usuario, UsuarioCredencial, UsuarioRol
+from apps.usuarios.services import password_service
 
 
 class UsuarioCrearForm(forms.ModelForm):
@@ -107,7 +105,7 @@ class UsuarioCrearForm(forms.ModelForm):
             raw_pwd = self.cleaned_data["password"]
             UsuarioCredencial.objects.create(
                 usuario=usuario,
-                password_hash=password_service.hash_password(raw_pwd),
+                password_hash=password_service.hash_password_argon2(raw_pwd),
                 algoritmo_hash="argon2",
             )
 

@@ -1,0 +1,239 @@
+{% extends "permisos/_page_base.html" %}
+
+{% block permisos_content %}
+<div class="permissions-grid">
+  <article class="card permissions-panel">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Contexto de asignacion</h2>
+        <p class="text-muted">Selecciona rol y ciclo para trabajar el acceso a evaluacion en una sola pantalla.</p>
+      </div>
+    </div>
+
+    <form method="get" class="form-grid">
+      <div class="form-group">
+        <span>Rol</span>
+        <select name="rol">
+          {% for role in roles %}
+            <option value="{{ role.pk }}"{% if selected_role and role.pk == selected_role.pk %} selected{% endif %}>
+              {{ role.nombre_rol }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <span>Ciclo</span>
+        <select name="ciclo">
+          {% for ciclo in cycles %}
+            <option value="{{ ciclo.pk }}"{% if selected_cycle and ciclo.pk == selected_cycle.pk %} selected{% endif %}>
+              {{ ciclo.nombre }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" type="submit">Cargar checklist</button>
+      </div>
+    </form>
+
+    <div class="permissions-summary">
+      <div>
+        <span class="permissions-summary__label">Indicadores</span>
+        <strong>{{ structure_summary.indicators_selected }} / {{ structure_summary.indicators_total }}</strong>
+      </div>
+      <div>
+        <span class="permissions-summary__label">Elementos</span>
+        <strong>{{ structure_summary.elements_selected }} / {{ structure_summary.elements_total }}</strong>
+      </div>
+    </div>
+  </article>
+
+  <article class="card permissions-panel permissions-panel--wide">
+    <div class="permissions-panel__header">
+      <div>
+        <h2>Checklist de acceso a evaluacion</h2>
+        <p class="text-muted">Indicador y elemento quedan unidos en el mismo checklist. Si marcas <strong>Acceso total</strong>, se seleccionan todos los elementos fundamentales del indicador.</p>
+      </div>
+    </div>
+
+    <form method="post" id="structure-access-form">
+      {% csrf_token %}
+      {{ form.rol.as_hidden }}
+      {{ form.ciclo.as_hidden }}
+
+      {% if form.non_field_errors %}
+        <div class="text-muted">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="permissions-structure-list">
+        {% for group in indicator_groups %}
+          <section class="permissions-structure-card" data-indicator-group="{{ group.indicator.pk }}">
+            <div class="permissions-structure-card__header">
+              <label class="permissions-structure-card__toggle">
+                <input
+                  type="checkbox"
+                  name="indicadores"
+                  value="{{ group.indicator.pk }}"
+                  data-indicator-checkbox
+                  {% if group.selected %}checked{% endif %}
+                >
+                <span>
+                  <strong>{{ group.indicator.codigo_indicador }} - {{ group.indicator.nombre_indicador }}</strong>
+                  <small>{{ group.indicator.subcriterio.criterio.codigo_criterio }} / {{ group.indicator.subcriterio.codigo_subcriterio }}</small>
+                </span>
+              </label>
+              <label class="permissions-structure-card__total">
+                <input
+                  type="checkbox"
+                  name="accesos_totales"
+                  value="{{ group.indicator.pk }}"
+                  data-total-checkbox
+                  {% if group.access_total %}checked{% endif %}
+                >
+                <span>Acceso total</span>
+              </label>
+            </div>
+
+            <div class="permissions-element-checklist">
+              {% for element in group.elements %}
+                <label class="permissions-checklist__item">
+                  <input
+                    type="checkbox"
+                    name="elementos"
+                    value="{{ element.pk }}"
+                    data-element-checkbox
+                    data-parent-indicator="{{ group.indicator.pk }}"
+                    {% if element.pk in group.selected_element_ids %}checked{% endif %}
+                  >
+                  <span>
+                    <strong>{{ element.codigo_elemento }} - {{ element.nombre_elemento }}</strong>
+                    <small>{{ element.nombre_elemento }}</small>
+                  </span>
+                </label>
+              {% empty %}
+                <p class="text-muted">Este indicador no tiene elementos fundamentales asociados.</p>
+              {% endfor %}
+            </div>
+          </section>
+        {% empty %}
+          <p class="text-muted">No existen indicadores activos para construir el checklist.</p>
+        {% endfor %}
+      </div>
+
+      {% if form.indicadores.errors or form.accesos_totales.errors or form.elementos.errors %}
+        <div class="text-muted">
+          {{ form.indicadores.errors }}
+          {{ form.accesos_totales.errors }}
+          {{ form.elementos.errors }}
+        </div>
+      {% endif %}
+
+      <div class="permissions-actions">
+        <button class="btn btn-primary" type="submit">Guardar checklist de acceso</button>
+      </div>
+    </form>
+  </article>
+</div>
+
+<article class="card permissions-panel permissions-panel--wide">
+  <div class="permissions-panel__header">
+    <div>
+      <h2>Asignaciones activas del contexto</h2>
+      <p class="text-muted">Consulta la asignacion unificada de acceso a evaluacion para el rol y ciclo seleccionados.</p>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Indicador</th>
+          <th>Acceso total</th>
+          <th>Elementos asignados</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for assignment in assignments %}
+          <tr>
+            <td>{{ assignment.indicador.codigo_indicador }} - {{ assignment.indicador.nombre_indicador }}</td>
+            <td>{% if assignment.acceso_total %}Si{% else %}No{% endif %}</td>
+            <td>
+              {% if assignment.assigned_elements %}
+                {% for item in assignment.assigned_elements %}
+                  <div>{{ item.elemento_fundamental.codigo_elemento }} - {{ item.elemento_fundamental.nombre_elemento }}</div>
+                {% endfor %}
+              {% else %}
+                <span class="text-muted">Sin elementos puntuales</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if assignment.activo %}
+                <span class="status status-success">Activo</span>
+              {% else %}
+                <span class="status status-muted">Inactivo</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">No existen accesos estructurales para este rol y ciclo.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<script>
+  (function () {
+    function getGroup(node) {
+      return node.closest("[data-indicator-group]");
+    }
+
+    function syncTotal(group) {
+      const totalCheckbox = group.querySelector("[data-total-checkbox]");
+      const indicatorCheckbox = group.querySelector("[data-indicator-checkbox]");
+      const elementCheckboxes = group.querySelectorAll("[data-element-checkbox]");
+
+      if (totalCheckbox.checked) {
+        indicatorCheckbox.checked = true;
+        elementCheckboxes.forEach((checkbox) => {
+          checkbox.checked = true;
+        });
+      }
+    }
+
+    document.querySelectorAll("[data-total-checkbox]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        syncTotal(getGroup(this));
+      });
+    });
+
+    document.querySelectorAll("[data-indicator-checkbox]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        const group = getGroup(this);
+        if (!this.checked) {
+          const totalCheckbox = group.querySelector("[data-total-checkbox]");
+          totalCheckbox.checked = false;
+          group.querySelectorAll("[data-element-checkbox]").forEach((elementCheckbox) => {
+            elementCheckbox.checked = false;
+          });
+        }
+      });
+    });
+
+    document.querySelectorAll("[data-element-checkbox]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        const group = getGroup(this);
+        const indicatorCheckbox = group.querySelector("[data-indicator-checkbox]");
+        if (this.checked) {
+          indicatorCheckbox.checked = true;
+        }
+      });
+    });
+
+    document.querySelectorAll("[data-indicator-group]").forEach(syncTotal);
+  })();
+</script>
+{% endblock %}

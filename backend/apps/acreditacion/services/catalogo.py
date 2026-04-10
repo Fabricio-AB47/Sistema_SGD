@@ -1,15 +1,18 @@
 from django.db import transaction
 from django.core.cache import cache
+from django.utils import timezone
 
 from application.services.storage_path_service import (
     build_criterio_drive_path,
     build_elemento_drive_path,
     build_indicador_drive_path,
     build_subcriterio_drive_path,
-    get_criterio_drive_root,
 )
 from apps.auditoria.services.auditoria_service import registrar_evento
-from apps.documentos.selectors import authorization_document_exists
+from apps.documentos.selectors import (
+    authorization_document_exists,
+    authorization_document_exists_for_cycle,
+)
 from apps.documentos.services import upload_cycle_authorization_document
 from apps.integraciones.services.graph_service import (
     clear_graph_cache,
@@ -38,9 +41,8 @@ def _registrar_evento_catalogo(*, actor, request, accion, descripcion, tabla, re
 
 def _provision_storage(*, drive_path):
     require_graph_configuration()
-    criterio_root = get_criterio_drive_root()
-    clear_graph_cache(criterio_root)
-    ensure_drive_folder(criterio_root, refresh=True)
+    # Fuerza validacion directa en Graph para confirmar si la carpeta ya existe
+    # antes de crear cualquier segmento faltante en la jerarquia.
     clear_graph_cache(drive_path)
     graph_item = ensure_drive_folder(drive_path, refresh=True)
     return {
@@ -149,11 +151,9 @@ def crear_indicador(*, form, actor=None, request=None):
 def crear_elemento(*, form, actor=None, request=None):
     elemento = form.save()
     _invalidate_acreditacion_metrics_cache()
-    storage = None
-    if elemento.indicador_id:
-        storage = _provision_storage(
-            drive_path=build_elemento_drive_path(elemento.indicador, elemento),
-        )
+    storage = _provision_storage(
+        drive_path=build_elemento_drive_path(elemento.indicador, elemento),
+    )
     _registrar_evento_catalogo(
         actor=actor,
         request=request,
@@ -162,22 +162,21 @@ def crear_elemento(*, form, actor=None, request=None):
         tabla="elemento_fundamental",
         registro=elemento,
     )
-    if storage is not None:
-        registrar_evento(
-            accion="CREAR_CARPETA_ELEMENTO",
-            descripcion=f"Se creo la carpeta Graph del elemento {elemento.codigo_elemento}.",
-            usuario=actor,
-            tipo_evento="ALMACENAMIENTO",
-            tabla_afectada="elemento_fundamental",
-            id_registro=elemento.pk,
-            valores_nuevos={
-                "indicador_id": elemento.indicador_id,
-                "ruta_drive": storage["drive_path"].as_posix(),
-                "graph_web_url": (storage["graph_item"] or {}).get("webUrl"),
-            },
-            criticidad="MEDIA",
-            request=request,
-        )
+    registrar_evento(
+        accion="CREAR_CARPETA_ELEMENTO",
+        descripcion=f"Se creo la carpeta Graph del elemento {elemento.codigo_elemento}.",
+        usuario=actor,
+        tipo_evento="ALMACENAMIENTO",
+        tabla_afectada="elemento_fundamental",
+        id_registro=elemento.pk,
+        valores_nuevos={
+            "indicador_id": elemento.indicador_id,
+            "ruta_drive": storage["drive_path"].as_posix(),
+            "graph_web_url": (storage["graph_item"] or {}).get("webUrl"),
+        },
+        criticidad="MEDIA",
+        request=request,
+    )
     return elemento
 
 
@@ -228,7 +227,12 @@ def crear_ciclo(*, form, actor=None, request=None):
         actor=actor,
         request=request,
     )
-    ciclo = form.save()
+    ciclo = form.save(commit=False)
+    ciclo.documento_autorizacion = authorization_result["documento"]
+    if (getattr(form.cleaned_data["estado"], "descripcion", "") or "").strip().upper() == "APROBADO":
+        ciclo.aprobado_por = actor
+        ciclo.fecha_aprobacion = timezone.now()
+    ciclo.save()
     _invalidate_acreditacion_metrics_cache()
     _registrar_evento_catalogo(
         actor=actor,
@@ -258,18 +262,34 @@ def crear_ciclo(*, form, actor=None, request=None):
 
 
 @transaction.atomic
-def actualizar_estado_ciclo(*, ciclo, estado, actor=None, request=None):
-    if (
-        (getattr(estado, "descripcion", "") or "").strip().upper() == "APROBADO"
-        and not authorization_document_exists(ciclo.nombre, ciclo.anio)
-    ):
+def actualizar_estado_ciclo(
+    *,
+    ciclo,
+    estado,
+    observacion_aprobacion: str | None = None,
+    actor=None,
+    request=None,
+):
+    estado_destino = (getattr(estado, "descripcion", "") or "").strip().upper()
+    if estado_destino == "APROBADO" and not authorization_document_exists_for_cycle(ciclo):
         raise ValueError(
             "No puedes aprobar el ciclo si no existe su documento de autorizacion."
         )
 
     estado_anterior = getattr(ciclo.estado, "descripcion", None)
     ciclo.estado = estado
-    ciclo.save(update_fields=["estado"])
+    update_fields = ["estado"]
+    if estado_destino == "APROBADO":
+        ciclo.aprobado_por = actor
+        ciclo.fecha_aprobacion = timezone.now()
+        ciclo.observacion_aprobacion = observacion_aprobacion
+        update_fields.extend(
+            ["aprobado_por", "fecha_aprobacion", "observacion_aprobacion"]
+        )
+    elif observacion_aprobacion:
+        ciclo.observacion_aprobacion = observacion_aprobacion
+        update_fields.append("observacion_aprobacion")
+    ciclo.save(update_fields=update_fields)
     registrar_evento(
         accion="ACTUALIZAR_ESTADO_CICLO",
         descripcion=f"Se actualizo el estado del ciclo {ciclo.nombre} a {estado.descripcion}.",
@@ -278,7 +298,12 @@ def actualizar_estado_ciclo(*, ciclo, estado, actor=None, request=None):
         tabla_afectada="ciclo_evaluacion",
         id_registro=ciclo.pk,
         valores_anteriores={"estado": estado_anterior},
-        valores_nuevos={"estado": estado.descripcion},
+        valores_nuevos={
+            "estado": estado.descripcion,
+            "aprobado_por": getattr(actor, "pk", None) if estado_destino == "APROBADO" else ciclo.aprobado_por_id,
+            "fecha_aprobacion": ciclo.fecha_aprobacion.isoformat() if ciclo.fecha_aprobacion else None,
+            "observacion_aprobacion": ciclo.observacion_aprobacion,
+        },
         criticidad="MEDIA",
         request=request,
     )

@@ -1,6 +1,7 @@
 from .gestion import (
     PermisoGestionForm,
     RolGestionForm,
+    RolEstructuraAccesoForm,
     RolIndicadorElementoGestionForm,
     RolIndicadorGestionForm,
     RolPermisoForm,
@@ -10,6 +11,7 @@ from .gestion import (
 __all__ = [
     "PermisoGestionForm",
     "RolGestionForm",
+    "RolEstructuraAccesoForm",
     "RolIndicadorElementoGestionForm",
     "RolIndicadorGestionForm",
     "RolPermisoForm",

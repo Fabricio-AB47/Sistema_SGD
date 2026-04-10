@@ -16,6 +16,8 @@
             <th>Codigo</th>
             <th>Elemento</th>
             <th>Indicador</th>
+            <th>Clasificacion</th>
+            <th>Tipo</th>
             <th>Orden</th>
             <th>Estado</th>
           </tr>
@@ -29,12 +31,10 @@
                 <div class="text-muted">{{ elemento.descripcion|default:"--" }}</div>
               </td>
               <td>
-                {% if elemento.indicador %}
-                  {{ elemento.indicador.codigo_indicador }} - {{ elemento.indicador.nombre_indicador }}
-                {% else %}
-                  <span class="text-muted">Sin indicador</span>
-                {% endif %}
+                {{ elemento.indicador.codigo_indicador }} - {{ elemento.indicador.nombre_indicador }}
               </td>
+              <td>{{ elemento.clasificacion.nombre|default:"--" }}</td>
+              <td>{{ elemento.tipo_elemento|default:"--" }}</td>
               <td>{{ elemento.orden_visual|default:"--" }}</td>
               <td>
                 {% if elemento.activo %}
@@ -46,7 +46,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="5" class="text-center text-muted">No existen elementos fundamentales registrados.</td>
+              <td colspan="7" class="text-center text-muted">No existen elementos fundamentales registrados.</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -57,14 +57,24 @@
   <article class="card acreditacion-panel">
     <h3>Nuevo elemento</h3>
     <form method="post" class="acreditacion-form">
-      {% csrf_token %}
-      {{ form.non_field_errors }}
+        {% csrf_token %}
+        {{ form.non_field_errors }}
       <div class="acreditacion-form__grid">
         <label class="acreditacion-form__field acreditacion-form__field--full">
           <span>Indicador</span>
           {{ form.indicador }}
           {{ form.indicador.errors }}
-          <small>Puedes crear el elemento sin indicador y realizar la union despues desde la ficha del indicador.</small>
+          <small>El elemento queda vinculado desde el inicio al indicador operativo.</small>
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Clasificacion</span>
+          {{ form.clasificacion }}
+          {{ form.clasificacion.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Tipo de elemento</span>
+          {{ form.tipo_elemento }}
+          {{ form.tipo_elemento.errors }}
         </label>
         <label class="acreditacion-form__field">
           <span>Codigo</span>

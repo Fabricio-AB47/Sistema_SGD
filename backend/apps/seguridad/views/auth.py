@@ -1,10 +1,11 @@
 from django.http import JsonResponse
-from django.views import View
+from django.shortcuts import render
 from django.utils.decorators import method_decorator
+from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from apps.seguridad.forms.login import LoginForm
-from apps.seguridad.services.auth import autenticar, cerrar_sesion, AuthError
+from apps.seguridad.services.auth import AuthError, autenticar, cerrar_sesion
 
 
 def _json_error(message, status=400):
@@ -27,18 +28,18 @@ class LoginApiView(View):
                 ip=request.META.get("REMOTE_ADDR"),
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:300],
             )
-        except AuthError as e:
-            return _json_error(str(e), status=e.status)
+        except AuthError as exc:
+            return _json_error(str(exc), status=exc.status)
 
         user = result["usuario"]
         return JsonResponse(
             {
                 "ok": True,
                 "token": result["token"],
-                "expira": result["expira"].isoformat(),
+                "expira": result["expira"].isoformat() if result.get("expira") else None,
                 "user": {
-                    "id": user.id,
-                    "nombre": f"{user.primer_nombre} {user.primer_apellido}".strip(),
+                    "id": user.id_user,
+                    "nombre": user.nombre_completo,
                     "correo": user.correo,
                 },
                 "session_id": result["session_id"],
@@ -54,3 +55,7 @@ class LogoutApiView(View):
             return _json_error("Token requerido")
         updated = cerrar_sesion(token)
         return JsonResponse({"ok": updated > 0})
+
+
+def login_page(request):
+    return render(request, "auth/login.html")

@@ -46,7 +46,6 @@ MODULE_DESCRIPTION = "Gestiona documentos, versionamiento, accesos y autorizacio
 MODULE_TABS = [
     {"label": "Clasificaciones documentales", "url_name": "documentos-clasificaciones-lista", "active_names": ["documentos-clasificaciones-lista"]},
     {"label": "Documentos", "url_name": "documentos-lista", "active_names": ["documentos-lista"]},
-    {"label": "Subir documento", "url_name": "documentos-subir", "active_names": ["documentos-subir"]},
     {"label": "Detalle de documento", "url_name": "documentos-detalle", "active_names": ["documentos-detalle"]},
     {"label": "Historial de versiones", "url_name": "documentos-versiones", "active_names": ["documentos-versiones"]},
     {"label": "Historial de accesos", "url_name": "documentos-accesos", "active_names": ["documentos-accesos"]},
@@ -116,9 +115,6 @@ class DocumentListView(DocumentosBaseView):
     template_name = "documentos/documento_list.html"
     page_title = "Documentos"
     page_description = "Consulta el inventario documental real, su clasificacion, versionamiento y uso operativo."
-    page_actions = [
-        {"label": "Subir documento", "url_name": "documentos-subir", "variant": "primary"},
-    ]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

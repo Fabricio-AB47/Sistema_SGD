@@ -1,0 +1,52 @@
+{% extends "base/auth_base.html" %}
+{% block title %}{{ page_title }} | SIG{% endblock %}
+
+{% block content %}
+{% include "includes/messages.html" %}
+<div class="auth-shell">
+  <section class="auth-panel">
+    <div class="auth-left">
+      <div class="auth-brand">
+        <div class="auth-logo">SIG</div>
+        <div class="auth-brand-text">
+          <span>Confirmacion</span>
+          <small>token_verificacion</small>
+        </div>
+      </div>
+
+      <div class="auth-welcome">
+        <h1>{{ page_title }}</h1>
+        <p>{{ page_description }}</p>
+      </div>
+
+      <form method="post" class="auth-form">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <div class="auth-input">
+          <span class="auth-input__icon">#</span>
+          {{ form.token }}
+          {{ form.token.errors }}
+        </div>
+
+        <button type="submit" class="auth-submit">Confirmar correo</button>
+      </form>
+
+      <div class="auth-links" style="margin-top: 1rem;">
+        <a href="{% url 'seguridad-login' %}">Ir al login</a>
+        <a href="{% url 'seguridad-solicitar-verificacion' %}">Solicitar verificacion</a>
+      </div>
+    </div>
+
+    <div class="auth-right">
+      <div class="auth-hero">
+        <p class="eyebrow">Estado de cuenta</p>
+        <h2 class="auth-hero-title">Seguridad de acceso</h2>
+        <p class="auth-hero-text">
+          La verificacion de correo ayuda a reducir suplantacion y habilita flujos de recuperacion confiables.
+        </p>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -4,9 +4,11 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
 from django.views.generic import ListView
+from urllib.parse import urlencode
 
 from apps.auditoria.services import registrar_evento
 from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.services.redirect_security import build_login_redirect_url
 from apps.integraciones.models import ApiCredencial, ApiToken
 from apps.integraciones.services import api_service, token_service
 from apps.usuarios.models import Usuario
@@ -17,6 +19,13 @@ def _get_current_usuario(request):
     if not user_id:
         return None
     return Usuario.objects.filter(pk=user_id).first()
+
+
+def _build_token_list_url(*, credencial_id: int | None = None) -> str:
+    base_url = str(reverse_lazy("integraciones-tokens-lista"))
+    if not credencial_id:
+        return base_url
+    return f"{base_url}?{urlencode({'credencial': credencial_id})}"
 
 
 class TokenListView(SigLoginRequiredMixin, ListView):
@@ -49,7 +58,7 @@ class TokenListView(SigLoginRequiredMixin, ListView):
 @require_POST
 def generar_token_view(request, credencial_id):
     if not request.session.get("sig_user_id"):
-        return redirect(settings.LOGIN_URL or "/login/")
+        return redirect(build_login_redirect_url(request, settings.LOGIN_URL or "/login/"))
 
     credencial = get_object_or_404(
         ApiCredencial.objects.select_related("api_servicio"),
@@ -76,4 +85,4 @@ def generar_token_view(request, credencial_id):
         request=request,
     )
     messages.success(request, f"Token generado para {credencial.nombre_aplicacion}.")
-    return redirect(request.POST.get("next") or reverse_lazy("integraciones-tokens-lista"))
+    return redirect(_build_token_list_url(credencial_id=credencial.pk))

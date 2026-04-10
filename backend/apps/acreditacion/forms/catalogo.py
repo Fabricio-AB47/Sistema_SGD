@@ -27,7 +27,14 @@ def _normalize_code(value: str) -> str:
 class CriterioForm(forms.ModelForm):
     class Meta:
         model = Criterio
-        fields = ["codigo_criterio", "nombre_criterio", "descripcion", "orden_visual", "activo"]
+        fields = [
+            "codigo_criterio",
+            "nombre_criterio",
+            "descripcion",
+            "ponderacion",
+            "orden_visual",
+            "activo",
+        ]
 
     def clean_codigo_criterio(self):
         codigo = _normalize_code(self.cleaned_data["codigo_criterio"])
@@ -48,7 +55,15 @@ class CriterioForm(forms.ModelForm):
 class SubcriterioForm(forms.ModelForm):
     class Meta:
         model = Subcriterio
-        fields = ["criterio", "codigo_subcriterio", "nombre_subcriterio", "descripcion", "orden_visual", "activo"]
+        fields = [
+            "criterio",
+            "codigo_subcriterio",
+            "nombre_subcriterio",
+            "descripcion",
+            "ponderacion",
+            "orden_visual",
+            "activo",
+        ]
 
     def clean_codigo_subcriterio(self):
         codigo = _normalize_code(self.cleaned_data["codigo_subcriterio"])
@@ -105,18 +120,18 @@ class ElementoFundamentalForm(forms.ModelForm):
         model = ElementoFundamental
         fields = [
             "indicador",
+            "clasificacion",
             "codigo_elemento",
             "nombre_elemento",
             "descripcion",
             "medio_verificacion",
+            "tipo_elemento",
             "orden_visual",
             "activo",
         ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["indicador"].required = False
-        self.fields["indicador"].empty_label = "Seleccione el indicador"
         self.fields["indicador"].queryset = Indicador.objects.select_related(
             "subcriterio__criterio"
         ).order_by(
@@ -131,6 +146,7 @@ class ElementoFundamentalForm(forms.ModelForm):
                 f"{indicador.codigo_indicador} - {indicador.nombre_indicador}"
             )
         )
+        self.fields["tipo_elemento"].initial = self.instance.tipo_elemento or "ESENCIAL"
 
     def clean_codigo_elemento(self):
         codigo = _normalize_code(self.cleaned_data["codigo_elemento"])
@@ -168,7 +184,7 @@ class IndicadorElementoForm(forms.Form):
         if fixed_indicador is not None:
             self.fields["elemento_fundamental"].queryset = self.fields[
                 "elemento_fundamental"
-            ].queryset.filter(indicador_id__isnull=True)
+            ].queryset.exclude(indicador_id=fixed_indicador.pk)
             self.fields["indicador"].queryset = Indicador.objects.filter(pk=fixed_indicador.pk)
             self.fields["indicador"].initial = fixed_indicador
             self.fields["indicador"].widget = forms.HiddenInput()
@@ -193,14 +209,8 @@ class IndicadorElementoForm(forms.Form):
         cleaned_data = super().clean()
         indicador = cleaned_data.get("indicador")
         elemento_fundamental = cleaned_data.get("elemento_fundamental")
-        if indicador and elemento_fundamental:
-            if elemento_fundamental.indicador_id == indicador.pk:
-                self.add_error("elemento_fundamental", "La relacion ya existe.")
-            elif elemento_fundamental.indicador_id and elemento_fundamental.indicador_id != indicador.pk:
-                self.add_error(
-                    "elemento_fundamental",
-                    "El elemento fundamental ya pertenece a otro indicador.",
-                )
+        if indicador and elemento_fundamental and elemento_fundamental.indicador_id == indicador.pk:
+            self.add_error("elemento_fundamental", "El elemento ya pertenece al indicador seleccionado.")
         return cleaned_data
 
 
@@ -258,9 +268,14 @@ class CicloEvaluacionForm(forms.ModelForm):
         self.fields["fecha_inicio"].input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"]
         self.fields["fecha_fin"].input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"]
         self.fields["archivo"].widget.attrs.update({"accept": ".pdf,.doc,.docx,.xls,.xlsx,.csv"})
-        clasificacion = self.fields["clasificacion"].queryset.filter(codigo="ACTA").first()
+        clasificacion = self.fields["clasificacion"].queryset.filter(codigo="AUT_CICLO").first()
+        if clasificacion is None:
+            clasificacion = self.fields["clasificacion"].queryset.filter(codigo="ACTA").first()
         if clasificacion:
             self.fields["clasificacion"].initial = clasificacion
+        estado_inicial = self.fields["estado"].queryset.filter(descripcion__iexact="ENVIADO").first()
+        if estado_inicial and not self.instance.pk:
+            self.fields["estado"].initial = estado_inicial
 
     def clean_nombre(self):
         return _normalize_required_text(self.cleaned_data["nombre"])
@@ -287,6 +302,15 @@ class CicloEstadoUpdateForm(forms.Form):
         ).order_by("id_estado_ciclo"),
         label="Estado",
     )
+    observacion_aprobacion = forms.CharField(
+        max_length=1000,
+        required=False,
+        label="Observacion",
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def clean_observacion_aprobacion(self):
+        return _normalize_optional_text(self.cleaned_data.get("observacion_aprobacion"))
 
 
 class CicloAuthorizationRevisionForm(forms.Form):

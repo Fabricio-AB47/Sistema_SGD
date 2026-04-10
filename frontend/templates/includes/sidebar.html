@@ -34,15 +34,16 @@
 
       <div class="sidebar__submenu" data-sidebar-panel>
         <span class="sidebar__subheading">Gestion base</span>
-        <a class="sidebar__sublink{% if current_url_name == 'usuarios-lista' or current_url_name == 'usuarios-crear' or current_url_name == 'usuarios-detalle' or current_url_name == 'usuarios-editar' or current_url_name == 'usuarios-asignar-roles' %} is-active{% endif %}" href="{% url 'usuarios-lista' %}">Usuarios</a>
+        <a class="sidebar__sublink{% if current_url_name == 'usuarios-lista' or current_url_name == 'usuarios-crear' or current_url_name == 'usuarios-detalle' or current_url_name == 'usuarios-editar' or current_url_name == 'usuarios-asignar-roles' or current_url_name == 'usuarios-estructura' %} is-active{% endif %}" href="{% url 'usuarios-lista' %}">Usuarios</a>
         <a class="sidebar__sublink{% if current_url_name == 'roles-lista' or current_url_name == 'roles-crear' %} is-active{% endif %}" href="{% url 'roles-lista' %}">Roles</a>
+        <a class="sidebar__sublink{% if current_url_name == 'usuarios-areas' %} is-active{% endif %}" href="{% url 'usuarios-areas' %}">Areas institucionales</a>
+        <a class="sidebar__sublink{% if current_url_name == 'usuarios-cargos' %} is-active{% endif %}" href="{% url 'usuarios-cargos' %}">Cargos por area</a>
         <a class="sidebar__sublink{% if current_url_name == 'seguridad-sesiones' %} is-active{% endif %}" href="{% url 'seguridad-sesiones' %}">Sesiones</a>
 
         <span class="sidebar__subheading">Permisos y alcance</span>
         <a class="sidebar__sublink{% if current_url_name == 'permisos-roles-permisos' %} is-active{% endif %}" href="{% url 'permisos-roles-permisos' %}">Permisos por rol</a>
         <a class="sidebar__sublink{% if current_url_name == 'permisos-usuario-rol' %} is-active{% endif %}" href="{% url 'permisos-usuario-rol' %}">Asignacion usuario-rol</a>
-        <a class="sidebar__sublink{% if current_url_name == 'permisos-acceso-indicador' %} is-active{% endif %}" href="{% url 'permisos-acceso-indicador' %}">Acceso por indicador</a>
-        <a class="sidebar__sublink{% if current_url_name == 'permisos-acceso-elemento' %} is-active{% endif %}" href="{% url 'permisos-acceso-elemento' %}">Acceso por elemento</a>
+        <a class="sidebar__sublink{% if current_url_name == 'permisos-acceso-evaluacion' %} is-active{% endif %}" href="{% url 'permisos-acceso-evaluacion' %}">Acceso a evaluacion</a>
 
         <span class="sidebar__subheading">Integraciones API</span>
         <a class="sidebar__sublink{% if current_url_name == 'integraciones-servicios-lista' or current_url_name == 'integraciones-servicios-crear' or current_url_name == 'integraciones-servicios-editar' %} is-active{% endif %}" href="{% url 'integraciones-servicios-lista' %}">Servicios API</a>
@@ -78,18 +79,12 @@
         <a class="sidebar__sublink{% if current_url_name == 'acreditacion-subcriterios-lista' %} is-active{% endif %}" href="{% url 'acreditacion-subcriterios-lista' %}">Subcriterios</a>
         <a class="sidebar__sublink{% if current_url_name == 'acreditacion-indicadores-lista' or current_url_name == 'acreditacion-indicadores-detalle' %} is-active{% endif %}" href="{% url 'acreditacion-indicadores-lista' %}">Indicadores</a>
         <a class="sidebar__sublink{% if current_url_name == 'acreditacion-elementos-lista' %} is-active{% endif %}" href="{% url 'acreditacion-elementos-lista' %}">Elementos fundamentales</a>
-        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-matriz' %} is-active{% endif %}" href="{% url 'acreditacion-matriz' %}">Matriz de acreditacion</a>
+        <a class="sidebar__sublink{% if current_url_name == 'acreditacion-matriz-registro' or current_url_name == 'acreditacion-matriz-evidencias' or current_url_name == 'acreditacion-matriz' or current_url_name == 'documentos-subir' or current_url_name == 'evaluacion-evidencias-lista' or current_url_name == 'evaluacion-evidencia-registrar' or current_url_name == 'evaluacion-evidencia-detalle' %} is-active{% endif %}" href="{% url 'acreditacion-matriz-registro' %}">Matriz de registro</a>
 
         <span class="sidebar__subheading">Control documental</span>
-        <a class="sidebar__sublink{% if current_url_name == 'documentos-clasificaciones-lista' %} is-active{% endif %}" href="{% url 'documentos-clasificaciones-lista' %}">Clasificaciones documentales</a>
-        <a class="sidebar__sublink{% if current_url_name == 'documentos-lista' %} is-active{% endif %}" href="{% url 'documentos-lista' %}">Documentos</a>
-        <a class="sidebar__sublink{% if current_url_name == 'documentos-subir' %} is-active{% endif %}" href="{% url 'documentos-subir' %}">Subir documento</a>
-        <a class="sidebar__sublink{% if current_url_name == 'documentos-versiones' %} is-active{% endif %}" href="{% url 'documentos-versiones' %}">Versiones</a>
-        <a class="sidebar__sublink{% if current_url_name == 'documentos-accesos' %} is-active{% endif %}" href="{% url 'documentos-accesos' %}">Accesos</a>
+        <a class="sidebar__sublink{% if current_url_name == 'documentos-clasificaciones-lista' or current_url_name == 'documentos-lista' or current_url_name == 'documentos-detalle' or current_url_name == 'documentos-versiones' or current_url_name == 'documentos-accesos' %} is-active{% endif %}" href="{% url 'documentos-lista' %}">Gestion documental</a>
 
         <span class="sidebar__subheading">Evaluacion y mejora</span>
-        <a class="sidebar__sublink{% if current_url_name == 'evaluacion-evidencias-lista' %} is-active{% endif %}" href="{% url 'evaluacion-evidencias-lista' %}">Evidencias</a>
-        <a class="sidebar__sublink{% if current_url_name == 'evaluacion-evidencia-registrar' %} is-active{% endif %}" href="{% url 'evaluacion-evidencia-registrar' %}">Registrar evidencia</a>
         <a class="sidebar__sublink{% if current_url_name == 'evaluacion-bandeja' %} is-active{% endif %}" href="{% url 'evaluacion-bandeja' %}">Bandeja de evaluacion</a>
         <a class="sidebar__sublink{% if current_url_name == 'evaluacion-evaluar' %} is-active{% endif %}" href="{% url 'evaluacion-evaluar' %}">Evaluar evidencia</a>
         <a class="sidebar__sublink{% if current_url_name == 'evaluacion-observaciones' %} is-active{% endif %}" href="{% url 'evaluacion-observaciones' %}">Observaciones</a>

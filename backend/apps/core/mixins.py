@@ -2,6 +2,8 @@ from django.conf import settings
 from django.shortcuts import redirect
 from django.utils.cache import add_never_cache_headers
 
+from apps.core.services.redirect_security import build_login_redirect_url
+
 
 class SigLoginRequiredMixin:
     """
@@ -12,7 +14,7 @@ class SigLoginRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         if not request.session.get("sig_user_id"):
             login_url = settings.LOGIN_URL or "/login/"
-            return redirect(f"{login_url}?next={request.get_full_path()}")
+            return redirect(build_login_redirect_url(request, login_url))
         response = super().dispatch(request, *args, **kwargs)
         add_never_cache_headers(response)
         return response

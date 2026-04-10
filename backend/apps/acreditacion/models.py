@@ -13,6 +13,7 @@ class Criterio(models.Model):
     codigo_criterio = models.CharField(max_length=20, unique=True)
     nombre_criterio = models.CharField(max_length=150)
     descripcion = models.CharField(max_length=1000, null=True, blank=True)
+    ponderacion = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     orden_visual = models.PositiveIntegerField(null=True, blank=True)
     activo = models.BooleanField(default=True)
 
@@ -38,6 +39,7 @@ class Subcriterio(models.Model):
     codigo_subcriterio = models.CharField(max_length=20, unique=True)
     nombre_subcriterio = models.CharField(max_length=150)
     descripcion = models.CharField(max_length=1000, null=True, blank=True)
+    ponderacion = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     orden_visual = models.PositiveIntegerField(null=True, blank=True)
     activo = models.BooleanField(default=True)
 
@@ -94,12 +96,23 @@ class ClasificacionElementoFundamental(CoreClasificacionElementoFundamental):
 
 
 class ElementoFundamental(models.Model):
+    TIPO_ELEMENTO_CHOICES = (
+        ("ESENCIAL", "Esencial"),
+        ("COMPLEMENTARIO", "Complementario"),
+    )
+
     id_elemento_fundamental = models.AutoField(primary_key=True)
     indicador = models.ForeignKey(
         Indicador,
         on_delete=models.PROTECT,
         related_name="elementos",
         db_column="id_indicador",
+    )
+    clasificacion = models.ForeignKey(
+        ClasificacionElementoFundamental,
+        on_delete=models.PROTECT,
+        related_name="elementos",
+        db_column="id_clasificacion",
         null=True,
         blank=True,
     )
@@ -107,6 +120,11 @@ class ElementoFundamental(models.Model):
     nombre_elemento = models.CharField(max_length=200)
     descripcion = models.CharField(max_length=2000, null=True, blank=True)
     medio_verificacion = models.CharField(max_length=1000, null=True, blank=True)
+    tipo_elemento = models.CharField(
+        max_length=20,
+        choices=TIPO_ELEMENTO_CHOICES,
+        default="ESENCIAL",
+    )
     orden_visual = models.PositiveIntegerField(null=True, blank=True)
     activo = models.BooleanField(default=True)
 
@@ -119,29 +137,6 @@ class ElementoFundamental(models.Model):
 
     def __str__(self) -> str:
         return f"{self.codigo_elemento} - {self.nombre_elemento}"
-
-
-class IndicadorElementoFundamental(models.Model):
-    pk = models.CompositePrimaryKey("indicador", "elemento_fundamental")
-    indicador = models.ForeignKey(
-        Indicador,
-        on_delete=models.CASCADE,
-        related_name="elementos_fundamentales",
-        db_column="id_indicador",
-    )
-    elemento_fundamental = models.ForeignKey(
-        ElementoFundamental,
-        on_delete=models.CASCADE,
-        related_name="indicadores",
-        db_column="id_elemento_fundamental",
-    )
-
-    class Meta:
-        db_table = "indicador_elemento_fundamental"
-        managed = False
-        verbose_name = "Indicador - Elemento fundamental"
-        verbose_name_plural = "Indicadores - Elementos fundamentales"
-
 
 class CicloEvaluacion(models.Model):
     id_ciclo = models.AutoField(primary_key=True)
@@ -156,6 +151,24 @@ class CicloEvaluacion(models.Model):
         related_name="ciclos",
         db_column="id_estado_ciclo",
     )
+    documento_autorizacion = models.ForeignKey(
+        "evidencias.Documento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ciclos_autorizados",
+        db_column="id_documento_autorizacion",
+    )
+    aprobado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ciclos_aprobados",
+        db_column="aprobado_por",
+    )
+    fecha_aprobacion = models.DateTimeField(null=True, blank=True)
+    observacion_aprobacion = models.CharField(max_length=1000, null=True, blank=True)
 
     class Meta:
         db_table = "ciclo_evaluacion"

@@ -1,0 +1,117 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Estructura de usuario | SIG{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <div>
+      <h1>Estructura de {{ usuario.primer_nombre }} {{ usuario.primer_apellido }}</h1>
+      <p class="text-muted">Asigna area/cargo y supervisor de acuerdo con la jerarquia institucional.</p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn btn-secondary" href="{% url 'usuarios-detalle' usuario.pk %}">Volver al usuario</a>
+      <a class="btn btn-secondary" href="{% url 'usuarios-cargos' %}">Cargos</a>
+      <a class="btn btn-secondary" href="{% url 'usuarios-areas' %}">Areas</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Asignar area y cargo</h3>
+    <form method="post" class="form-grid">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="asignar_area_cargo">
+      {{ area_cargo_form.non_field_errors }}
+
+      <div class="form-group">
+        <span>Area</span>
+        {{ area_cargo_form.area }}
+        {{ area_cargo_form.area.errors }}
+      </div>
+      <div class="form-group">
+        <span>Cargo</span>
+        {{ area_cargo_form.cargo }}
+        {{ area_cargo_form.cargo.errors }}
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Asignar area/cargo</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Asignar supervisor</h3>
+    <form method="post" class="form-grid">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="asignar_supervisor">
+      {{ supervisor_form.non_field_errors }}
+
+      <div class="form-group">
+        <span>Supervisor</span>
+        {{ supervisor_form.supervisor }}
+        {{ supervisor_form.supervisor.errors }}
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Asignar supervisor</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Area y cargo asignados</h3>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Cargo</th>
+            <th>Nivel</th>
+            <th>Fecha asignacion</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in area_cargos %}
+            <tr>
+              <td>{{ item.area.codigo_area }} - {{ item.area.nombre_area }}</td>
+              <td>{{ item.cargo.codigo_cargo }} - {{ item.cargo.nombre_cargo }}</td>
+              <td>{{ item.cargo.nivel_jerarquico }}</td>
+              <td>{{ item.fecha_asignacion }}</td>
+              <td>{% if item.activo %}<span class="status status-success">Activo</span>{% else %}<span class="status status-muted">Inactivo</span>{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-muted text-center">Sin asignaciones de area/cargo.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Supervisores asignados</h3>
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Supervisor</th>
+            <th>Correo</th>
+            <th>Fecha asignacion</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in supervisores %}
+            <tr>
+              <td>{{ item.supervisor.nombre_completo }}</td>
+              <td>{{ item.supervisor.correo }}</td>
+              <td>{{ item.fecha_asignacion }}</td>
+              <td>{% if item.activo %}<span class="status status-success">Activo</span>{% else %}<span class="status status-muted">Inactivo</span>{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-muted text-center">Sin supervisores asignados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

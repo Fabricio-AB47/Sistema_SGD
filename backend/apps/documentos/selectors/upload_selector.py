@@ -5,7 +5,7 @@ from apps.acreditacion.models import CicloEvaluacion
 from apps.documentos.models import Documento
 from apps.documentos.selectors.authorization_selector import (
     attach_cycle_authorization_status,
-    authorization_document_exists,
+    authorization_document_exists_for_cycle,
 )
 
 
@@ -22,7 +22,7 @@ def cycle_allows_document_upload(ciclo) -> bool:
         return False
     if (getattr(ciclo.estado, "descripcion", "") or "").strip().upper() != "APROBADO":
         return False
-    return authorization_document_exists(ciclo.nombre, ciclo.anio)
+    return authorization_document_exists_for_cycle(ciclo)
 
 
 def get_recent_cycle_upload_statuses(limit: int = 8):

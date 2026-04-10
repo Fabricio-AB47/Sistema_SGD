@@ -35,7 +35,9 @@ class AuthorizationUploadForm(AuthorizationFolderForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        clasificacion = ClasificacionDocumento.objects.filter(codigo="ACTA", activo=True).first()
+        clasificacion = ClasificacionDocumento.objects.filter(codigo="AUT_CICLO", activo=True).first()
+        if clasificacion is None:
+            clasificacion = ClasificacionDocumento.objects.filter(codigo="ACTA", activo=True).first()
         if clasificacion:
             self.fields["clasificacion"].initial = clasificacion
 

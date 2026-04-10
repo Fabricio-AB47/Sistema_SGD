@@ -10,19 +10,21 @@ class Documento(models.Model):
     descripcion_documento = models.CharField(max_length=500, null=True, blank=True)
     nombre_archivo = models.CharField(max_length=255)
     mime_type = models.CharField(max_length=150, null=True, blank=True)
-    extension_archivo = models.CharField(max_length=15, null=True, blank=True)
+    extension_archivo = models.CharField(max_length=20, null=True, blank=True)
     tamano_archivo = models.BigIntegerField(null=True, blank=True)
-    ruta_local = models.CharField(max_length=500, null=True, blank=True)
-    hash_documento = models.CharField(max_length=128, unique=True)
+    ruta_local = models.CharField(max_length=1000, null=True, blank=True)
+    hash_documento = models.CharField(max_length=128, null=True, blank=True)
     checksum_archivo = models.CharField(max_length=128, null=True, blank=True)
     clasificacion = models.ForeignKey(
         ClasificacionDocumento,
         on_delete=models.PROTECT,
         related_name="documentos",
         db_column="id_clasificacion_documento",
+        null=True,
+        blank=True,
     )
-    esta_cifrado = models.BooleanField(default=True)
-    algoritmo_cifrado = models.CharField(max_length=50, null=True, blank=True)
+    esta_cifrado = models.BooleanField(default=False)
+    algoritmo_cifrado = models.CharField(max_length=100, null=True, blank=True)
     referencia_clave_cifrado = models.CharField(max_length=200, null=True, blank=True)
     graph_site_id = models.CharField(max_length=200, null=True, blank=True)
     graph_drive_id = models.CharField(max_length=200, null=True, blank=True)
@@ -42,6 +44,7 @@ class Documento(models.Model):
         db_column="subido_por",
     )
     activo = models.BooleanField(default=True)
+    version_fila = models.BinaryField(null=True, blank=True, editable=False)
 
     class Meta:
         db_table = "documento"
@@ -53,7 +56,7 @@ class Documento(models.Model):
             models.Index(fields=["graph_item_id"], name="ix_documento_graph_item"),
             models.Index(
                 fields=["clasificacion", "-fecha_subida"],
-                name="ix_doc_clasif_fecha",
+                name="ix_documento_clasificacion_fecha",
             ),
         ]
 
@@ -81,11 +84,11 @@ class VersionDocumento(models.Model):
         db_column="subido_por",
     )
     graph_item_id = models.CharField(max_length=200, null=True, blank=True)
-    ruta_local = models.CharField(max_length=500, null=True, blank=True)
-    hash_documento = models.CharField(max_length=128)
+    ruta_local = models.CharField(max_length=1000, null=True, blank=True)
+    hash_documento = models.CharField(max_length=128, null=True, blank=True)
     checksum_archivo = models.CharField(max_length=128, null=True, blank=True)
-    esta_cifrado = models.BooleanField(default=True)
-    algoritmo_cifrado = models.CharField(max_length=50, null=True, blank=True)
+    esta_cifrado = models.BooleanField(default=False)
+    algoritmo_cifrado = models.CharField(max_length=100, null=True, blank=True)
     referencia_clave_cifrado = models.CharField(max_length=200, null=True, blank=True)
 
     class Meta:
@@ -123,8 +126,6 @@ class RegistroEvidencia(models.Model):
         Indicador,
         on_delete=models.PROTECT,
         related_name="registros_evidencia",
-        null=True,
-        blank=True,
         db_column="id_indicador",
     )
     ciclo = models.ForeignKey(
@@ -146,6 +147,15 @@ class RegistroEvidencia(models.Model):
         related_name="evidencias_registradas",
         db_column="registrado_por",
     )
+    enviado_revision_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="evidencias_enviadas_revision",
+        db_column="enviado_revision_por",
+    )
+    fecha_envio_revision = models.DateTimeField(null=True, blank=True)
     comentario = models.CharField(max_length=500, null=True, blank=True)
 
     class Meta:
@@ -153,26 +163,16 @@ class RegistroEvidencia(models.Model):
         managed = False
         verbose_name = "Registro de evidencia"
         verbose_name_plural = "Registros de evidencia"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["documento", "elemento_fundamental", "ciclo"],
-                name="uq_registro_evidencia",
-            )
-        ]
         indexes = [
             models.Index(
-                fields=["elemento_fundamental", "ciclo"],
-                name="ix_reg_ev_elem_ciclo",
-            ),
-            models.Index(
-                fields=["indicador", "ciclo"],
-                name="ix_reg_ev_ind_ciclo",
+                fields=["indicador", "elemento_fundamental", "ciclo"],
+                name="ix_registro_evidencia_indicador_elemento_ciclo",
             ),
         ]
 
 
 class DocumentoAccesoLog(models.Model):
-    id_documento_acceso_log = models.BigAutoField(primary_key=True)
+    id_documento_acceso_log = models.AutoField(primary_key=True)
     documento = models.ForeignKey(
         Documento,
         on_delete=models.CASCADE,
@@ -187,7 +187,7 @@ class DocumentoAccesoLog(models.Model):
         related_name="logs_documento",
         db_column="id_user",
     )
-    accion = models.CharField(max_length=50)
+    accion = models.CharField(max_length=100)
     fecha_evento = models.DateTimeField(null=True, blank=True)
     ip = models.CharField(max_length=45, null=True, blank=True)
     user_agent = models.CharField(max_length=300, null=True, blank=True)
@@ -203,6 +203,6 @@ class DocumentoAccesoLog(models.Model):
         indexes = [
             models.Index(
                 fields=["documento", "-fecha_evento"],
-                name="ix_doc_acc_doc_fecha",
+                name="ix_documento_acceso_log_doc_fecha",
             )
         ]

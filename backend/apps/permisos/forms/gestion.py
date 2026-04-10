@@ -99,7 +99,7 @@ class RolIndicadorElementoGestionForm(forms.Form):
         queryset=RolIndicador.objects.filter(activo=True)
         .select_related("rol", "indicador", "ciclo")
         .order_by("rol__nombre_rol", "indicador__codigo_indicador"),
-        label="Acceso por indicador",
+        label="Acceso a evaluacion",
     )
     elemento_fundamental = forms.ModelChoiceField(
         queryset=ElementoFundamental.objects.filter(activo=True).order_by("codigo_elemento"),
@@ -131,4 +131,79 @@ class RolIndicadorElementoGestionForm(forms.Form):
             raise forms.ValidationError(
                 "El elemento fundamental seleccionado no pertenece al indicador elegido."
             )
+        return cleaned
+
+
+class RolEstructuraAccesoForm(forms.Form):
+    rol = forms.ModelChoiceField(
+        queryset=Rol.objects.filter(activo=True).order_by("nombre_rol"),
+        label="Rol",
+    )
+    ciclo = forms.ModelChoiceField(
+        queryset=CicloEvaluacion.objects.select_related("estado").order_by("-fecha_inicio"),
+        label="Ciclo",
+    )
+    indicadores = forms.MultipleChoiceField(
+        required=False,
+        choices=(),
+        widget=forms.MultipleHiddenInput,
+    )
+    accesos_totales = forms.MultipleChoiceField(
+        required=False,
+        choices=(),
+        widget=forms.MultipleHiddenInput,
+    )
+    elementos = forms.MultipleChoiceField(
+        required=False,
+        choices=(),
+        widget=forms.MultipleHiddenInput,
+    )
+
+    def __init__(self, *args, indicator_groups=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        indicator_groups = indicator_groups or []
+        self._indicator_map = {}
+        self._indicator_element_map = {}
+        self._element_indicator_map = {}
+
+        indicator_choices = []
+        element_choices = []
+        for group in indicator_groups:
+            indicador = group["indicator"]
+            self._indicator_map[indicador.pk] = indicador
+            indicator_choices.append((str(indicador.pk), indicador.codigo_indicador))
+            element_ids = set()
+            for elemento in group["elements"]:
+                element_choices.append((str(elemento.pk), elemento.codigo_elemento))
+                self._element_indicator_map[elemento.pk] = indicador.pk
+                element_ids.add(elemento.pk)
+            self._indicator_element_map[indicador.pk] = element_ids
+
+        self.fields["indicadores"].choices = indicator_choices
+        self.fields["accesos_totales"].choices = indicator_choices
+        self.fields["elementos"].choices = element_choices
+
+    def clean(self):
+        cleaned = super().clean()
+        indicator_ids = {int(value) for value in cleaned.get("indicadores", [])}
+        total_ids = {int(value) for value in cleaned.get("accesos_totales", [])}
+        element_ids = {int(value) for value in cleaned.get("elementos", [])}
+
+        valid_indicator_ids = set(self._indicator_map)
+        valid_element_ids = set(self._element_indicator_map)
+
+        indicator_ids &= valid_indicator_ids
+        total_ids &= valid_indicator_ids
+        element_ids &= valid_element_ids
+
+        for element_id in list(element_ids):
+            indicator_ids.add(self._element_indicator_map[element_id])
+
+        for indicator_id in list(total_ids):
+            indicator_ids.add(indicator_id)
+            element_ids.update(self._indicator_element_map.get(indicator_id, set()))
+
+        cleaned["indicadores"] = sorted(indicator_ids)
+        cleaned["accesos_totales"] = sorted(total_ids)
+        cleaned["elementos"] = sorted(element_ids)
         return cleaned

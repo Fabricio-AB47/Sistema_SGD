@@ -1,0 +1,109 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Cargos por area | SIG{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <div>
+      <h1>Cargos por area</h1>
+      <p class="text-muted">Gestiona cargos, nivel jerarquico y aprobacion interna por area.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <form method="post" class="form-grid">
+      {% csrf_token %}
+      {{ cargo_form.non_field_errors }}
+
+      <div class="form-group">
+        <span>Area</span>
+        {{ cargo_form.area }}
+        {{ cargo_form.area.errors }}
+      </div>
+      <div class="form-group">
+        <span>Codigo cargo</span>
+        {{ cargo_form.codigo_cargo }}
+        {{ cargo_form.codigo_cargo.errors }}
+      </div>
+      <div class="form-group">
+        <span>Nombre cargo</span>
+        {{ cargo_form.nombre_cargo }}
+        {{ cargo_form.nombre_cargo.errors }}
+      </div>
+      <div class="form-group">
+        <span>Nivel jerarquico</span>
+        {{ cargo_form.nivel_jerarquico }}
+        {{ cargo_form.nivel_jerarquico.errors }}
+      </div>
+      <div class="form-check">
+        {{ cargo_form.aprueba_interno }} <span>Aprueba interno</span>
+        {{ cargo_form.aprueba_interno.errors }}
+      </div>
+      <div class="form-check">
+        {{ cargo_form.activo }} <span>Activo</span>
+        {{ cargo_form.activo.errors }}
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Guardar cargo</button>
+        <a href="{% url 'usuarios-areas' %}" class="btn btn-secondary">Ir a areas</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <form method="get" class="filters">
+      <div class="filters__grid">
+        <label class="form-group">
+          <span>Filtrar por area</span>
+          <select name="area">
+            <option value="">Todas</option>
+            {% for area in areas %}
+              <option value="{{ area.id_area }}" {% if selected_area_id == area.id_area|stringformat:"s" %}selected{% endif %}>
+                {{ area.codigo_area }} - {{ area.nombre_area }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <div class="filters__actions">
+          <button type="submit" class="btn btn-primary">Filtrar</button>
+          <a href="{% url 'usuarios-cargos' %}" class="btn btn-secondary">Limpiar</a>
+        </div>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Codigo</th>
+            <th>Cargo</th>
+            <th>Nivel</th>
+            <th>Aprueba interno</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cargo in cargos %}
+            <tr>
+              <td>{{ cargo.area.nombre_area }}</td>
+              <td>{{ cargo.codigo_cargo }}</td>
+              <td>{{ cargo.nombre_cargo }}</td>
+              <td>{{ cargo.nivel_jerarquico }}</td>
+              <td>{% if cargo.aprueba_interno %}Si{% else %}No{% endif %}</td>
+              <td>
+                {% if cargo.activo %}
+                  <span class="status status-success">Activo</span>
+                {% else %}
+                  <span class="status status-muted">Inactivo</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="text-muted text-center">No hay cargos registrados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

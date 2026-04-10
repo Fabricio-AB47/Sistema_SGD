@@ -3,9 +3,8 @@ import logging
 from django.contrib import messages
 from django.db import DatabaseError, IntegrityError, OperationalError
 from django.http import Http404
-from django.shortcuts import redirect, resolve_url
+from django.shortcuts import redirect
 from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.generic import RedirectView, TemplateView
 
@@ -43,9 +42,16 @@ from apps.acreditacion.services import (
 from apps.acreditacion.models import CicloEvaluacion
 from apps.documentos.services import (
     AuthorizationServiceError,
+    StructuredDocumentUploadError,
     upload_cycle_authorization_revision,
 )
 from apps.documentos.selectors import attach_cycle_authorization_status
+from apps.evaluacion.forms import MatrixEvidenceRegistrationForm
+from apps.evaluacion.selectors import get_matrix_registration_dashboard
+from apps.evaluacion.services import (
+    MatrixEvidenceRegistrationError,
+    register_matrix_evidence,
+)
 from apps.integraciones.services.graph_service import GraphServiceError
 from apps.usuarios.models import Usuario
 
@@ -59,6 +65,11 @@ MODULE_TABS = [
     {"label": "Subcriterios", "url_name": "acreditacion-subcriterios-lista", "active_names": ["acreditacion-subcriterios-lista"]},
     {"label": "Indicadores", "url_name": "acreditacion-indicadores-lista", "active_names": ["acreditacion-indicadores-lista", "acreditacion-indicadores-detalle"]},
     {"label": "Elementos fundamentales", "url_name": "acreditacion-elementos-lista", "active_names": ["acreditacion-elementos-lista"]},
+    {
+        "label": "Matriz de registro",
+        "url_name": "acreditacion-matriz-registro",
+        "active_names": ["acreditacion-matriz-registro", "acreditacion-matriz-evidencias"],
+    },
     {"label": "Matriz de acreditacion", "url_name": "acreditacion-matriz", "active_names": ["acreditacion-matriz"]},
     {"label": "Ciclos y autorizacion", "url_name": "acreditacion-ciclos-lista", "active_names": ["acreditacion-ciclos-lista", "acreditacion-ciclos-crear", "acreditacion-ciclos-detalle"]},
 ]
@@ -69,21 +80,6 @@ def _report_operation_error(*, request, exc: Exception, form=None, user_message:
     messages.error(request, user_message)
     if form is not None:
         form.add_error(None, user_message)
-
-
-def _safe_redirect_response(*, request, redirect_to: str | None, fallback: str):
-    candidate = (redirect_to or "").strip()
-    if candidate and url_has_allowed_host_and_scheme(
-        url=candidate,
-        allowed_hosts={request.get_host()},
-        require_https=request.is_secure(),
-    ):
-        return redirect(candidate)
-
-    if candidate:
-        logger.warning("Se bloqueo una redireccion no confiable en acreditacion: %s", candidate)
-
-    return redirect(resolve_url(fallback))
 
 
 class AcreditacionBaseView(SigLoginRequiredMixin, TemplateView):
@@ -297,6 +293,101 @@ class MatrizView(AcreditacionBaseView):
         return context
 
 
+class MatrizRegistroView(AcreditacionBaseView):
+    template_name = "acreditacion/matriz_registro.html"
+    page_title = "Matriz de registro"
+    page_description = (
+        "Unifica la carga documental con el registro de evidencia sobre la misma matriz "
+        "operativa de criterio, subcriterio, indicador y elemento."
+    )
+    page_actions = [
+        {"label": "Ver matriz", "url_name": "acreditacion-matriz", "variant": "secondary"},
+        {"label": "Gestion documental", "url_name": "documentos-lista", "variant": "secondary"},
+    ]
+    show_acreditacion_overview = False
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        dashboard = get_matrix_registration_dashboard(
+            ciclo_id=kwargs.get("selected_cycle_id") or self.request.GET.get("ciclo")
+        )
+        selected_cycle = dashboard.get("selected_cycle")
+        summary = dashboard.get("matrix_registration_summary", {})
+        context.update(dashboard)
+        context["page_highlights"] = [
+            {
+                "label": "Ciclo activo",
+                "value": getattr(selected_cycle, "nombre", "Sin ciclo habilitado"),
+            },
+            {"label": "Subidas", "value": summary.get("uploaded", 0)},
+            {"label": "Faltantes", "value": summary.get("pending", 0)},
+            {"label": "Cobertura", "value": f"{summary.get('completion_percent', 0)}%"},
+        ]
+        allowed_cycle_ids = [ciclo.pk for ciclo in dashboard.get("available_cycles", [])]
+        context["registration_form"] = kwargs.get("registration_form") or MatrixEvidenceRegistrationForm(
+            ciclo_initial=selected_cycle,
+            allowed_cycle_ids=allowed_cycle_ids,
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        dashboard = get_matrix_registration_dashboard(ciclo_id=request.POST.get("ciclo"))
+        allowed_cycle_ids = [ciclo.pk for ciclo in dashboard.get("available_cycles", [])]
+        form = MatrixEvidenceRegistrationForm(
+            request.POST,
+            request.FILES,
+            allowed_cycle_ids=allowed_cycle_ids,
+        )
+        if form.is_valid():
+            try:
+                register_matrix_evidence(
+                    ciclo=form.cleaned_data["ciclo"],
+                    indicador=form.cleaned_data["indicador"],
+                    elemento_fundamental=form.cleaned_data["elemento_fundamental"],
+                    clasificacion=form.cleaned_data["clasificacion"],
+                    uploaded_file=form.cleaned_data["archivo"],
+                    descripcion_documento=form.cleaned_data.get("descripcion_documento"),
+                    comentario=form.cleaned_data.get("comentario"),
+                    actor=self._actor(),
+                    request=request,
+                )
+            except (
+                MatrixEvidenceRegistrationError,
+                StructuredDocumentUploadError,
+                GraphServiceError,
+                AuthorizationServiceError,
+                OSError,
+                ValueError,
+                IntegrityError,
+                OperationalError,
+                DatabaseError,
+            ) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message=(
+                        "No fue posible registrar la evidencia. "
+                        "Verifica el ciclo, el archivo y la conexion con Microsoft Graph."
+                    ),
+                )
+            else:
+                messages.success(
+                    request,
+                    "Documento y evidencia registrados correctamente en la matriz de registro.",
+                )
+                return redirect(
+                    f"{reverse('acreditacion-matriz-registro')}?ciclo={form.cleaned_data['ciclo'].pk}"
+                )
+
+        return self.render_to_response(
+            self.get_context_data(
+                registration_form=form,
+                selected_cycle_id=request.POST.get("ciclo"),
+            )
+        )
+
+
 class CicloListView(AcreditacionBaseView):
     template_name = "acreditacion/ciclo_list.html"
     page_title = "Ciclos y documento de autorizacion"
@@ -364,7 +455,11 @@ class CicloDetailView(AcreditacionBaseView):
         ciclo = kwargs.get("ciclo")
         context["ciclo"] = ciclo
         context["estado_form"] = kwargs.get("estado_form") or CicloEstadoUpdateForm(
-            initial={"ciclo_id": ciclo.pk, "estado": ciclo.estado}
+            initial={
+                "ciclo_id": ciclo.pk,
+                "estado": ciclo.estado,
+                "observacion_aprobacion": ciclo.observacion_aprobacion,
+            }
         )
         context["authorization_revision_form"] = kwargs.get("authorization_revision_form") or CicloAuthorizationRevisionForm()
         return context
@@ -383,13 +478,16 @@ class CicloDetailView(AcreditacionBaseView):
         form = CicloAuthorizationRevisionForm(request.POST, request.FILES)
         if form.is_valid():
             try:
-                upload_cycle_authorization_revision(
+                revision_result = upload_cycle_authorization_revision(
                     ciclo=ciclo,
                     descripcion_documento=form.cleaned_data.get("descripcion_documento"),
                     uploaded_file=form.cleaned_data["archivo"],
                     actor=self._actor(),
                     request=request,
                 )
+                if revision_result["documento"].pk != ciclo.documento_autorizacion_id:
+                    ciclo.documento_autorizacion = revision_result["documento"]
+                    ciclo.save(update_fields=["documento_autorizacion"])
             except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
                 user_message = str(exc).strip() or "No fue posible registrar la nueva version del documento."
                 _report_operation_error(
@@ -432,6 +530,7 @@ class CicloEstadoUpdateView(SigLoginRequiredMixin, View):
                     actualizar_estado_ciclo(
                         ciclo=ciclo,
                         estado=form.cleaned_data["estado"],
+                        observacion_aprobacion=form.cleaned_data.get("observacion_aprobacion"),
                         actor=self._actor(),
                         request=request,
                     )
@@ -443,15 +542,7 @@ class CicloEstadoUpdateView(SigLoginRequiredMixin, View):
                     )
                 else:
                     messages.success(request, f"Estado actualizado a {form.cleaned_data['estado'].descripcion}.")
-                return _safe_redirect_response(
-                    request=request,
-                    redirect_to=request.POST.get("next_url"),
-                    fallback="acreditacion-ciclos-lista",
-                )
+                return redirect("acreditacion-ciclos-lista")
 
         messages.error(request, "No fue posible actualizar el estado del ciclo.")
-        return _safe_redirect_response(
-            request=request,
-            redirect_to=request.POST.get("next_url"),
-            fallback="acreditacion-ciclos-lista",
-        )
+        return redirect("acreditacion-ciclos-lista")

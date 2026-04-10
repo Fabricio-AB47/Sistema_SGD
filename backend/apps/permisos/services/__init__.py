@@ -8,6 +8,7 @@ from .gestion import (
     desactivar_rol_indicador,
     eliminar_rol_indicador_elemento,
     revocar_usuario_rol,
+    sincronizar_acceso_estructura,
     sincronizar_permisos_rol,
 )
 
@@ -21,5 +22,6 @@ __all__ = [
     "desactivar_rol_indicador",
     "eliminar_rol_indicador_elemento",
     "revocar_usuario_rol",
+    "sincronizar_acceso_estructura",
     "sincronizar_permisos_rol",
 ]

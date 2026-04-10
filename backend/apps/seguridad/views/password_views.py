@@ -46,12 +46,13 @@ class PasswordRecoveryView(FormView):
             request=self.request,
         )
 
-        if result["usuario"] and result["token"] and settings.DEBUG:
-            messages.success(
-                self.request,
-                "Token de recuperacion generado. Completa el cambio de contrasena.",
-            )
-            return redirect(f"{reverse('seguridad-cambiar-password')}?token={result['token']}")
+        if result["usuario"] and result["token"]:
+            if result.get("email_sent"):
+                messages.success(self.request, "Se envio un correo con el enlace de recuperacion.")
+            else:
+                messages.warning(self.request, "Se genero el token, pero el correo no pudo enviarse.")
+            if settings.DEBUG:
+                return redirect(f"{reverse('seguridad-cambiar-password')}?token={result['token']}")
 
         messages.success(
             self.request,

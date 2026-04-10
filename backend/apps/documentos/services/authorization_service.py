@@ -75,7 +75,7 @@ def _build_document_payload(
         or _default_description(nombre_ciclo, anio),
         "nombre_archivo": _safe_file_name(uploaded_file.name),
         "mime_type": uploaded_file.content_type or mimetypes.guess_type(uploaded_file.name)[0],
-        "extension_archivo": PurePosixPath(uploaded_file.name).suffix.lower()[:15] or None,
+        "extension_archivo": PurePosixPath(uploaded_file.name).suffix.lower()[:20] or None,
         "tamano_archivo": len(content),
         "ruta_local": storage_path.as_posix(),
         "hash_documento": document_hash,
@@ -359,15 +359,31 @@ def upload_cycle_authorization_revision(
     actor=None,
     request=None,
 ):
-    documento_actual = _get_existing_authorization_document(ciclo.nombre, ciclo.anio)
+    documento_actual = getattr(ciclo, "documento_autorizacion", None)
+    if documento_actual is None and getattr(ciclo, "documento_autorizacion_id", None):
+        documento_actual = (
+            Documento.objects.filter(
+                pk=ciclo.documento_autorizacion_id,
+                activo=True,
+            )
+            .select_related("clasificacion")
+            .first()
+        )
+    if documento_actual is None:
+        documento_actual = _get_existing_authorization_document(ciclo.nombre, ciclo.anio)
     clasificacion = None
     if documento_actual is not None:
         clasificacion = documento_actual.clasificacion
     if clasificacion is None:
+        clasificacion = ClasificacionDocumento.objects.filter(
+            codigo="AUT_CICLO",
+            activo=True,
+        ).first()
+    if clasificacion is None:
         clasificacion = ClasificacionDocumento.objects.filter(codigo="ACTA", activo=True).first()
     if clasificacion is None:
         raise AuthorizationServiceError(
-            "No existe una clasificacion ACTA activa para registrar la nueva version del documento."
+            "No existe una clasificacion AUT_CICLO o ACTA activa para registrar la nueva version del documento."
         )
 
     return upload_cycle_authorization_document(

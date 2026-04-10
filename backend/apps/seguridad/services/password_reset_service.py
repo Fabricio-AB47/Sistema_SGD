@@ -10,14 +10,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.auditoria.services.auditoria_service import registrar_evento
-from apps.seguridad.models import (
-    HistorialPassword,
-    TokenRecuperacion,
-    UserSession,
-    UsuarioCredencial,
-)
-from apps.seguridad.services import password_service
-from apps.usuarios.models import Usuario
+from apps.seguridad.services.notification_service import send_password_recovery_email
+from apps.usuarios.models import HistorialPassword, TokenRecuperacion, UserSession, Usuario, UsuarioCredencial
+from apps.usuarios.services import password_service
 
 
 RESET_TOKEN_MINUTES = 30
@@ -73,6 +68,12 @@ def create_recovery_token(*, correo: str, actor=None, request=None):
         ip_solicitud=request.META.get("REMOTE_ADDR") if request else None,
     )
 
+    delivery = send_password_recovery_email(
+        usuario=usuario,
+        token_plain=token_plain,
+        request=request,
+    )
+
     registrar_evento(
         accion="SOLICITAR_RECUPERACION_PASSWORD",
         descripcion=f"Se genero un token de recuperacion para el usuario {usuario}.",
@@ -83,12 +84,18 @@ def create_recovery_token(*, correo: str, actor=None, request=None):
         valores_nuevos={
             "correo": usuario.correo,
             "expira_en_minutos": RESET_TOKEN_MINUTES,
+            "correo_enviado": bool(delivery["sent"]),
         },
         criticidad="MEDIA",
         request=request,
     )
 
-    return {"usuario": usuario, "token": token_plain}
+    return {
+        "usuario": usuario,
+        "token": token_plain,
+        "email_sent": bool(delivery["sent"]),
+        "delivery_error": delivery.get("error"),
+    }
 
 
 @transaction.atomic
@@ -109,11 +116,10 @@ def reset_password_with_token(*, token_plain: str, new_password: str, actor=None
     HistorialPassword.objects.create(
         usuario=usuario,
         password_hash=previous_hash,
-        algoritmo_hash=previous_algorithm,
     )
 
-    credencial.password_hash = password_service.hash_password(new_password)
-    credencial.algoritmo_hash = "ARGON2ID"
+    credencial.password_hash = password_service.hash_password_argon2(new_password)
+    credencial.algoritmo_hash = "argon2"
     credencial.password_version = (credencial.password_version or 0) + 1
     credencial.fecha_cambio = timezone.now()
     credencial.requiere_cambio = False
@@ -146,7 +152,7 @@ def reset_password_with_token(*, token_plain: str, new_password: str, actor=None
         tabla_afectada="usuario_credencial",
         id_registro=usuario.pk,
         valores_nuevos={
-            "algoritmo_hash": "ARGON2ID",
+            "algoritmo_hash": "argon2",
             "password_version": credencial.password_version,
             "sesiones_revocadas": sesiones_revocadas,
         },

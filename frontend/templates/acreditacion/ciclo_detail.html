@@ -26,7 +26,7 @@
           <span>Estado</span>
           {% with estado_desc=ciclo.estado.descripcion|upper %}
             <strong>
-              <span class="acreditacion-status {% if estado_desc == 'APROBADO' %}acreditacion-status--success{% elif estado_desc == 'ABIERTO' %}acreditacion-status--info{% elif estado_desc == 'EN_REVISION' %}acreditacion-status--warning{% else %}acreditacion-status--muted{% endif %}">
+              <span class="acreditacion-status {% if estado_desc == 'APROBADO' or estado_desc == 'EN_EJECUCION' %}acreditacion-status--success{% elif estado_desc == 'ENVIADO' %}acreditacion-status--info{% elif estado_desc == 'RECHAZADO' %}acreditacion-status--danger{% else %}acreditacion-status--muted{% endif %}">
                 {{ ciclo.estado.descripcion }}
               </span>
             </strong>
@@ -43,7 +43,7 @@
       <h3>Contexto rapido</h3>
       <p class="text-muted">{{ ciclo.descripcion|default:"Este ciclo no tiene descripcion registrada." }}</p>
       <ul class="acreditacion-links">
-        <li>Usa esta pantalla para aprobar el ciclo o mantenerlo en revision.</li>
+        <li>Usa esta pantalla para aprobar, rechazar o mover el ciclo a ejecucion.</li>
         <li>El documento principal se edita desde Microsoft Graph.</li>
         <li>Cada archivo adicional genera una nueva version trazable.</li>
       </ul>
@@ -63,11 +63,15 @@
         {% csrf_token %}
         {{ estado_form.non_field_errors }}
         <input type="hidden" name="ciclo_id" value="{{ ciclo.pk }}">
-        <input type="hidden" name="next_url" value="{% url 'acreditacion-ciclos-lista' %}">
         <label class="acreditacion-form__field">
           <span>Estado actual</span>
           {{ estado_form.estado }}
           {{ estado_form.estado.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Observacion</span>
+          {{ estado_form.observacion_aprobacion }}
+          {{ estado_form.observacion_aprobacion.errors }}
         </label>
         <div class="acreditacion-form__actions">
           <button class="btn btn-primary" type="submit">Guardar estado</button>
@@ -100,6 +104,18 @@
           <div>
             <dt>Disponibilidad</dt>
             <dd>{% if ciclo.document_upload_enabled %}Habilitada para carga general{% else %}Pendiente de habilitacion{% endif %}</dd>
+          </div>
+          <div>
+            <dt>Aprobado por</dt>
+            <dd>{{ ciclo.aprobado_por.nombre_completo|default:ciclo.aprobado_por|default:"--" }}</dd>
+          </div>
+          <div>
+            <dt>Fecha aprobacion</dt>
+            <dd>{{ ciclo.fecha_aprobacion|date:"d/m/Y H:i"|default:"--" }}</dd>
+          </div>
+          <div>
+            <dt>Observacion</dt>
+            <dd>{{ ciclo.observacion_aprobacion|default:"--" }}</dd>
           </div>
         </dl>
         <div class="ciclo-detail-card__actions">

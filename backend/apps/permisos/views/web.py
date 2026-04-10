@@ -3,49 +3,46 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView, TemplateView
 
 from apps.core.mixins import SigLoginRequiredMixin
 from apps.permisos.forms import (
     PermisoGestionForm,
     RolGestionForm,
-    RolIndicadorElementoGestionForm,
-    RolIndicadorGestionForm,
+    RolEstructuraAccesoForm,
     RolPermisoForm,
     UsuarioRolGestionForm,
 )
-from apps.permisos.models import RolIndicador, RolIndicadorElemento, UsuarioRol
+from apps.permisos.models import UsuarioRol
 from apps.permisos.selectors import (
     get_permission_metrics,
     get_role_detail,
-    get_role_indicator_assignments,
-    get_role_indicator_element_assignments,
     get_role_permissions,
+    get_role_structure_access_context,
     get_roles_queryset,
     get_user_role_assignments,
 )
 from apps.permisos.services import (
     actualizar_rol,
-    asignar_rol_indicador,
-    asignar_rol_indicador_elemento,
     asignar_usuario_rol,
     crear_permiso,
-    crear_rol,
-    desactivar_rol_indicador,
-    eliminar_rol_indicador_elemento,
     revocar_usuario_rol,
+    sincronizar_acceso_estructura,
     sincronizar_permisos_rol,
 )
 from apps.usuarios.models import Usuario
 
 
 PERMISSION_TABS = [
-    {"label": "Roles", "url_name": "permisos-roles-lista"},
-    {"label": "Detalle de rol", "url_name": "permisos-roles-detalle"},
-    {"label": "Permisos por rol", "url_name": "permisos-roles-permisos"},
-    {"label": "Asignacion usuario-rol", "url_name": "permisos-usuario-rol"},
-    {"label": "Acceso por indicador", "url_name": "permisos-acceso-indicador"},
-    {"label": "Acceso por elemento", "url_name": "permisos-acceso-elemento"},
+    {"label": "Roles", "url_name": "permisos-roles-lista", "active_names": ["permisos-roles-lista"]},
+    {"label": "Detalle de rol", "url_name": "permisos-roles-detalle", "active_names": ["permisos-roles-detalle"]},
+    {"label": "Permisos por rol", "url_name": "permisos-roles-permisos", "active_names": ["permisos-roles-permisos"]},
+    {"label": "Asignacion usuario-rol", "url_name": "permisos-usuario-rol", "active_names": ["permisos-usuario-rol"]},
+    {
+        "label": "Acceso a evaluacion",
+        "url_name": "permisos-acceso-evaluacion",
+        "active_names": ["permisos-acceso-evaluacion"],
+    },
 ]
 
 
@@ -231,78 +228,112 @@ class UserRoleAssignmentView(PermisosBaseView):
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class RoleIndicatorAccessView(PermisosBaseView):
-    template_name = "permisos/rol_indicador.html"
-    page_title = "Acceso por indicador"
-    page_description = "Gestiona el acceso por rol sobre cada indicador dentro de un ciclo."
+class RoleStructureAccessView(PermisosBaseView):
+    template_name = "permisos/acceso_evaluacion.html"
+    page_title = "Acceso a evaluacion"
+    page_description = (
+        "Unifica el acceso por indicador y elemento fundamental en una sola operacion por rol y ciclo."
+    )
+
+    def _context_payload(self, **overrides):
+        role_id = overrides.get("role_id")
+        ciclo_id = overrides.get("ciclo_id")
+        if role_id is None:
+            role_id = self.request.GET.get("rol") or self.request.POST.get("rol")
+        if ciclo_id is None:
+            ciclo_id = self.request.GET.get("ciclo") or self.request.POST.get("ciclo")
+        return get_role_structure_access_context(role_id=role_id, ciclo_id=ciclo_id)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["form"] = kwargs.get("form") or RolIndicadorGestionForm()
-        context["assignments"] = get_role_indicator_assignments()
+        payload = self._context_payload(
+            role_id=kwargs.get("role_id"),
+            ciclo_id=kwargs.get("ciclo_id"),
+        )
+        context.update(payload)
+
+        indicator_groups = payload["indicator_groups"]
+        initial_indicators = [
+            str(group["indicator"].pk) for group in indicator_groups if group["selected"]
+        ]
+        initial_total_ids = [
+            str(group["indicator"].pk) for group in indicator_groups if group["access_total"]
+        ]
+        initial_element_ids = [
+            str(element_id)
+            for group in indicator_groups
+            for element_id in group["selected_element_ids"]
+        ]
+
+        context["form"] = kwargs.get("form") or RolEstructuraAccesoForm(
+            initial={
+                "rol": payload["selected_role"],
+                "ciclo": payload["selected_cycle"],
+                "indicadores": initial_indicators,
+                "accesos_totales": initial_total_ids,
+                "elementos": initial_element_ids,
+            },
+            indicator_groups=indicator_groups,
+        )
         return context
 
     def post(self, request, *args, **kwargs):
         actor = _current_usuario(request)
-        action = request.POST.get("action")
-
-        if action == "deactivate":
-            access = RolIndicador.objects.filter(pk=request.POST.get("access_id")).select_related(
-                "rol", "indicador"
-            ).first()
-            if access:
-                desactivar_rol_indicador(acceso=access, actor=actor, request=request)
-                messages.success(request, "Acceso por indicador desactivado.")
-            return redirect("permisos-acceso-indicador")
-
-        form = RolIndicadorGestionForm(request.POST)
+        payload = self._context_payload()
+        form = RolEstructuraAccesoForm(
+            request.POST,
+            indicator_groups=payload["indicator_groups"],
+        )
         if form.is_valid():
-            asignar_rol_indicador(
+            sincronizar_acceso_estructura(
                 rol=form.cleaned_data["rol"],
-                indicador=form.cleaned_data["indicador"],
                 ciclo=form.cleaned_data["ciclo"],
-                acceso_total=form.cleaned_data["acceso_total"],
+                indicator_ids=form.cleaned_data["indicadores"],
+                total_indicator_ids=form.cleaned_data["accesos_totales"],
+                element_ids=form.cleaned_data["elementos"],
                 actor=actor,
                 request=request,
             )
-            messages.success(request, "Acceso por indicador registrado correctamente.")
-            return redirect("permisos-acceso-indicador")
-        return self.render_to_response(self.get_context_data(form=form))
-
-
-class RoleIndicatorElementAccessView(PermisosBaseView):
-    template_name = "permisos/rol_indicador_elemento.html"
-    page_title = "Acceso por elemento"
-    page_description = "Relaciona elementos fundamentales con accesos ya creados por indicador."
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["form"] = kwargs.get("form") or RolIndicadorElementoGestionForm()
-        context["assignments"] = get_role_indicator_element_assignments()
-        return context
-
-    def post(self, request, *args, **kwargs):
-        actor = _current_usuario(request)
-        action = request.POST.get("action")
-
-        if action == "delete":
-            access = RolIndicadorElemento.objects.filter(
-                rol_indicador_id=request.POST.get("rol_indicador_id"),
-                elemento_fundamental_id=request.POST.get("elemento_id"),
-            ).select_related("rol_indicador", "elemento_fundamental").first()
-            if access:
-                eliminar_rol_indicador_elemento(acceso=access, actor=actor, request=request)
-                messages.success(request, "Acceso por elemento eliminado.")
-            return redirect("permisos-acceso-elemento")
-
-        form = RolIndicadorElementoGestionForm(request.POST)
-        if form.is_valid():
-            asignar_rol_indicador_elemento(
-                rol_indicador=form.cleaned_data["rol_indicador"],
-                elemento_fundamental=form.cleaned_data["elemento_fundamental"],
-                actor=actor,
-                request=request,
+            messages.success(request, "Acceso estructural actualizado correctamente.")
+            return redirect(
+                _url(
+                    "permisos-acceso-evaluacion",
+                    rol=form.cleaned_data["rol"].pk,
+                    ciclo=form.cleaned_data["ciclo"].pk,
+                )
             )
-            messages.success(request, "Acceso por elemento registrado correctamente.")
-            return redirect("permisos-acceso-elemento")
-        return self.render_to_response(self.get_context_data(form=form))
+        return self.render_to_response(
+            self.get_context_data(
+                form=form,
+                role_id=request.POST.get("rol"),
+                ciclo_id=request.POST.get("ciclo"),
+            )
+        )
+
+
+class RoleStructureAccessRedirectView(RedirectView):
+    permanent = False
+    query_string = True
+
+    def get_redirect_url(self, *args, **kwargs):
+        return _url(
+            "permisos-acceso-evaluacion",
+            rol=self.request.GET.get("rol"),
+            ciclo=self.request.GET.get("ciclo"),
+        )
+
+
+class RoleIndicatorAccessView(RoleStructureAccessRedirectView):
+    pass
+
+
+class RoleIndicatorElementAccessView(RoleStructureAccessRedirectView):
+    pass
+
+
+class RoleIndicatorAccessRedirectView(RoleIndicatorAccessView):
+    pass
+
+
+class RoleIndicatorElementAccessRedirectView(RoleIndicatorElementAccessView):
+    pass

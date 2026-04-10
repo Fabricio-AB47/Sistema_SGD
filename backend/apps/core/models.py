@@ -14,7 +14,6 @@ class TipoIdentificacion(models.Model):
     id_tipo_identificacion = models.AutoField(primary_key=True)
     descripcion = models.CharField(max_length=100, unique=True)
     activo = models.BooleanField(default=True)
-    fecha_creacion = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "tipo_identificacion"
@@ -107,6 +106,22 @@ class EstadoInforme(models.Model):
         return self.descripcion
 
 
+class EstadoTareaEvidencia(models.Model):
+    id_estado_tarea = models.AutoField(primary_key=True)
+    descripcion = models.CharField(max_length=100, unique=True)
+    activo = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "estado_tarea_evidencia"
+        managed = False
+        verbose_name = "Estado de tarea de evidencia"
+        verbose_name_plural = "Estados de tarea de evidencia"
+        ordering = ("descripcion",)
+
+    def __str__(self) -> str:
+        return self.descripcion
+
+
 class TipoIndicador(models.Model):
     id_tipo_ind = models.AutoField(primary_key=True)
     descripcion = models.CharField(max_length=100, unique=True)
@@ -149,10 +164,10 @@ class ClasificacionDocumento(models.Model):
     )
 
     id_clasificacion_documento = models.AutoField(primary_key=True)
-    codigo = models.CharField(max_length=30, unique=True)
-    nombre = models.CharField(max_length=120)
-    nivel_confidencialidad = models.CharField(max_length=30, choices=NIVEL_CHOICES)
-    requiere_cifrado = models.BooleanField(default=True)
+    codigo = models.CharField(max_length=20, unique=True)
+    nombre = models.CharField(max_length=150)
+    nivel_confidencialidad = models.CharField(max_length=20, choices=NIVEL_CHOICES)
+    requiere_cifrado = models.BooleanField(default=False)
     activo = models.BooleanField(default=True)
 
     class Meta:
