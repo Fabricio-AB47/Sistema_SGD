@@ -37,6 +37,7 @@
     </article>
   </section>
 
+  {% if can_create_cycles %}
   <div class="ciclos-layout">
     <article class="card acreditacion-panel ciclos-composer">
       <div class="ciclos-composer__header">
@@ -176,6 +177,17 @@
       </div>
     </aside>
   </div>
+  {% else %}
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="ciclos-board__header">
+      <div>
+        <p class="eyebrow">Modo rector</p>
+        <h3>Vista de revision y aprobacion</h3>
+        <p class="text-muted">Con este rol solo puedes revisar los ciclos registrados y aprobar/rechazar documentos desde la opcion Revisar.</p>
+      </div>
+    </div>
+  </article>
+  {% endif %}
 
   <article class="card acreditacion-panel acreditacion-panel--wide ciclos-board">
     <div class="ciclos-board__header">

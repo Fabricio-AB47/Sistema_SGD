@@ -7,6 +7,10 @@
       <h1>Cargos por area</h1>
       <p class="text-muted">Gestiona cargos, nivel jerarquico y aprobacion interna por area.</p>
     </div>
+    <div class="page-header__actions">
+      <a href="{% url 'usuarios-organigrama' %}" class="btn btn-secondary">Ver organigrama</a>
+      <a href="{% url 'usuarios-areas' %}" class="btn btn-secondary">Ir a areas</a>
+    </div>
   </div>
 
   <div class="card">
@@ -46,6 +50,7 @@
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">Guardar cargo</button>
         <a href="{% url 'usuarios-areas' %}" class="btn btn-secondary">Ir a areas</a>
+        <a href="{% url 'usuarios-organigrama' %}" class="btn btn-secondary">Ver organigrama</a>
       </div>
     </form>
   </div>

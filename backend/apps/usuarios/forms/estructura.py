@@ -1,6 +1,14 @@
+import unicodedata
+
 from django import forms
 
 from apps.usuarios.models import AreaInstitucional, CargoArea, Usuario, UsuarioSupervisor
+
+
+def _normalize_token(value: str | None) -> str:
+    normalized = unicodedata.normalize("NFKD", (value or "").strip())
+    ascii_only = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return " ".join(ascii_only.upper().split())
 
 
 class AreaInstitucionalForm(forms.ModelForm):
@@ -48,11 +56,31 @@ class UsuarioAreaCargoForm(forms.Form):
         self.usuario = usuario
         super().__init__(*args, **kwargs)
 
+        self.fields["area"].empty_label = "SELECCIONE AREA"
+        self.fields["cargo"].empty_label = "SELECCIONE CARGO"
+        self.fields["area"].label_from_instance = lambda value: f"{_normalize_token(value.codigo_area)} - {_normalize_token(value.nombre_area)}"
+        self.fields["cargo"].label_from_instance = lambda value: f"{_normalize_token(value.codigo_cargo)} - {_normalize_token(value.nombre_cargo)}"
+
         area_id = (self.data.get("area") if self.is_bound else None) or self.initial.get("area")
         cargos = CargoArea.objects.filter(activo=True).select_related("area").order_by("area__nombre_area", "nombre_cargo")
         if area_id:
             cargos = cargos.filter(area_id=area_id)
         self.fields["cargo"].queryset = cargos
+        self.area_catalog = [
+            {
+                "id": str(area.id_area),
+                "label": f"{_normalize_token(area.codigo_area)} - {_normalize_token(area.nombre_area)}",
+            }
+            for area in AreaInstitucional.objects.filter(activo=True).order_by("nombre_area")
+        ]
+        self.area_cargo_map = {}
+        for cargo in CargoArea.objects.filter(activo=True, area__activo=True).select_related("area").order_by("area__nombre_area", "nombre_cargo"):
+            self.area_cargo_map.setdefault(str(cargo.area_id), []).append(
+                {
+                    "id": str(cargo.id_cargo),
+                    "label": f"{_normalize_token(cargo.codigo_cargo)} - {_normalize_token(cargo.nombre_cargo)}",
+                }
+            )
 
     def clean(self):
         cleaned = super().clean()

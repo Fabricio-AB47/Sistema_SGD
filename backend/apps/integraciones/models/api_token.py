@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 from apps.integraciones.models.api_credencial import ApiCredencial
 
@@ -15,7 +16,7 @@ class ApiToken(models.Model):
     iv_access_token = models.BinaryField(null=True, blank=True)
     refresh_token_encriptado = models.BinaryField(null=True, blank=True)
     iv_refresh_token = models.BinaryField(null=True, blank=True)
-    fecha_generacion = models.DateTimeField(null=True, blank=True)
+    fecha_generacion = models.DateTimeField(default=timezone.now)
     fecha_expiracion = models.DateTimeField(null=True, blank=True)
     activo = models.BooleanField(default=True)
     referencia_clave_cifrado = models.CharField(max_length=200, null=True, blank=True)

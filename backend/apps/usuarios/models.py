@@ -1,6 +1,8 @@
 from django.db import models
 from django.utils import timezone
 
+from apps.core.fields import RowVersionField
+
 
 class Usuario(models.Model):
     id_user = models.AutoField(primary_key=True)
@@ -16,7 +18,7 @@ class Usuario(models.Model):
     fecha_creacion = models.DateTimeField(null=True, blank=True)
     fecha_actualizacion = models.DateTimeField(null=True, blank=True)
     id_tipo_identificacion = models.IntegerField()
-    version_fila = models.BinaryField(null=True, blank=True)
+    version_fila = RowVersionField(null=True, blank=True, editable=False)
 
     class Meta:
         db_table = "usuario"
@@ -134,7 +136,7 @@ class UsuarioRol(models.Model):
         related_name="usuarios",
         db_column="id_rol",
     )
-    fecha_asignacion = models.DateTimeField(null=True, blank=True)
+    fecha_asignacion = models.DateTimeField(default=timezone.now, null=True, blank=True)
     fecha_revocacion = models.DateTimeField(null=True, blank=True)
     asignado_por = models.ForeignKey(
         Usuario,

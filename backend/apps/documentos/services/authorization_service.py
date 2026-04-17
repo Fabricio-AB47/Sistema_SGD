@@ -157,7 +157,18 @@ def prepare_cycle_authorization_storage(
         drive_path,
         payload=payload,
         access_token=access_token,
+        refresh=True,
     )
+    validated_folder = graph_service.get_item_by_relative_path(
+        drive_path,
+        payload=payload,
+        access_token=access_token,
+        refresh=True,
+    )
+    if validated_folder is None:
+        raise AuthorizationServiceError(
+            f"No fue posible validar la carpeta Graph del ciclo en {drive_path.as_posix()}."
+        )
 
     registrar_evento(
         accion="PREPARAR_CARPETA_AUTORIZACION_CICLO",
@@ -176,7 +187,7 @@ def prepare_cycle_authorization_storage(
     )
     return {
         "drive_path": drive_path,
-        "graph_item": graph_item,
+        "graph_item": validated_folder or graph_item,
     }
 
 

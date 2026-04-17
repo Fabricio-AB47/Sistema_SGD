@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 from apps.integraciones.models.api_servicio import ApiServicio
 from apps.usuarios.models import Usuario
@@ -22,7 +23,7 @@ class ApiConsumoLog(models.Model):
         blank=True,
         db_column="usuario_sistema",
     )
-    fecha_consumo = models.DateTimeField(null=True, blank=True)
+    fecha_consumo = models.DateTimeField(default=timezone.now)
     ip = models.CharField(max_length=45, null=True, blank=True)
     resultado = models.CharField(max_length=50, null=True, blank=True)
     detalle = models.CharField(max_length=1000, null=True, blank=True)

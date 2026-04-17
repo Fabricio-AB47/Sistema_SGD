@@ -7,6 +7,16 @@
       <h3>Matriz de acreditacion</h3>
       <p class="text-muted">Lectura real de la jerarquia usando `criterio`, `subcriterio`, `indicador` y `elemento_fundamental.id_indicador`.</p>
     </div>
+    <button
+      class="btn btn-ghost acreditacion-info-trigger"
+      type="button"
+      data-matriz-info-trigger
+      aria-haspopup="dialog"
+      aria-controls="matriz-calificacion-dialog"
+      aria-label="Ver informacion de calificacion"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle" aria-hidden="true" focusable="false"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg>
+    </button>
   </div>
 
   <div class="acreditacion-matrix">
@@ -45,4 +55,65 @@
     {% endfor %}
   </div>
 </article>
+
+<div class="acreditacion-info-modal" id="matriz-calificacion-dialog" aria-labelledby="matriz-calificacion-dialog-title" hidden>
+  <button class="acreditacion-info-modal__overlay" type="button" data-matriz-info-overlay aria-label="Cerrar guia de calificacion"></button>
+  <div class="acreditacion-info-dialog">
+    <div class="acreditacion-info-dialog__header">
+      <div>
+        <span class="acreditacion-pill">Guia de calificacion</span>
+        <h3 id="matriz-calificacion-dialog-title">Como se calificara la evidencia de esta matriz</h3>
+      </div>
+      <button class="acreditacion-info-dialog__close" type="button" data-matriz-info-close aria-label="Cerrar informacion">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" /></svg>
+      </button>
+    </div>
+    <div class="acreditacion-info-dialog__body">
+      <p>
+        Esta matriz define el contexto de evaluacion. Si la revision es <strong>cuantitativa</strong>, se usa un valor numerico en
+        <strong>Calificacion</strong>. Si es <strong>cualitativa</strong>, la decision se sustenta en el <strong>Comentario</strong>
+        y en el <strong>Estado</strong> asignado.
+      </p>
+      <ul class="acreditacion-form-guide__list">
+        <li><strong>Cuantitativa:</strong> valor numerico medible para el indicador.</li>
+        <li><strong>Cualitativa:</strong> analisis descriptivo del cumplimiento y hallazgos.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+  (function () {
+    const modal = document.getElementById('matriz-calificacion-dialog');
+    const openButton = document.querySelector('[data-matriz-info-trigger]');
+    const closeButton = document.querySelector('[data-matriz-info-close]');
+    const overlayButton = document.querySelector('[data-matriz-info-overlay]');
+
+    if (!modal || !openButton || !closeButton || !overlayButton) {
+      return;
+    }
+
+    const closeModal = function () {
+      modal.hidden = true;
+      document.body.style.overflow = '';
+    };
+
+    openButton.addEventListener('click', function () {
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+    });
+
+    closeButton.addEventListener('click', closeModal);
+    overlayButton.addEventListener('click', closeModal);
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) {
+        closeModal();
+      }
+    });
+  })();
+</script>
 {% endblock %}

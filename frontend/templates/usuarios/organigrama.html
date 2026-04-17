@@ -1,0 +1,68 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}Organigrama institucional | SIG{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <div>
+      <h1>Organigrama institucional</h1>
+      <p class="text-muted">Vista consolidada de areas, cargos y usuarios activos segun la jerarquia de la base de datos.</p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn btn-secondary" href="{% url 'usuarios-areas' %}">Areas</a>
+      <a class="btn btn-secondary" href="{% url 'usuarios-cargos' %}">Cargos</a>
+      <a class="btn btn-secondary" href="{% url 'usuarios-lista' %}">Usuarios</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Cargos</th>
+            <th>Usuarios asignados</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in organigrama %}
+            <tr>
+              <td>
+                <strong>{{ item.area.codigo_area }}</strong><br>
+                <span class="text-muted">{{ item.area.nombre_area }}</span>
+              </td>
+              <td>
+                <div class="stack" style="gap:0.75rem;">
+                  {% for cargo_item in item.cargos %}
+                    <div class="card">
+                      <div>
+                        <strong>{{ cargo_item.cargo.codigo_cargo }} - {{ cargo_item.cargo.nombre_cargo }}</strong>
+                        <p class="text-muted" style="margin:0.35rem 0 0;">Nivel jerarquico {{ cargo_item.cargo.nivel_jerarquico }} | {% if cargo_item.cargo.aprueba_interno %}Aprueba interno{% else %}No aprueba interno{% endif %}</p>
+                        <div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.5rem;">
+                          {% for usuario in cargo_item.usuarios %}
+                            <span class="status status-muted">{{ usuario.nombre_completo }}</span>
+                          {% empty %}
+                            <span class="text-muted">Sin usuarios asignados</span>
+                          {% endfor %}
+                        </div>
+                      </div>
+                    </div>
+                  {% empty %}
+                    <span class="text-muted">No existen cargos activos para esta area.</span>
+                  {% endfor %}
+                </div>
+              </td>
+              <td>
+                <span class="status status-success">{{ item.usuarios_total }} activos</span>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-muted">No hay asignaciones activas para construir el organigrama.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

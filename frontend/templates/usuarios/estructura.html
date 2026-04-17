@@ -11,6 +11,7 @@
       <a class="btn btn-secondary" href="{% url 'usuarios-detalle' usuario.pk %}">Volver al usuario</a>
       <a class="btn btn-secondary" href="{% url 'usuarios-cargos' %}">Cargos</a>
       <a class="btn btn-secondary" href="{% url 'usuarios-areas' %}">Areas</a>
+      <a class="btn btn-secondary" href="{% url 'usuarios-organigrama' %}">Organigrama</a>
     </div>
   </div>
 
@@ -37,6 +38,71 @@
       </div>
     </form>
   </div>
+
+  {{ area_cargo_form.area_catalog|json_script:"usuario-estructura-area-catalog" }}
+  {{ area_cargo_form.area_cargo_map|json_script:"usuario-estructura-area-cargo-map" }}
+  <script>
+    (function () {
+      var areaSelect = document.getElementById("id_area");
+      var cargoSelect = document.getElementById("id_cargo");
+      var areaCatalogNode = document.getElementById("usuario-estructura-area-catalog");
+      var areaCargoMapNode = document.getElementById("usuario-estructura-area-cargo-map");
+
+      if (!areaSelect || !cargoSelect || !areaCatalogNode || !areaCargoMapNode) {
+        return;
+      }
+
+      var areaCatalog = JSON.parse(areaCatalogNode.textContent || "[]");
+      var areaCargoMap = JSON.parse(areaCargoMapNode.textContent || "{}");
+
+      function renderOptions(select, options, placeholder, keepValue) {
+        var previous = keepValue || "";
+        select.innerHTML = "";
+
+        var emptyOption = document.createElement("option");
+        emptyOption.value = "";
+        emptyOption.textContent = placeholder;
+        select.appendChild(emptyOption);
+
+        options.forEach(function (item) {
+          var option = document.createElement("option");
+          option.value = String(item.id);
+          option.textContent = item.label;
+          select.appendChild(option);
+        });
+
+        if (options.some(function (item) { return String(item.id) === String(previous); })) {
+          select.value = String(previous);
+        } else if (options.length > 0) {
+          select.value = String(options[0].id);
+        } else {
+          select.value = "";
+        }
+      }
+
+      function refreshCargoOptions(autoSelectFirst) {
+        var areaId = areaSelect.value || "";
+        var cargoOptions = areaId ? (areaCargoMap[String(areaId)] || []) : [];
+        var currentCargoValue = cargoSelect.value;
+        renderOptions(cargoSelect, cargoOptions, "SELECCIONE CARGO", autoSelectFirst ? "" : currentCargoValue);
+        cargoSelect.disabled = !areaId || cargoOptions.length === 0;
+      }
+
+      areaSelect.addEventListener("change", function () {
+        refreshCargoOptions(true);
+      });
+
+      [areaSelect, cargoSelect].forEach(function (select) {
+        select.style.textTransform = "uppercase";
+      });
+
+      areaSelect.style.textTransform = "uppercase";
+      cargoSelect.style.textTransform = "uppercase";
+
+      cargoSelect.disabled = !areaSelect.value;
+      refreshCargoOptions(false);
+    })();
+  </script>
 
   <div class="card">
     <h3>Asignar supervisor</h3>

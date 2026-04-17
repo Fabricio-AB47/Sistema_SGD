@@ -1,1 +1,213 @@
-{% extends "shared/admin_page.html" %}
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+<div class="admin-highlights">
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Total en bandeja</span>
+    <strong class="admin-highlights__value">{{ inbox_counts.TODOS|default:0 }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Enviados</span>
+    <strong class="admin-highlights__value">{{ inbox_counts.ENVIADO|default:0 }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Revisados</span>
+    <strong class="admin-highlights__value">{{ inbox_counts.REVISADO|default:0 }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Aprobados</span>
+    <strong class="admin-highlights__value">{{ inbox_counts.APROBADO|default:0 }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Rechazados</span>
+    <strong class="admin-highlights__value">{{ inbox_counts.RECHAZADO|default:0 }}</strong>
+  </article>
+</div>
+
+<article class="card">
+  {% if scope_flags.is_evaluator %}
+    <p class="text-muted" style="margin-bottom: 0.8rem;">Bandeja limitada a evidencias con salida habilitada por nivel 1.</p>
+  {% endif %}
+  <div class="page-header">
+    <div>
+      <h2>Bandeja de revision interna</h2>
+      <p class="text-muted">Filtra por estado operativo y utiliza la semaforizacion para priorizar la evaluacion.</p>
+    </div>
+    <button
+      class="btn btn-ghost acreditacion-info-trigger"
+      type="button"
+      data-bandeja-info-trigger
+      aria-haspopup="dialog"
+      aria-controls="bandeja-calificacion-dialog"
+      aria-label="Ver informacion de calificacion"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle" aria-hidden="true" focusable="false"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg>
+    </button>
+  </div>
+
+  <form method="get" class="page-header__actions evaluacion-inbox__filters">
+    <label>
+      <span class="text-muted evaluacion-inbox__filter-label">Filtro de estado</span>
+      <select name="estado">
+        {% for option in inbox_filter_options %}
+          <option value="{{ option }}" {% if selected_estado == option %}selected{% endif %}>{{ option|title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn btn-secondary" type="submit">Filtrar</button>
+  </form>
+
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Registro</th>
+          <th>Ciclo</th>
+          <th>Indicador</th>
+          <th>Elemento</th>
+          <th>Estado</th>
+          <th>% Cumplimiento</th>
+          <th>Semaforo</th>
+          <th>Documento</th>
+          <th>Accion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in registros_pendientes %}
+          <tr>
+            <td>#{{ row.registro.pk }}</td>
+            <td>{{ row.registro.ciclo.nombre }}</td>
+            <td>{{ row.registro.indicador.codigo_indicador }}</td>
+            <td>{{ row.registro.elemento_fundamental.codigo_elemento }}</td>
+            <td>
+              {% if row.inbox_state == 'APROBADO' %}
+                <span class="acreditacion-status acreditacion-status--success">APROBADO</span>
+              {% elif row.inbox_state == 'RECHAZADO' %}
+                <span class="acreditacion-status acreditacion-status--danger">RECHAZADO</span>
+              {% elif row.inbox_state == 'REVISADO' %}
+                <span class="acreditacion-status acreditacion-status--warning">REVISADO</span>
+              {% else %}
+                <span class="acreditacion-status acreditacion-status--info">ENVIADO</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if row.porcentaje is not None %}
+                {{ row.porcentaje|floatformat:2 }}%
+              {% else %}
+                --
+              {% endif %}
+            </td>
+            <td>
+              <span class="acreditacion-status {{ row.semaforo_class }}">{{ row.semaforo }}</span>
+            </td>
+            <td>{{ row.registro.documento.nombre_archivo }}</td>
+            <td>
+              <div class="page-header__actions">
+                <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ row.registro.pk }}">Detalle</a>
+                <a class="btn btn-secondary" href="{% url 'evaluacion-evaluar' %}?registro={{ row.registro.pk }}">Evaluar</a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="9" class="text-center text-muted">No existen evidencias para el filtro seleccionado.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<article class="card">
+  <h2>Ultimas evaluaciones</h2>
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Registro</th>
+          <th>Estado</th>
+          <th>Evaluador</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for evaluacion in evaluaciones_recientes %}
+          <tr>
+            <td>#{{ evaluacion.pk }}</td>
+            <td><a href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ evaluacion.registro_id }}">#{{ evaluacion.registro_id }}</a></td>
+            <td>{{ evaluacion.estado.descripcion }}</td>
+            <td>{{ evaluacion.usuario_evaluador.nombre_completo|default:evaluacion.usuario_evaluador }}</td>
+            <td>{{ evaluacion.fecha_evaluacion|date:"d/m/Y H:i"|default:"-" }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="text-center text-muted">Aun no existen evaluaciones registradas.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<div class="acreditacion-info-modal" id="bandeja-calificacion-dialog" aria-labelledby="bandeja-calificacion-dialog-title" hidden>
+  <button class="acreditacion-info-modal__overlay" type="button" data-bandeja-info-overlay aria-label="Cerrar guia de calificacion"></button>
+  <div class="acreditacion-info-dialog">
+    <div class="acreditacion-info-dialog__header">
+      <div>
+        <span class="acreditacion-pill">Guia de calificacion</span>
+        <h3 id="bandeja-calificacion-dialog-title">Como se califican los registros de la bandeja</h3>
+      </div>
+      <button class="acreditacion-info-dialog__close" type="button" data-bandeja-info-close aria-label="Cerrar informacion">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" /></svg>
+      </button>
+    </div>
+    <div class="acreditacion-info-dialog__body">
+      <p>
+        Cuando evalues un registro de esta bandeja: si el criterio es <strong>cuantitativo</strong>, usa una
+        <strong>Calificacion</strong> numerica. Si es <strong>cualitativo</strong>, fundamenta en el
+        <strong>Comentario</strong> y define el <strong>Estado</strong> final de revision.
+      </p>
+      <ul class="acreditacion-form-guide__list">
+        <li><strong>Cuantitativa:</strong> nota numerica alineada al indicador.</li>
+        <li><strong>Cualitativa:</strong> juicio tecnico descriptivo sobre cumplimiento.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+  (function () {
+    const modal = document.getElementById('bandeja-calificacion-dialog');
+    const openButton = document.querySelector('[data-bandeja-info-trigger]');
+    const closeButton = document.querySelector('[data-bandeja-info-close]');
+    const overlayButton = document.querySelector('[data-bandeja-info-overlay]');
+
+    if (!modal || !openButton || !closeButton || !overlayButton) {
+      return;
+    }
+
+    const closeModal = function () {
+      modal.hidden = true;
+      document.body.style.overflow = '';
+    };
+
+    openButton.addEventListener('click', function () {
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+    });
+
+    closeButton.addEventListener('click', closeModal);
+    overlayButton.addEventListener('click', closeModal);
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) {
+        closeModal();
+      }
+    });
+  })();
+</script>
+{% endblock %}

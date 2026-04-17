@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class ApiServicio(models.Model):
@@ -8,7 +9,7 @@ class ApiServicio(models.Model):
     descripcion = models.CharField(max_length=500, null=True, blank=True)
     url_base = models.CharField(max_length=500, null=True, blank=True)
     activo = models.BooleanField(default=True)
-    fecha_creacion = models.DateTimeField(null=True, blank=True)
+    fecha_creacion = models.DateTimeField(default=timezone.now)
 
     class Meta:
         db_table = "api_servicio"

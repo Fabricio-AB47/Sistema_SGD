@@ -1,6 +1,7 @@
 from django.db import models
 
 from apps.acreditacion.models import CicloEvaluacion, ElementoFundamental, Indicador
+from apps.core.fields import RowVersionField
 from apps.core.models import ClasificacionDocumento, EstadoEvidencia
 from apps.usuarios.models import Usuario
 
@@ -44,7 +45,7 @@ class Documento(models.Model):
         db_column="subido_por",
     )
     activo = models.BooleanField(default=True)
-    version_fila = models.BinaryField(null=True, blank=True, editable=False)
+    version_fila = RowVersionField(null=True, blank=True, editable=False)
 
     class Meta:
         db_table = "documento"

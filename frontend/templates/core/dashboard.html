@@ -17,19 +17,68 @@
 <div class="kpi-grid">
   <div class="kpi-card">
     <span class="kpi-label">Evidencias cargadas</span>
-    <strong class="kpi-value">--</strong>
+    <strong class="kpi-value">{{ dashboard_metrics.evidencias }}</strong>
   </div>
   <div class="kpi-card">
     <span class="kpi-label">Evaluaciones pendientes</span>
-    <strong class="kpi-value">--</strong>
+    <strong class="kpi-value">{{ dashboard_metrics.evaluaciones_pendientes }}</strong>
   </div>
   <div class="kpi-card">
     <span class="kpi-label">Informes en revisión</span>
-    <strong class="kpi-value">--</strong>
+    <strong class="kpi-value">{{ dashboard_metrics.informes_revision }}</strong>
   </div>
   <div class="kpi-card">
     <span class="kpi-label">Planes de mejora activos</span>
-    <strong class="kpi-value">--</strong>
+    <strong class="kpi-value">{{ dashboard_metrics.planes_activos }}</strong>
   </div>
 </div>
+
+{% if quick_links %}
+<br>
+<div class="card admin-access-panel">
+  <div class="page-header admin-access-panel__header">
+    <div>
+      <h2>Accesos del perfil</h2>
+      <p class="text-muted">Rutas disponibles segun el rol y el alcance operativo del usuario autenticado.</p>
+    </div>
+    <span class="admin-access-panel__chip">{{ quick_links|length }} accesos</span>
+  </div>
+  <div class="admin-highlights admin-highlights--profile">
+    {% for item in quick_links %}
+      <article class="admin-highlights__card admin-highlights__card--link">
+        <a class="admin-highlights__link" href="{% url item.url_name %}">
+          <span class="admin-highlights__icon" aria-hidden="true">
+            {% if item.icon == 'users' %}
+              <svg viewBox="0 0 24 24" fill="none"><path d="M17 21v-1.5a4.5 4.5 0 0 0-4.5-4.5h-1A4.5 4.5 0 0 0 7 19.5V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% elif item.icon == 'shield' %}
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3 19 6v5c0 5-3.4 8.5-7 10-3.6-1.5-7-5-7-10V6l7-3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.5 12l1.7 1.7L14.8 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% elif item.icon == 'map' %}
+              <svg viewBox="0 0 24 24" fill="none"><path d="M9 5.5 15 4l5 2.5v12l-6 1.5-6-2-5 2.5v-12L9 5.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 5.5v14M15 4v14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% elif item.icon == 'briefcase' %}
+              <svg viewBox="0 0 24 24" fill="none"><path d="M9 7V6a3 3 0 0 1 6 0v1M4 8h16v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 12h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            {% elif item.icon == 'orgchart' %}
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 5.5v4M6 14.5h12M8.5 9.5h7A2.5 2.5 0 0 1 18 12v2.5H6V12a2.5 2.5 0 0 1 2.5-2.5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="5.5" r="1.5" stroke="currentColor" stroke-width="1.8"/><circle cx="6" cy="14.5" r="1.5" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="14.5" r="1.5" stroke="currentColor" stroke-width="1.8"/></svg>
+            {% elif item.icon == 'clock' %}
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v4.5l3 1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% elif item.icon == 'key' %}
+              <svg viewBox="0 0 24 24" fill="none"><path d="M14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" stroke="currentColor" stroke-width="1.8"/><path d="M13.5 13.5 20 20M17.5 16.5 20 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% elif item.icon == 'swap' %}
+              <svg viewBox="0 0 24 24" fill="none"><path d="M7 7h11l-3-3M17 17H6l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 4v3h-3M6 20v-3h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% else %}
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 2 20 7v10l-8 5-8-5V7l8-5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            {% endif %}
+          </span>
+          <span class="admin-highlights__content">
+            <span class="admin-highlights__label">{{ item.group }}</span>
+            <strong class="admin-highlights__value">{{ item.label }}</strong>
+          </span>
+          <span class="admin-highlights__arrow" aria-hidden="true">
+            <svg viewBox="0 0 20 20" fill="none"><path d="m7 4 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </a>
+      </article>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

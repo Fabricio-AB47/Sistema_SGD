@@ -1,7 +1,7 @@
 import logging
 
 from django.contrib import messages
-from django.db import DatabaseError, IntegrityError, OperationalError
+from django.db import DatabaseError, IntegrityError, OperationalError, transaction
 from django.http import Http404
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -10,6 +10,9 @@ from django.views.generic import RedirectView, TemplateView
 
 from apps.core.mixins import SigLoginRequiredMixin
 from apps.acreditacion.forms import (
+    CicloEstadoAutorizacionForm,
+    ESTADOS_FLUJO_CICLO,
+    ESTADOS_RECTOR_DECISION,
     CicloAuthorizationRevisionForm,
     CicloEstadoUpdateForm,
     CicloEvaluacionForm,
@@ -19,6 +22,7 @@ from apps.acreditacion.forms import (
     IndicadorForm,
     SubcriterioForm,
 )
+from apps.core.models import EstadoCiclo
 from apps.acreditacion.selectors import (
     get_acreditacion_metrics,
     get_ciclo_detail,
@@ -395,7 +399,16 @@ class CicloListView(AcreditacionBaseView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["form"] = kwargs.get("form") or CicloEvaluacionForm()
+        session_roles = tuple(self.request.session.get("sig_roles", []) or [])
+        operational_roles = tuple(self.request.session.get("sig_operational_roles", []) or [])
+        effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
+        context["can_create_cycles"] = not any(
+            str(role).strip().upper() == "RECTOR" for role in effective_roles
+        )
+        context["form"] = kwargs.get("form") or CicloEvaluacionForm(
+            usuario_id=self.request.session.get("sig_user_id"),
+            assignment_id=self.request.session.get("sig_active_assignment_id"),
+        )
         ciclos = attach_cycle_authorization_status(get_ciclos_queryset())
         context["ciclos"] = ciclos
         context["ciclos_summary"] = {
@@ -411,7 +424,19 @@ class CicloListView(AcreditacionBaseView):
         return context
 
     def post(self, request, *args, **kwargs):
-        form = CicloEvaluacionForm(request.POST, request.FILES)
+        session_roles = tuple(request.session.get("sig_roles", []) or [])
+        operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
+        effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
+        if any(str(role).strip().upper() == "RECTOR" for role in effective_roles):
+            messages.warning(request, "El rol RECTOR solo puede revisar, aprobar o rechazar ciclos.")
+            return redirect("acreditacion-ciclos-lista")
+
+        form = CicloEvaluacionForm(
+            request.POST,
+            request.FILES,
+            usuario_id=request.session.get("sig_user_id"),
+            assignment_id=request.session.get("sig_active_assignment_id"),
+        )
         if form.is_valid():
             try:
                 crear_ciclo(form=form, actor=self._actor(), request=request)
@@ -450,24 +475,74 @@ class CicloDetailView(AcreditacionBaseView):
     ]
     show_acreditacion_overview = False
 
+    def _effective_roles(self, request):
+        session_roles = tuple(request.session.get("sig_roles", []) or [])
+        operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
+        return tuple(dict.fromkeys([*session_roles, *operational_roles]))
+
+    def _is_rector(self, request) -> bool:
+        return any(str(role).strip().upper() == "RECTOR" for role in self._effective_roles(request))
+
+    def _allowed_states_for_actor(self, request) -> tuple[str, ...]:
+        if self._is_rector(request):
+            return ESTADOS_RECTOR_DECISION
+        return ESTADOS_FLUJO_CICLO
+
+    def _get_estado_by_normalized_name(self, normalized_name: str):
+        for estado in EstadoCiclo.objects.filter(activo=True).only("id_estado_ciclo", "descripcion"):
+            current_name = (getattr(estado, "descripcion", "") or "").strip().upper().replace(" ", "_")
+            if current_name == normalized_name:
+                return estado
+        return None
+
+    def _ensure_rector_review_state(self, request, ciclo):
+        if not self._is_rector(request):
+            return ciclo
+
+        estado_actual = (getattr(getattr(ciclo, "estado", None), "descripcion", "") or "").strip().upper().replace(" ", "_")
+        if estado_actual != "ENVIADO":
+            return ciclo
+
+        estado_en_ejecucion = self._get_estado_by_normalized_name("EN_EJECUCION")
+        if estado_en_ejecucion is None:
+            return ciclo
+
+        try:
+            actualizar_estado_ciclo(
+                ciclo=ciclo,
+                estado=estado_en_ejecucion,
+                observacion_aprobacion=None,
+                actor=self._actor(),
+                request=request,
+            )
+            messages.info(request, "El ciclo cambio a EN_EJECUCION para revision del Rector.")
+        except (ValueError, IntegrityError, OperationalError, DatabaseError):
+            return ciclo
+
+        return get_ciclo_detail(ciclo.pk) or ciclo
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         ciclo = kwargs.get("ciclo")
+        allowed_states = self._allowed_states_for_actor(self.request)
         context["ciclo"] = ciclo
-        context["estado_form"] = kwargs.get("estado_form") or CicloEstadoUpdateForm(
+        context["is_rector_actor"] = self._is_rector(self.request)
+        context["ciclo_form"] = kwargs.get("ciclo_form") or CicloEstadoAutorizacionForm(
             initial={
                 "ciclo_id": ciclo.pk,
                 "estado": ciclo.estado,
                 "observacion_aprobacion": ciclo.observacion_aprobacion,
-            }
+                "descripcion_documento": "",
+            },
+            allowed_states=allowed_states,
         )
-        context["authorization_revision_form"] = kwargs.get("authorization_revision_form") or CicloAuthorizationRevisionForm()
         return context
 
     def get(self, request, ciclo_id, *args, **kwargs):
         ciclo = get_ciclo_detail(ciclo_id)
         if ciclo is None:
             raise Http404("El ciclo no existe.")
+        ciclo = self._ensure_rector_review_state(request, ciclo)
         return self.render_to_response(self.get_context_data(ciclo=ciclo))
 
     def post(self, request, ciclo_id, *args, **kwargs):
@@ -475,36 +550,56 @@ class CicloDetailView(AcreditacionBaseView):
         if ciclo is None:
             raise Http404("El ciclo no existe.")
 
-        form = CicloAuthorizationRevisionForm(request.POST, request.FILES)
+        form = CicloEstadoAutorizacionForm(
+            request.POST,
+            request.FILES,
+            allowed_states=self._allowed_states_for_actor(request),
+        )
         if form.is_valid():
+            if form.cleaned_data["ciclo_id"] != ciclo.pk:
+                form.add_error(None, "El ciclo enviado no coincide con la solicitud.")
+                return self.render_to_response(self.get_context_data(ciclo=ciclo, ciclo_form=form))
+
             try:
-                revision_result = upload_cycle_authorization_revision(
-                    ciclo=ciclo,
-                    descripcion_documento=form.cleaned_data.get("descripcion_documento"),
-                    uploaded_file=form.cleaned_data["archivo"],
-                    actor=self._actor(),
-                    request=request,
-                )
-                if revision_result["documento"].pk != ciclo.documento_autorizacion_id:
-                    ciclo.documento_autorizacion = revision_result["documento"]
-                    ciclo.save(update_fields=["documento_autorizacion"])
+                with transaction.atomic():
+                    actualizar_estado_ciclo(
+                        ciclo=ciclo,
+                        estado=form.cleaned_data["estado"],
+                        observacion_aprobacion=form.cleaned_data.get("observacion_aprobacion"),
+                        actor=self._actor(),
+                        request=request,
+                    )
+
+                    uploaded_file = form.cleaned_data.get("archivo")
+                    if uploaded_file:
+                        revision_result = upload_cycle_authorization_revision(
+                            ciclo=ciclo,
+                            descripcion_documento=form.cleaned_data.get("descripcion_documento"),
+                            uploaded_file=uploaded_file,
+                            actor=self._actor(),
+                            request=request,
+                        )
+                        if revision_result["documento"].pk != ciclo.documento_autorizacion_id:
+                            ciclo.documento_autorizacion = revision_result["documento"]
+                            ciclo.save(update_fields=["documento_autorizacion"])
+                        messages.success(request, "Estado del ciclo y nueva version del documento registrados correctamente.")
+                    else:
+                        messages.success(request, f"Estado actualizado a {form.cleaned_data['estado'].descripcion}.")
+                return redirect("acreditacion-ciclos-lista")
             except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
-                user_message = str(exc).strip() or "No fue posible registrar la nueva version del documento."
+                user_message = str(exc).strip() or "No fue posible guardar el estado y la version del documento."
                 _report_operation_error(
                     request=request,
                     exc=exc,
                     form=form,
                     user_message=user_message,
                 )
-            else:
-                messages.success(request, "Nueva version del documento registrada correctamente.")
-                return redirect("acreditacion-ciclos-lista")
 
         ciclo = get_ciclo_detail(ciclo_id)
         return self.render_to_response(
             self.get_context_data(
                 ciclo=ciclo,
-                authorization_revision_form=form,
+                ciclo_form=form,
             )
         )
 
@@ -516,12 +611,21 @@ class CicloEstadoUpdateView(SigLoginRequiredMixin, View):
             return None
         return Usuario.objects.filter(pk=user_id).only("id_user", "primer_nombre", "primer_apellido").first()
 
+    def _is_rector(self, request) -> bool:
+        session_roles = tuple(request.session.get("sig_roles", []) or [])
+        operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
+        effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
+        return any(str(role).strip().upper() == "RECTOR" for role in effective_roles)
+
     def post(self, request, ciclo_id, *args, **kwargs):
         ciclo = CicloEvaluacion.objects.select_related("estado").filter(pk=ciclo_id).first()
         if ciclo is None:
             raise Http404("El ciclo no existe.")
 
-        form = CicloEstadoUpdateForm(request.POST)
+        form = CicloEstadoUpdateForm(
+            request.POST,
+            allowed_states=ESTADOS_RECTOR_DECISION if self._is_rector(request) else ESTADOS_FLUJO_CICLO,
+        )
         if form.is_valid():
             if form.cleaned_data["ciclo_id"] != ciclo.pk:
                 form.add_error(None, "El ciclo enviado no coincide con la solicitud.")

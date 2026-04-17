@@ -8,6 +8,16 @@
         <h3>Carga documental operativa</h3>
         <p class="text-muted">La documentacion general solo se habilita para ciclos aprobados con autorizacion registrada.</p>
       </div>
+      <button
+        class="btn btn-ghost acreditacion-info-trigger"
+        type="button"
+        data-upload-info-trigger
+        aria-haspopup="dialog"
+        aria-controls="upload-calificacion-dialog"
+        aria-label="Ver informacion de calificacion"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle" aria-hidden="true" focusable="false"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg>
+      </button>
     </div>
 
     {% if can_upload_documents %}
@@ -15,36 +25,36 @@
         {% csrf_token %}
         {{ upload_form.non_field_errors }}
         <div class="documentos-form__grid">
-          <label class="documentos-form__field documentos-form__field--full">
-            <span>Ciclo aprobado</span>
+          <div class="documentos-form__field documentos-form__field--full">
+            <label for="{{ upload_form.ciclo.id_for_label }}">Ciclo aprobado</label>
             {{ upload_form.ciclo }}
             {{ upload_form.ciclo.errors }}
-          </label>
-          <label class="documentos-form__field documentos-form__field--full">
-            <span>Indicador</span>
+          </div>
+          <div class="documentos-form__field documentos-form__field--full">
+            <label for="{{ upload_form.indicador.id_for_label }}">Indicador</label>
             {{ upload_form.indicador }}
             {{ upload_form.indicador.errors }}
-          </label>
-          <label class="documentos-form__field documentos-form__field--full">
-            <span>Elemento fundamental</span>
+          </div>
+          <div class="documentos-form__field documentos-form__field--full">
+            <label for="{{ upload_form.elemento_fundamental.id_for_label }}">Elemento fundamental</label>
             {{ upload_form.elemento_fundamental }}
             {{ upload_form.elemento_fundamental.errors }}
-          </label>
-          <label class="documentos-form__field documentos-form__field--full">
-            <span>Clasificacion</span>
+          </div>
+          <div class="documentos-form__field documentos-form__field--full">
+            <label for="{{ upload_form.clasificacion.id_for_label }}">Clasificacion</label>
             {{ upload_form.clasificacion }}
             {{ upload_form.clasificacion.errors }}
-          </label>
-          <label class="documentos-form__field documentos-form__field--full">
-            <span>Descripcion del documento</span>
+          </div>
+          <div class="documentos-form__field documentos-form__field--full">
+            <label for="{{ upload_form.descripcion_documento.id_for_label }}">Descripcion del documento</label>
             {{ upload_form.descripcion_documento }}
             {{ upload_form.descripcion_documento.errors }}
-          </label>
-          <label class="documentos-form__field documentos-form__field--full">
-            <span>Archivo</span>
+          </div>
+          <div class="documentos-form__field documentos-form__field--full">
+            <label for="{{ upload_form.archivo.id_for_label }}">Archivo</label>
             {{ upload_form.archivo }}
             {{ upload_form.archivo.errors }}
-          </label>
+          </div>
         </div>
         <div class="documentos-form__actions">
           <button class="btn btn-primary" type="submit">Subir documento</button>
@@ -189,4 +199,65 @@
     </div>
   </article>
 </div>
+
+<div class="acreditacion-info-modal" id="upload-calificacion-dialog" aria-labelledby="upload-calificacion-dialog-title" hidden>
+  <button class="acreditacion-info-modal__overlay" type="button" data-upload-info-overlay aria-label="Cerrar guia de calificacion"></button>
+  <div class="acreditacion-info-dialog">
+    <div class="acreditacion-info-dialog__header">
+      <div>
+        <span class="acreditacion-pill">Guia de calificacion</span>
+        <h3 id="upload-calificacion-dialog-title">Como se evaluara el documento de evidencia</h3>
+      </div>
+      <button class="acreditacion-info-dialog__close" type="button" data-upload-info-close aria-label="Cerrar informacion">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" /></svg>
+      </button>
+    </div>
+    <div class="acreditacion-info-dialog__body">
+      <p>
+        Al subir este documento, quedara disponible para revision. La evaluacion puede ser
+        <strong>cuantitativa</strong> (nota numerica en calificacion) o <strong>cualitativa</strong>
+        (analisis descriptivo en comentario y estado).
+      </p>
+      <ul class="acreditacion-form-guide__list">
+        <li><strong>Cuantitativa:</strong> evidencia medible con resultado numerico.</li>
+        <li><strong>Cualitativa:</strong> evidencia analizada por calidad, pertinencia y consistencia.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+  (function () {
+    const modal = document.getElementById('upload-calificacion-dialog');
+    const openButton = document.querySelector('[data-upload-info-trigger]');
+    const closeButton = document.querySelector('[data-upload-info-close]');
+    const overlayButton = document.querySelector('[data-upload-info-overlay]');
+
+    if (!modal || !openButton || !closeButton || !overlayButton) {
+      return;
+    }
+
+    const closeModal = function () {
+      modal.hidden = true;
+      document.body.style.overflow = '';
+    };
+
+    openButton.addEventListener('click', function () {
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+    });
+
+    closeButton.addEventListener('click', closeModal);
+    overlayButton.addEventListener('click', closeModal);
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) {
+        closeModal();
+      }
+    });
+  })();
+</script>
 {% endblock %}

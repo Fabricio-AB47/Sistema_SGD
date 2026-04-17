@@ -40,18 +40,9 @@ class CredencialForm(forms.ModelForm):
 
     def save(self, commit=True, current_user=None):
         credencial = super().save(commit=False)
-        secret_encriptado, iv_secret, referencia = credential_service.encrypt_secret(
-            self.cleaned_data["secret"]
-        )
-        credencial.client_id = credential_service.encrypt_text_value(
-            self.cleaned_data.get("client_id")
-        )
-        credencial.tenant_id = credential_service.encrypt_text_value(
-            self.cleaned_data.get("tenant_id")
-        )
-        credencial.secret_encriptado = secret_encriptado
-        credencial.iv_secret = iv_secret
-        credencial.referencia_clave_cifrado = referencia
+        credencial.set_client_id_plain(self.cleaned_data.get("client_id"))
+        credencial.set_tenant_id_plain(self.cleaned_data.get("tenant_id"))
+        credencial.set_secret_plain(self.cleaned_data["secret"])
         if not credencial.pk:
             credencial.fecha_creacion = timezone.now()
         if current_user is not None:

@@ -55,26 +55,44 @@
       <div class="ciclo-detail-card__header">
         <div>
           <h3>Estado del ciclo</h3>
-          <p class="text-muted">Actualiza el estado operativo desde una vista dedicada.</p>
+          <p class="text-muted">Actualiza el estado operativo y, si corresponde, registra una nueva version firmada con un solo guardado.</p>
         </div>
       </div>
 
-      <form method="post" action="{% url 'acreditacion-ciclos-estado' ciclo.pk %}" class="acreditacion-form">
+      <form method="post" action="{% url 'acreditacion-ciclos-detalle' ciclo.pk %}" enctype="multipart/form-data" class="acreditacion-form">
         {% csrf_token %}
-        {{ estado_form.non_field_errors }}
+        {{ ciclo_form.non_field_errors }}
         <input type="hidden" name="ciclo_id" value="{{ ciclo.pk }}">
         <label class="acreditacion-form__field">
           <span>Estado actual</span>
-          {{ estado_form.estado }}
-          {{ estado_form.estado.errors }}
+          {{ ciclo_form.estado }}
+          {{ ciclo_form.estado.errors }}
         </label>
         <label class="acreditacion-form__field">
           <span>Observacion</span>
-          {{ estado_form.observacion_aprobacion }}
-          {{ estado_form.observacion_aprobacion.errors }}
+          {{ ciclo_form.observacion_aprobacion }}
+          {{ ciclo_form.observacion_aprobacion.errors }}
+        </label>
+
+        <div class="ciclo-detail-card__header ciclo-detail-card__header--nested">
+          <div>
+            <h4>Documento de autorizacion / version firmada</h4>
+            <p class="text-muted">Si adjuntas archivo, se registrara una nueva version en el mismo guardado.</p>
+          </div>
+        </div>
+
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Descripcion de la nueva version</span>
+          {{ ciclo_form.descripcion_documento }}
+          {{ ciclo_form.descripcion_documento.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>Documento firmado</span>
+          {{ ciclo_form.archivo }}
+          {{ ciclo_form.archivo.errors }}
         </label>
         <div class="acreditacion-form__actions">
-          <button class="btn btn-primary" type="submit">Guardar estado</button>
+          <button class="btn btn-primary" type="submit">Guardar todo</button>
         </div>
       </form>
     </article>
@@ -147,34 +165,5 @@
     </article>
   </div>
 
-  <article class="card acreditacion-panel ciclo-upload-card">
-    <div class="ciclo-upload-card__header">
-      <div>
-        <p class="eyebrow">Versionamiento</p>
-        <h3>Cargar nueva version firmada</h3>
-        <p class="text-muted">Adjunta una nueva aprobacion o una version firmada sin reemplazar el historial existente.</p>
-      </div>
-    </div>
-
-    <form method="post" enctype="multipart/form-data" class="acreditacion-form">
-      {% csrf_token %}
-      {{ authorization_revision_form.non_field_errors }}
-      <div class="ciclos-form-grid">
-        <label class="acreditacion-form__field acreditacion-form__field--full">
-          <span>Descripcion de la version</span>
-          {{ authorization_revision_form.descripcion_documento }}
-          {{ authorization_revision_form.descripcion_documento.errors }}
-        </label>
-        <label class="acreditacion-form__field acreditacion-form__field--full">
-          <span>Documento firmado</span>
-          {{ authorization_revision_form.archivo }}
-          {{ authorization_revision_form.archivo.errors }}
-        </label>
-      </div>
-      <div class="acreditacion-form__actions">
-        <button class="btn btn-primary" type="submit">Cargar nueva version</button>
-      </div>
-    </form>
-  </article>
 </div>
 {% endblock %}

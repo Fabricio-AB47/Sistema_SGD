@@ -133,6 +133,22 @@ def upload_structured_document(
     graph_payload, graph_access_token = graph_service.get_graph_session()
 
     drive_folder = build_document_drive_path(indicador, elemento_fundamental, ciclo)
+    graph_service.ensure_drive_folder(
+        drive_folder,
+        payload=graph_payload,
+        access_token=graph_access_token,
+        refresh=True,
+    )
+    validated_folder = graph_service.get_item_by_relative_path(
+        drive_folder,
+        payload=graph_payload,
+        access_token=graph_access_token,
+        refresh=True,
+    )
+    if validated_folder is None:
+        raise StructuredDocumentUploadError(
+            f"No fue posible validar la carpeta Graph para {drive_folder.as_posix()}."
+        )
     file_name = _safe_file_name(uploaded_file.name)
     storage_path = drive_folder / file_name
 
@@ -141,6 +157,7 @@ def upload_structured_document(
         file_name=file_name,
         content=content,
         content_type=uploaded_file.content_type,
+        ensure_folder=False,
         payload=graph_payload,
         access_token=graph_access_token,
     )

@@ -72,6 +72,31 @@ body {
   line-height: 1.4;
 }
 
+.sidebar__profile {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.5rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 18px;
+  background: rgba($primary, 0.05);
+  border: 1px solid rgba($primary, 0.08);
+
+  strong {
+    color: $text;
+    font-size: 0.95rem;
+  }
+
+  span,
+  small {
+    color: $text_muted;
+    line-height: 1.35;
+  }
+
+  small {
+    font-size: 0.78rem;
+  }
+}
+
 .sidebar__nav {
   display: flex;
   flex-direction: column;
@@ -262,13 +287,15 @@ body {
   padding: 2rem 3rem;
   display: flex;
   flex-direction: column;
-  gap: 1.35rem;
+  gap: 1.9rem;
   min-height: 100vh;
 }
 
 .page-wrapper {
   display: flex;
   flex-direction: column;
+  gap: 2rem;
+  width: 100%;
 }
 
 .card {
@@ -386,9 +413,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1.8rem;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.06);
-  margin-top: 0.15rem;
-  margin-bottom: 1.1rem;
+  margin: 0;
 }
 .hero-badge {
   background: #fff;
@@ -411,19 +438,23 @@ body {
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: 1.35rem;
+  margin-bottom: 2.5rem; /* espacio hacia abajo */
 }
+
 .kpi-card {
   background: #fff;
   border-radius: 12px;
-  padding: 1rem 1.25rem;
+  padding: 1.25rem 1.35rem;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
 }
+
 .kpi-label {
   display: block;
   font-size: 13px;
   color: #6b7280;
 }
+
 .kpi-value {
   font-size: 26px;
   color: #0f172a;

@@ -13,6 +13,7 @@ from apps.core.services.redirect_security import get_safe_redirect_target
 from apps.seguridad.services import create_login_otp
 from apps.usuarios.forms import LoginForm
 from apps.usuarios.services import auth_service, session_service
+from apps.usuarios.services.user_context_service import hydrate_request_session_context
 
 
 class LoginView(FormView):
@@ -44,6 +45,7 @@ class LoginView(FormView):
             self.request.session["sig_roles"] = list(result.roles)
             self.request.session["sig_permissions"] = list(result.permissions)
             self.request.session["sig_requires_password_change"] = result.requires_password_change
+            hydrate_request_session_context(self.request, usuario_id=result.usuario.id_user)
 
             if result.session_expires_at:
                 seconds = max(1, int((result.session_expires_at - timezone.now()).total_seconds()))

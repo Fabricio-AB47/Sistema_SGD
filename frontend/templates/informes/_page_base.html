@@ -1,0 +1,28 @@
+{% extends "base/dashboard_base.html" %}
+{% block title %}{{ page_title }} | SIG{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <p class="text-muted">{{ page_description }}</p>
+  </div>
+</div>
+
+<div class="card admin-tabs">
+  {% for tab in module_tabs %}
+    <a class="admin-tabs__link{% if current_url_name in tab.active_names %} is-active{% endif %}" href="{% url tab.url_name %}">{{ tab.label }}</a>
+  {% endfor %}
+</div>
+
+<div class="card admin-hero">
+  <div>
+    <p class="eyebrow">{{ module_title }}</p>
+    <h2>{{ page_title }}</h2>
+    <p class="text-muted">{{ module_description }}</p>
+  </div>
+  <span class="hero-badge">{{ page_status }}</span>
+</div>
+
+{% block informes_content %}{% endblock %}
+{% endblock %}

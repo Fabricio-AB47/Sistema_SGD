@@ -1,1 +1,61 @@
-{% extends "shared/admin_page.html" %}
+{% extends "informes/_page_base.html" %}
+
+{% block informes_content %}
+<div class="admin-highlights">
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Total</span>
+    <strong class="admin-highlights__value">{{ informe_metrics.total }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Borradores</span>
+    <strong class="admin-highlights__value">{{ informe_metrics.borradores }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">En revision</span>
+    <strong class="admin-highlights__value">{{ informe_metrics.revision }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Aprobados</span>
+    <strong class="admin-highlights__value">{{ informe_metrics.aprobados }}</strong>
+  </article>
+</div>
+
+<article class="card">
+  <h2>Listado de informes</h2>
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Ciclo</th>
+          <th>Estado</th>
+          <th>Elaborado por</th>
+          <th>Fecha</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for informe in informes %}
+          <tr>
+            <td>#{{ informe.pk }}</td>
+            <td>{{ informe.ciclo.nombre }}</td>
+            <td>{{ informe.estado.descripcion }}</td>
+            <td>{{ informe.elaborado_por.nombre_completo|default:informe.elaborado_por }}</td>
+            <td>{{ informe.fecha_generacion|date:"d/m/Y H:i"|default:"-" }}</td>
+            <td>
+              <div class="page-header__actions">
+                <a class="btn btn-ghost" href="{% url 'informes-detalle' %}?informe={{ informe.pk }}">Detalle</a>
+                <a class="btn btn-secondary" href="{% url 'informes-aprobar' %}?informe={{ informe.pk }}">Estado</a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted">Aun no existen informes registrados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}

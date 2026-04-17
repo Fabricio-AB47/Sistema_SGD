@@ -7,6 +7,10 @@
       <h1>Areas institucionales</h1>
       <p class="text-muted">Catalogo de areas para estructurar cargos y jerarquia interna.</p>
     </div>
+    <div class="page-header__actions">
+      <a href="{% url 'usuarios-organigrama' %}" class="btn btn-secondary">Ver organigrama</a>
+      <a href="{% url 'usuarios-cargos' %}" class="btn btn-secondary">Ir a cargos</a>
+    </div>
   </div>
 
   <div class="card">
@@ -32,6 +36,7 @@
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">Guardar area</button>
         <a href="{% url 'usuarios-cargos' %}" class="btn btn-secondary">Ir a cargos</a>
+        <a href="{% url 'usuarios-organigrama' %}" class="btn btn-secondary">Ver organigrama</a>
       </div>
     </form>
   </div>

@@ -9,6 +9,10 @@ from .user_selector import (  # noqa: F401
 from .structure_selector import (  # noqa: F401
     get_areas_queryset,
     get_cargos_queryset,
+    get_organigrama_institucional,
+    get_primary_usuario_area_cargo,
+    get_usuario_area_cargo_for_context,
+    get_usuario_area_cargo_options,
     get_usuario_area_cargos,
     get_usuario_supervisores,
 )

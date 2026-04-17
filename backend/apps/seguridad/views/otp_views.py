@@ -11,6 +11,7 @@ from apps.core.services.redirect_security import build_login_redirect_url
 from apps.seguridad.forms import OTPVerificationForm
 from apps.seguridad.services import complete_login_after_otp, create_login_otp, verify_login_otp
 from apps.usuarios.models import Usuario
+from apps.usuarios.services.user_context_service import hydrate_request_session_context
 
 
 def _pending_user(request):
@@ -49,6 +50,7 @@ def _store_authenticated_session(
     request.session["sig_roles"] = list(roles)
     request.session["sig_permissions"] = list(permissions)
     request.session["sig_requires_password_change"] = bool(requires_password_change)
+    hydrate_request_session_context(request, usuario_id=usuario.id_user)
 
     expires_at = session_data.get("expires_at")
     if expires_at:

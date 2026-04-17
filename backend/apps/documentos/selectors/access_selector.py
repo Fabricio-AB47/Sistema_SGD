@@ -121,6 +121,8 @@ def get_documento_for_access(documento_id: int, *, actor=None):
     )
     if documento is None:
         return None
-    if not usuario_puede_acceder_documento(actor, documento):
+    # Regla operativa vigente: cualquier usuario autenticado puede observar
+    # documentos activos desde las vistas protegidas (abrir/preview/descargar/graph).
+    if actor is None:
         return None
     return documento

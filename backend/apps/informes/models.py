@@ -1,6 +1,7 @@
 from django.db import models
 
 from apps.acreditacion.models import CicloEvaluacion
+from apps.core.fields import RowVersionField
 from apps.core.models import EstadoInforme
 from apps.evidencias.models import Documento
 from apps.usuarios.models import Usuario
@@ -48,7 +49,7 @@ class InformeAutoevaluacion(models.Model):
         related_name="informes",
         db_column="id_estado_informe",
     )
-    version_fila = models.BinaryField(null=True, blank=True, editable=False)
+    version_fila = RowVersionField(null=True, blank=True, editable=False)
 
     class Meta:
         db_table = "informe_autoevaluacion"

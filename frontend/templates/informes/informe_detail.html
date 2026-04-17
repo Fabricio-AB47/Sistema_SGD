@@ -1,1 +1,38 @@
-{% extends "shared/admin_page.html" %}
+{% extends "informes/_page_base.html" %}
+
+{% block informes_content %}
+<article class="card">
+  <div class="page-header">
+    <div>
+      <h2>Informe #{{ informe.pk }}</h2>
+      <p class="text-muted">Detalle del informe de autoevaluacion asociado al ciclo {{ informe.ciclo.nombre }}.</p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn btn-secondary" href="{% url 'informes-aprobar' %}?informe={{ informe.pk }}">Gestionar estado</a>
+    </div>
+  </div>
+  <div class="detail-grid">
+    <div><strong>Ciclo</strong><p>{{ informe.ciclo.nombre }}</p></div>
+    <div><strong>Estado</strong><p>{{ informe.estado.descripcion }}</p></div>
+    <div><strong>Elaborado por</strong><p>{{ informe.elaborado_por.nombre_completo|default:informe.elaborado_por }}</p></div>
+    <div><strong>Fecha generacion</strong><p>{{ informe.fecha_generacion|date:"d/m/Y H:i"|default:"-" }}</p></div>
+    <div><strong>Aprobado por</strong><p>{{ informe.aprobado_por.nombre_completo|default:informe.aprobado_por|default:"-" }}</p></div>
+    <div><strong>Fecha aprobacion</strong><p>{{ informe.fecha_aprobacion|date:"d/m/Y H:i"|default:"-" }}</p></div>
+  </div>
+</article>
+
+<article class="card">
+  <h3>Resumen</h3>
+  <p>{{ informe.resumen|default:"Sin resumen registrado." }}</p>
+</article>
+
+<article class="card">
+  <h3>Conclusiones</h3>
+  <p>{{ informe.conclusiones|default:"Sin conclusiones registradas." }}</p>
+</article>
+
+<article class="card">
+  <h3>Observacion de aprobacion</h3>
+  <p>{{ informe.observacion_aprobacion|default:"Sin observaciones." }}</p>
+</article>
+{% endblock %}

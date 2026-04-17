@@ -59,31 +59,31 @@
       {% csrf_token %}
       {{ form.non_field_errors }}
       <div class="acreditacion-form__grid">
-        <label class="acreditacion-form__field">
-          <span>Codigo</span>
+        <div class="acreditacion-form__field">
+          <label for="{{ form.codigo_criterio.id_for_label }}">Codigo</label>
           {{ form.codigo_criterio }}
           {{ form.codigo_criterio.errors }}
-        </label>
-        <label class="acreditacion-form__field">
-          <span>Orden visual</span>
+        </div>
+        <div class="acreditacion-form__field">
+          <label for="{{ form.orden_visual.id_for_label }}">Orden visual</label>
           {{ form.orden_visual }}
           {{ form.orden_visual.errors }}
-        </label>
-        <label class="acreditacion-form__field acreditacion-form__field--full">
-          <span>Nombre</span>
+        </div>
+        <div class="acreditacion-form__field acreditacion-form__field--full">
+          <label for="{{ form.nombre_criterio.id_for_label }}">Nombre</label>
           {{ form.nombre_criterio }}
           {{ form.nombre_criterio.errors }}
-        </label>
-        <label class="acreditacion-form__field acreditacion-form__field--full">
-          <span>Descripcion</span>
+        </div>
+        <div class="acreditacion-form__field acreditacion-form__field--full">
+          <label for="{{ form.descripcion.id_for_label }}">Descripcion</label>
           {{ form.descripcion }}
           {{ form.descripcion.errors }}
-        </label>
-        <label class="acreditacion-form__field">
-          <span>Activo</span>
+        </div>
+        <div class="acreditacion-form__field">
+          <label for="{{ form.activo.id_for_label }}">Activo</label>
           {{ form.activo }}
           {{ form.activo.errors }}
-        </label>
+        </div>
       </div>
       <div class="acreditacion-form__actions">
         <button class="btn btn-primary" type="submit">Guardar criterio</button>

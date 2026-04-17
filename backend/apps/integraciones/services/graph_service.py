@@ -559,6 +559,35 @@ def ensure_drive_folder(
     )
 
 
+def get_item_by_relative_path(
+    relative_path: str | PurePosixPath,
+    *,
+    payload: dict[str, Any] | None = None,
+    access_token: str | None = None,
+    refresh: bool = False,
+) -> dict[str, Any] | None:
+    normalized_path = _normalized_graph_path(relative_path)
+    cached_item = None if refresh else cache.get(_cache_key("item-path", normalized_path))
+    if cached_item is not None:
+        return cached_item
+
+    if payload is None or access_token is None:
+        payload, access_token = get_graph_session()
+
+    item = _get_item_by_path(
+        relative_path=relative_path,
+        access_token=access_token,
+        log_payload=payload,
+    )
+    if item is not None:
+        cache.set(
+            _cache_key("item-path", normalized_path),
+            item,
+            GRAPH_CACHE_TIMEOUT_SECONDS,
+        )
+    return item
+
+
 def upload_file(
     *,
     relative_folder_path: str | PurePosixPath,
@@ -621,6 +650,7 @@ def clear_graph_cache(relative_path: str | PurePosixPath | None = None) -> None:
         return
 
     parts = _normalize_graph_path_parts(relative_path)
+    cache.delete(_cache_key("item-path", _normalized_graph_path(relative_path)))
     prefix: list[str] = []
     for part in parts:
         prefix.append(part)

@@ -241,7 +241,8 @@ class ProtectedDocumentAccessView(SigLoginRequiredMixin, View):
         return Usuario.objects.filter(pk=user_id).only("id_user", "primer_nombre", "primer_apellido").first()
 
     def get(self, request, documento_id, *args, **kwargs):
-        documento = get_documento_for_access(documento_id)
+        actor = self._actor()
+        documento = get_documento_for_access(documento_id, actor=actor)
         if documento is None:
             raise Http404("El documento no existe.")
 
@@ -257,7 +258,7 @@ class ProtectedDocumentAccessView(SigLoginRequiredMixin, View):
 
         registrar_acceso_documento(
             documento=documento,
-            actor=self._actor(),
+            actor=actor,
             request=request,
             accion="VIEW_DOCUMENTO_PROTEGIDO",
             detalle=f"Se accedio al documento protegido {documento.nombre_archivo}.",
@@ -277,7 +278,8 @@ class ProtectedDocumentAccessView(SigLoginRequiredMixin, View):
 @method_decorator(xframe_options_sameorigin, name="dispatch")
 class ProtectedDocumentPreviewView(ProtectedDocumentAccessView):
     def get(self, request, documento_id, *args, **kwargs):
-        documento = get_documento_for_access(documento_id)
+        actor = self._actor()
+        documento = get_documento_for_access(documento_id, actor=actor)
         if documento is None:
             raise Http404("El documento no existe.")
 
@@ -300,7 +302,7 @@ class ProtectedDocumentPreviewView(ProtectedDocumentAccessView):
 
         registrar_acceso_documento(
             documento=documento,
-            actor=self._actor(),
+            actor=actor,
             request=request,
             accion="PREVIEW_DOCUMENTO_PROTEGIDO",
             detalle=f"Se previsualizo el documento protegido {documento.nombre_archivo}.",
@@ -319,7 +321,8 @@ class ProtectedDocumentPreviewView(ProtectedDocumentAccessView):
 
 class ProtectedDocumentDownloadView(ProtectedDocumentAccessView):
     def get(self, request, documento_id, *args, **kwargs):
-        documento = get_documento_for_access(documento_id)
+        actor = self._actor()
+        documento = get_documento_for_access(documento_id, actor=actor)
         if documento is None:
             raise Http404("El documento no existe.")
 
@@ -335,7 +338,7 @@ class ProtectedDocumentDownloadView(ProtectedDocumentAccessView):
 
         registrar_acceso_documento(
             documento=documento,
-            actor=self._actor(),
+            actor=actor,
             request=request,
             accion="DOWNLOAD_DOCUMENTO_PROTEGIDO",
             detalle=f"Se descargo el documento protegido {documento.nombre_archivo}.",
@@ -360,7 +363,8 @@ class ProtectedDocumentGraphRedirectView(SigLoginRequiredMixin, View):
         return Usuario.objects.filter(pk=user_id).only("id_user", "primer_nombre", "primer_apellido").first()
 
     def get(self, request, documento_id, *args, **kwargs):
-        documento = get_documento_for_access(documento_id)
+        actor = self._actor()
+        documento = get_documento_for_access(documento_id, actor=actor)
         if documento is None:
             raise Http404("El documento no existe.")
 
@@ -376,7 +380,7 @@ class ProtectedDocumentGraphRedirectView(SigLoginRequiredMixin, View):
 
         registrar_acceso_documento(
             documento=documento,
-            actor=self._actor(),
+            actor=actor,
             request=request,
             accion="OPEN_DOCUMENTO_GRAPH",
             detalle=f"Se abrio en Graph el documento protegido {documento.nombre_archivo}.",

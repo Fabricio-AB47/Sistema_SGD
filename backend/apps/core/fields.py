@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.functional import cached_property
 
 
 class RowVersionField(models.BinaryField):
@@ -8,4 +9,8 @@ class RowVersionField(models.BinaryField):
     """
 
     generated = True
+    db_returning = False
 
+    @cached_property
+    def referenced_fields(self):
+        return frozenset()

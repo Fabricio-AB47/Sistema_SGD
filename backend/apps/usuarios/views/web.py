@@ -2,10 +2,10 @@ from django.contrib import messages
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import ListView, CreateView, UpdateView, DetailView, FormView, TemplateView
+from django.views.generic import ListView, CreateView, UpdateView, DetailView, FormView, TemplateView, View
 from django.db import models
 
-from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.mixins import SigAdminRoleRequiredMixin, SigLoginRequiredMixin
 from apps.usuarios.forms.estructura import (
     AreaInstitucionalForm,
     CargoAreaForm,
@@ -18,6 +18,7 @@ from apps.usuarios.models import Usuario, Rol, UsuarioRol
 from apps.usuarios.selectors import (
     get_areas_queryset,
     get_cargos_queryset,
+    get_organigrama_institucional,
     get_usuario_area_cargos,
     get_usuario_supervisores,
 )
@@ -28,6 +29,7 @@ from apps.usuarios.services import (
     crear_area,
     crear_cargo,
 )
+from apps.usuarios.services.user_context_service import hydrate_request_session_context
 
 
 class UsuarioListView(SigLoginRequiredMixin, ListView):
@@ -64,10 +66,12 @@ class UsuarioListView(SigLoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["roles"] = Rol.objects.filter(activo=True).order_by("nombre_rol")
+        session_roles = tuple(self.request.session.get("sig_roles", []) or [])
+        ctx["can_create_user"] = any(str(role).strip().lower() == "administrador" for role in session_roles)
         return ctx
 
 
-class UsuarioCreateView(SigLoginRequiredMixin, CreateView):
+class UsuarioCreateView(SigAdminRoleRequiredMixin, CreateView):
     model = Usuario
     form_class = UsuarioCrearForm
     template_name = "usuarios/crear.html"
@@ -195,6 +199,43 @@ class CargoAreaListView(SigLoginRequiredMixin, TemplateView):
                 messages.success(request, "Cargo por area creado correctamente.")
                 return redirect("usuarios-cargos")
         return self.render_to_response(self.get_context_data(cargo_form=form))
+
+
+class OrganigramaInstitucionalView(SigLoginRequiredMixin, TemplateView):
+    template_name = "usuarios/organigrama.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["organigrama"] = get_organigrama_institucional()
+        return context
+
+
+class CambiarContextoOperativoView(SigLoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        session_user_id = request.session.get("sig_user_id")
+        assignment_id = request.POST.get("assignment_id")
+        redirect_to = request.POST.get("next") or request.META.get("HTTP_REFERER") or reverse("core-dashboard")
+
+        if not session_user_id:
+            messages.error(request, "No existe una sesion activa para cambiar el contexto.")
+            return redirect(redirect_to)
+
+        try:
+            assignment_id = int(assignment_id)
+        except (TypeError, ValueError):
+            assignment_id = None
+
+        context = hydrate_request_session_context(
+            request,
+            usuario_id=session_user_id,
+            assignment_id=assignment_id,
+        )
+        if context.get("active_assignment_id") is None:
+            messages.warning(request, "No tienes un area/cargo activo disponible.")
+        else:
+            messages.success(request, "Contexto operativo actualizado correctamente.")
+
+        return redirect(redirect_to)
 
 
 class UsuarioEstructuraView(SigLoginRequiredMixin, TemplateView):

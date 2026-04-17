@@ -14,9 +14,12 @@ from apps.documentos.selectors import (
     authorization_document_exists_for_cycle,
 )
 from apps.documentos.services import upload_cycle_authorization_document
+from apps.evidencias.models import Documento, RegistroEvidencia
 from apps.integraciones.services.graph_service import (
     clear_graph_cache,
     ensure_drive_folder,
+    get_item_by_relative_path,
+    GraphServiceError,
     require_graph_configuration,
 )
 
@@ -45,10 +48,31 @@ def _provision_storage(*, drive_path):
     # antes de crear cualquier segmento faltante en la jerarquia.
     clear_graph_cache(drive_path)
     graph_item = ensure_drive_folder(drive_path, refresh=True)
+    validated_item = get_item_by_relative_path(drive_path, refresh=True)
+    if validated_item is None:
+        raise GraphServiceError(
+            f"No fue posible validar la carpeta Graph esperada para la ruta {drive_path.as_posix()}."
+        )
     return {
         "drive_path": drive_path,
-        "graph_item": graph_item,
+        "graph_item": validated_item or graph_item,
     }
+
+
+def _element_has_linked_content(*, elemento_fundamental) -> bool:
+    previous_path = build_elemento_drive_path(
+        elemento_fundamental.indicador,
+        elemento_fundamental,
+    ).as_posix()
+    has_documents = Documento.objects.filter(
+        ruta_local__startswith=previous_path,
+        activo=True,
+    ).exists()
+    if has_documents:
+        return True
+    return RegistroEvidencia.objects.filter(
+        elemento_fundamental=elemento_fundamental
+    ).exists()
 
 
 @transaction.atomic
@@ -183,6 +207,12 @@ def crear_elemento(*, form, actor=None, request=None):
 @transaction.atomic
 def vincular_indicador_elemento(*, indicador, elemento_fundamental, actor=None, request=None):
     indicador_anterior_id = elemento_fundamental.indicador_id
+    if indicador_anterior_id == indicador.pk:
+        return elemento_fundamental
+    if _element_has_linked_content(elemento_fundamental=elemento_fundamental):
+        raise ValueError(
+            "No puedes mover este elemento a otro indicador porque ya tiene documentos o evidencias registradas."
+        )
     elemento_fundamental.indicador = indicador
     elemento_fundamental.save(update_fields=["indicador"])
     storage = _provision_storage(

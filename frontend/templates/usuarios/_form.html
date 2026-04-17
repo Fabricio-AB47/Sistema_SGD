@@ -64,6 +64,20 @@
       {{ form.rol.errors }}
     {% endif %}
   </div>
+  <div class="form-group">
+    {% if form.area %}
+      <span>Area</span>
+      {{ form.area }}
+      {{ form.area.errors }}
+    {% endif %}
+  </div>
+  <div class="form-group">
+    {% if form.cargo %}
+      <span>Cargo</span>
+      {{ form.cargo }}
+      {{ form.cargo.errors }}
+    {% endif %}
+  </div>
   <div class="form-check">
     {{ form.activo }} <span>Activo</span>
     {{ form.activo.errors }}
@@ -74,3 +88,124 @@
     <a class="btn btn-secondary" href="{% url 'usuarios-lista' %}">Cancelar</a>
   </div>
 </form>
+
+{% if form.area and form.cargo %}
+  {{ form.area_catalog|json_script:"usuario-area-catalog" }}
+  {{ form.area_cargo_map|json_script:"usuario-area-cargo-map" }}
+  {% if form.rol %}
+    {{ form.role_area_map|json_script:"usuario-role-area-map" }}
+  {% endif %}
+
+  <script>
+    (function () {
+      var areaSelect = document.getElementById("id_area");
+      var cargoSelect = document.getElementById("id_cargo");
+      var roleSelect = document.getElementById("id_rol");
+
+      if (!areaSelect || !cargoSelect) {
+        return;
+      }
+
+      var areaCatalogNode = document.getElementById("usuario-area-catalog");
+      var areaCargoMapNode = document.getElementById("usuario-area-cargo-map");
+      var roleAreaMapNode = document.getElementById("usuario-role-area-map");
+
+      var areaCatalog = areaCatalogNode ? JSON.parse(areaCatalogNode.textContent) : [];
+      var areaCargoMap = areaCargoMapNode ? JSON.parse(areaCargoMapNode.textContent) : {};
+      var roleAreaMap = roleAreaMapNode ? JSON.parse(roleAreaMapNode.textContent) : null;
+
+      function renderOptions(select, options, placeholder, keepValue) {
+        var previous = keepValue || "";
+        select.innerHTML = "";
+
+        var emptyOption = document.createElement("option");
+        emptyOption.value = "";
+        emptyOption.textContent = placeholder;
+        select.appendChild(emptyOption);
+
+        options.forEach(function (item) {
+          var option = document.createElement("option");
+          option.value = String(item.id);
+          option.textContent = item.label;
+          select.appendChild(option);
+        });
+
+        var hasPrevious = options.some(function (item) {
+          return String(item.id) === String(previous);
+        });
+        if (hasPrevious) {
+          select.value = String(previous);
+        } else {
+          select.value = "";
+        }
+      }
+
+      function getAllowedAreaIdsByRole() {
+        if (!roleSelect || !roleAreaMap) {
+          return null;
+        }
+        var roleId = roleSelect.value || "";
+        if (!roleId) {
+          return [];
+        }
+        return roleAreaMap[roleId] || [];
+      }
+
+      function refreshAreaOptions(forceAutoSelect) {
+        var currentAreaValue = areaSelect.value;
+        var allowedIds = getAllowedAreaIdsByRole();
+        var filteredAreas = areaCatalog;
+
+        if (Array.isArray(allowedIds)) {
+          var allowedLookup = new Set(allowedIds.map(String));
+          filteredAreas = areaCatalog.filter(function (area) {
+            return allowedLookup.has(String(area.id));
+          });
+        }
+
+        var keepAreaValue = currentAreaValue;
+        if (forceAutoSelect && filteredAreas.length > 0) {
+          keepAreaValue = filteredAreas[0].id;
+        }
+        renderOptions(areaSelect, filteredAreas, "SELECCIONE AREA", keepAreaValue);
+
+        if (!areaSelect.value && filteredAreas.length > 0 && roleSelect && roleSelect.value) {
+          areaSelect.value = String(filteredAreas[0].id);
+        }
+        areaSelect.disabled = filteredAreas.length === 0;
+      }
+
+      function refreshCargoOptions() {
+        var currentCargoValue = cargoSelect.value;
+        var areaId = areaSelect.value || "";
+        var cargoOptions = areaId ? (areaCargoMap[String(areaId)] || []) : [];
+        renderOptions(cargoSelect, cargoOptions, "SELECCIONE CARGO", currentCargoValue);
+        cargoSelect.disabled = !areaId || cargoOptions.length === 0;
+      }
+
+      if (roleSelect && roleAreaMap) {
+        roleSelect.addEventListener("change", function () {
+          refreshAreaOptions(true);
+          refreshCargoOptions();
+        });
+      }
+
+      areaSelect.addEventListener("change", function () {
+        refreshCargoOptions();
+      });
+
+      refreshAreaOptions(false);
+      refreshCargoOptions();
+
+      [roleSelect, areaSelect, cargoSelect].forEach(function (select) {
+        if (select) {
+          select.style.textTransform = "uppercase";
+        }
+      });
+
+      if (!roleSelect) {
+        areaSelect.disabled = false;
+      }
+    })();
+  </script>
+{% endif %}

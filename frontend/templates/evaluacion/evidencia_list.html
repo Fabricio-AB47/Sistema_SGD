@@ -1,1 +1,172 @@
-{% extends "shared/admin_page.html" %}
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+<div class="admin-highlights">
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Total registros</span>
+    <strong class="admin-highlights__value">{{ evaluation_metrics.total_registros }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Pendientes</span>
+    <strong class="admin-highlights__value">{{ evaluation_metrics.pendientes_revision }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Evaluaciones</span>
+    <strong class="admin-highlights__value">{{ evaluation_metrics.evaluaciones }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Observaciones</span>
+    <strong class="admin-highlights__value">{{ evaluation_metrics.observaciones }}</strong>
+  </article>
+</div>
+
+<article class="card">
+  <form method="get" class="filters-grid">
+    <label>
+      <span>Busqueda</span>
+      <input type="text" name="q" value="{{ selected_filters.q }}" placeholder="Documento, ciclo, indicador o elemento">
+    </label>
+    <label>
+      <span>Estado</span>
+      <input type="text" name="estado" value="{{ selected_filters.estado }}" placeholder="Ej. APROBADA">
+    </label>
+    <label>
+      <span>Ciclo</span>
+      <input type="text" name="ciclo" value="{{ selected_filters.ciclo }}" placeholder="ID ciclo">
+    </label>
+    <div class="page-header__actions" style="align-self:end;">
+      <button class="btn btn-primary" type="submit">Filtrar</button>
+      <a class="btn btn-secondary" href="{% url 'evaluacion-evidencias-lista' %}">Limpiar</a>
+    </div>
+  </form>
+</article>
+
+<article class="card">
+  {% if scope_flags.is_evaluator %}
+    <p class="text-muted" style="margin-bottom: 0.8rem;">Se muestran solo evidencias con salida habilitada por un cargo de nivel 1.</p>
+  {% endif %}
+  <div class="page-header" style="margin-bottom: 1rem;">
+    <div>
+      <h2>Registros de evidencia</h2>
+      <p class="text-muted">Consulta el documento asociado, el estado de evidencia y la ruta de revisión.</p>
+    </div>
+    <button
+      class="btn btn-ghost acreditacion-info-trigger"
+      type="button"
+      data-evidencia-info-trigger
+      aria-haspopup="dialog"
+      aria-controls="evidencia-calificacion-dialog"
+      aria-label="Ver informacion de calificacion"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle" aria-hidden="true" focusable="false"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg>
+    </button>
+  </div>
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Registro</th>
+          <th>Ciclo</th>
+          <th>Indicador</th>
+          <th>Elemento</th>
+          <th>Documento</th>
+          <th>Estado</th>
+          <th>Salida evaluador</th>
+          <th>Fecha</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for registro in registros %}
+          <tr>
+            <td>#{{ registro.id_registro }}</td>
+            <td>{{ registro.ciclo.nombre }}</td>
+            <td>{{ registro.indicador.codigo_indicador }} - {{ registro.indicador.nombre_indicador }}</td>
+            <td>{{ registro.elemento_fundamental.codigo_elemento }} - {{ registro.elemento_fundamental.nombre_elemento }}</td>
+            <td>{{ registro.documento.nombre_archivo }}</td>
+            <td>{{ registro.estado.descripcion }}</td>
+            <td>
+              {% if registro.fecha_envio_revision %}
+                <span class="acreditacion-status acreditacion-status--success">HABILITADA</span>
+              {% else %}
+                <span class="acreditacion-status acreditacion-status--muted">PENDIENTE</span>
+              {% endif %}
+            </td>
+            <td>{{ registro.fecha_registro|date:"d/m/Y H:i"|default:"-" }}</td>
+            <td>
+              <div class="page-header__actions">
+                <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ registro.pk }}">Detalle</a>
+                <a class="btn btn-secondary" href="{% url 'evaluacion-evaluar' %}?registro={{ registro.pk }}">Evaluar</a>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="9" class="text-center text-muted">No existen registros con los filtros seleccionados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<div class="acreditacion-info-modal" id="evidencia-calificacion-dialog" aria-labelledby="evidencia-calificacion-dialog-title" hidden>
+  <button class="acreditacion-info-modal__overlay" type="button" data-evidencia-info-overlay aria-label="Cerrar guia de calificacion"></button>
+  <div class="acreditacion-info-dialog">
+    <div class="acreditacion-info-dialog__header">
+      <div>
+        <span class="acreditacion-pill">Guia de calificacion</span>
+        <h3 id="evidencia-calificacion-dialog-title">Como se calificara cada evidencia</h3>
+      </div>
+      <button class="acreditacion-info-dialog__close" type="button" data-evidencia-info-close aria-label="Cerrar informacion">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" /></svg>
+      </button>
+    </div>
+    <div class="acreditacion-info-dialog__body">
+      <p>
+        Cada registro de evidencia puede calificarse de dos formas: <strong>cuantitativa</strong> con nota numerica o
+        <strong>cualitativa</strong> con sustento descriptivo en el comentario y el estado de revision.
+      </p>
+      <ul class="acreditacion-form-guide__list">
+        <li><strong>Cuantitativa:</strong> usa calificacion numerica para medir logro.</li>
+        <li><strong>Cualitativa:</strong> documenta analisis tecnico y define estado segun hallazgos.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+  (function () {
+    const modal = document.getElementById('evidencia-calificacion-dialog');
+    const openButton = document.querySelector('[data-evidencia-info-trigger]');
+    const closeButton = document.querySelector('[data-evidencia-info-close]');
+    const overlayButton = document.querySelector('[data-evidencia-info-overlay]');
+
+    if (!modal || !openButton || !closeButton || !overlayButton) {
+      return;
+    }
+
+    const closeModal = function () {
+      modal.hidden = true;
+      document.body.style.overflow = '';
+    };
+
+    openButton.addEventListener('click', function () {
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+    });
+
+    closeButton.addEventListener('click', closeModal);
+    overlayButton.addEventListener('click', closeModal);
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) {
+        closeModal();
+      }
+    });
+  })();
+</script>
+{% endblock %}

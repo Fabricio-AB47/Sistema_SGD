@@ -9,6 +9,7 @@ from apps.acreditacion.models import (
 )
 from apps.core.models import ClasificacionDocumento, EstadoCiclo
 from apps.core.services.upload_security import validate_uploaded_file
+from apps.usuarios.models import UsuarioAreaCargo
 
 
 DATETIME_LOCAL_FORMAT = "%Y-%m-%dT%H:%M"
@@ -35,10 +36,26 @@ ERROR_DUPLICATE_INDICADOR_CODE = "Ya existe un indicador con ese codigo."
 ERROR_DUPLICATE_ELEMENTO_CODE = "Ya existe un elemento con ese codigo."
 ERROR_ELEMENT_ALREADY_LINKED = "El elemento ya pertenece al indicador seleccionado."
 ERROR_END_DATE_BEFORE_START = "La fecha fin no puede ser menor a la fecha inicio."
+ERROR_ASSIGNMENT_REQUIRED = "Debes tener un area/cargo activo para gestionar este recurso."
 
 CLASIFICACION_AUT_CICLO = "AUT_CICLO"
 CLASIFICACION_ACTA = "ACTA"
 ESTADO_ENVIADO = "ENVIADO"
+ESTADO_EN_EJECUCION = "EN_EJECUCION"
+ESTADO_APROBADO = "APROBADO"
+ESTADO_RECHAZADO = "RECHAZADO"
+
+ESTADOS_FLUJO_CICLO = (
+    ESTADO_ENVIADO,
+    ESTADO_EN_EJECUCION,
+    ESTADO_APROBADO,
+    ESTADO_RECHAZADO,
+)
+
+ESTADOS_RECTOR_DECISION = (
+    ESTADO_APROBADO,
+    ESTADO_RECHAZADO,
+)
 
 
 def _normalize_required_text(value: str) -> str:
@@ -52,6 +69,20 @@ def _normalize_optional_text(value: str | None) -> str | None:
 
 def _normalize_code(value: str) -> str:
     return _normalize_required_text(value).upper()
+
+
+def _normalize_estado(value: str | None) -> str:
+    return _normalize_required_text(value or "").upper().replace(" ", "_")
+
+
+def _filter_estados(queryset, allowed_states: tuple[str, ...]):
+    normalized_allowed = {_normalize_estado(item) for item in (allowed_states or ()) if item}
+    allowed_ids = [
+        estado.pk
+        for estado in queryset
+        if _normalize_estado(getattr(estado, "descripcion", "")) in normalized_allowed
+    ]
+    return queryset.filter(pk__in=allowed_ids).order_by("id_estado_ciclo")
 
 
 class CriterioForm(forms.ModelForm):
@@ -294,6 +325,8 @@ class CicloEvaluacionForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        if self.usuario_id and self.active_assignment is None:
+            raise forms.ValidationError(ERROR_ASSIGNMENT_REQUIRED)
         fecha_inicio = cleaned_data.get("fecha_inicio")
         fecha_fin = cleaned_data.get("fecha_fin")
         if fecha_inicio and fecha_fin and fecha_fin < fecha_inicio:
@@ -301,11 +334,26 @@ class CicloEvaluacionForm(forms.ModelForm):
         return cleaned_data
 
     def __init__(self, *args, **kwargs):
+        self.usuario_id = kwargs.pop("usuario_id", None)
+        self.assignment_id = kwargs.pop("assignment_id", None)
         super().__init__(*args, **kwargs)
         self.fields["anio"].label = "Año"
         self.fields["fecha_inicio"].input_formats = DATETIME_INPUT_FORMATS
         self.fields["fecha_fin"].input_formats = DATETIME_INPUT_FORMATS
         self.fields["archivo"].widget.attrs.update({"accept": ALLOWED_DOCUMENT_TYPES})
+
+        self.active_assignment = None
+        if self.usuario_id:
+            assignments = UsuarioAreaCargo.objects.select_related("area", "cargo").filter(
+                usuario_id=self.usuario_id,
+                activo=True,
+                area__activo=True,
+                cargo__activo=True,
+            )
+            if self.assignment_id:
+                self.active_assignment = assignments.filter(pk=self.assignment_id).first()
+            if self.active_assignment is None:
+                self.active_assignment = assignments.first()
 
         clasificacion = self.fields["clasificacion"].queryset.filter(
             codigo=CLASIFICACION_AUT_CICLO
@@ -353,6 +401,13 @@ class CicloEstadoUpdateForm(forms.Form):
         widget=forms.Textarea(attrs=TEXTAREA_ATTRS),
     )
 
+    def __init__(self, *args, allowed_states: tuple[str, ...] | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["estado"].queryset = _filter_estados(
+            self.fields["estado"].queryset,
+            allowed_states or ESTADOS_FLUJO_CICLO,
+        )
+
     def clean_observacion_aprobacion(self):
         return _normalize_optional_text(self.cleaned_data.get("observacion_aprobacion"))
 
@@ -372,4 +427,49 @@ class CicloAuthorizationRevisionForm(forms.Form):
     def clean_archivo(self):
         archivo = self.cleaned_data.get("archivo")
         validate_uploaded_file(archivo, label=SIGNED_DOCUMENT_LABEL)
+        return archivo
+
+
+class CicloEstadoAutorizacionForm(forms.Form):
+    ciclo_id = forms.IntegerField(widget=forms.HiddenInput)
+    estado = forms.ModelChoiceField(
+        queryset=EstadoCiclo.objects.filter(activo=True)
+        .only("id_estado_ciclo", "descripcion", "activo")
+        .order_by("id_estado_ciclo"),
+        label="Estado",
+    )
+    observacion_aprobacion = forms.CharField(
+        max_length=1000,
+        required=False,
+        label="Observacion",
+        widget=forms.Textarea(attrs=TEXTAREA_ATTRS),
+    )
+    descripcion_documento = forms.CharField(
+        max_length=500,
+        required=False,
+        label="Descripcion de la nueva version",
+        widget=forms.Textarea(attrs=TEXTAREA_ATTRS),
+    )
+    archivo = forms.FileField(
+        label=SIGNED_DOCUMENT_FIELD_LABEL,
+        required=False,
+    )
+
+    def __init__(self, *args, allowed_states: tuple[str, ...] | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["estado"].queryset = _filter_estados(
+            self.fields["estado"].queryset,
+            allowed_states or ESTADOS_FLUJO_CICLO,
+        )
+
+    def clean_observacion_aprobacion(self):
+        return _normalize_optional_text(self.cleaned_data.get("observacion_aprobacion"))
+
+    def clean_descripcion_documento(self):
+        return _normalize_optional_text(self.cleaned_data.get("descripcion_documento"))
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data.get("archivo")
+        if archivo:
+            validate_uploaded_file(archivo, label=SIGNED_DOCUMENT_LABEL)
         return archivo

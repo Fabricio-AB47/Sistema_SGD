@@ -1,1 +1,52 @@
-{% extends "shared/admin_page.html" %}
+{% extends "informes/_page_base.html" %}
+
+{% block informes_content %}
+<div class="two-column-layout">
+  <article class="card">
+    <h2>Registrar informe</h2>
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="ciclos-form-grid">
+        <label class="acreditacion-form__field">
+          <span>{{ form.ciclo.label }}</span>
+          {{ form.ciclo }}
+          {{ form.ciclo.errors }}
+        </label>
+        <label class="acreditacion-form__field">
+          <span>{{ form.estado.label }}</span>
+          {{ form.estado }}
+          {{ form.estado.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>{{ form.resumen.label }}</span>
+          {{ form.resumen }}
+          {{ form.resumen.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>{{ form.conclusiones.label }}</span>
+          {{ form.conclusiones }}
+          {{ form.conclusiones.errors }}
+        </label>
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar informe</button>
+      </div>
+    </form>
+  </article>
+
+  <aside class="card">
+    <h3>Ultimos informes</h3>
+    <ul class="admin-sections__list">
+      {% for informe in recent_informes %}
+        <li>
+          <a href="{% url 'informes-detalle' %}?informe={{ informe.pk }}">#{{ informe.pk }} · {{ informe.ciclo.nombre }}</a>
+          <span class="text-muted"> · {{ informe.estado.descripcion }}</span>
+        </li>
+      {% empty %}
+        <li class="text-muted">No existen informes previos.</li>
+      {% endfor %}
+    </ul>
+  </aside>
+</div>
+{% endblock %}

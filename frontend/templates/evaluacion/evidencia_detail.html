@@ -1,1 +1,148 @@
-{% extends "shared/admin_page.html" %}
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+<article class="card">
+  <div class="page-header">
+    <div>
+      <h2>Registro #{{ registro.id_registro }}</h2>
+      <p class="text-muted">Trazabilidad completa del documento, el ciclo y las evaluaciones asociadas.</p>
+    </div>
+    <div class="page-header__actions">
+      <a class="btn btn-secondary" href="{% url 'evaluacion-evaluar' %}?registro={{ registro.pk }}">Evaluar</a>
+      <a class="btn btn-ghost" href="{% url 'documentos-protegidos-abrir' registro.documento.pk %}">Abrir documento</a>
+    </div>
+  </div>
+
+  {% if release_controls.can_manage %}
+    <form method="post" class="acreditacion-form acreditacion-form--compact">
+      {% csrf_token %}
+      <input type="hidden" name="registro" value="{{ registro.pk }}">
+      <label class="acreditacion-form__checkbox">
+        <input type="checkbox" name="habilitar_salida" value="1" {% if release_controls.is_released %}checked{% endif %}>
+        <span>Habilitar salida para el evaluador</span>
+      </label>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar salida</button>
+      </div>
+      <small class="text-muted">
+        {% if release_controls.can_reassign %}
+          Como Director de Tecnologia puedes reasignar la salida marcando la casilla y guardando nuevamente.
+        {% else %}
+          Solo cargos de nivel 1 con aprobacion interna habilitan la visibilidad para evaluacion.
+        {% endif %}
+      </small>
+    </form>
+  {% endif %}
+
+  <div class="detail-grid">
+    <div>
+      <strong>Ciclo</strong>
+      <p>{{ registro.ciclo.nombre }}</p>
+    </div>
+    <div>
+      <strong>Estado evidencia</strong>
+      <p>{{ registro.estado.descripcion }}</p>
+    </div>
+    <div>
+      <strong>Indicador</strong>
+      <p>{{ registro.indicador.codigo_indicador }} - {{ registro.indicador.nombre_indicador }}</p>
+    </div>
+    <div>
+      <strong>Elemento</strong>
+      <p>{{ registro.elemento_fundamental.codigo_elemento }} - {{ registro.elemento_fundamental.nombre_elemento }}</p>
+    </div>
+    <div>
+      <strong>Documento</strong>
+      <p>{{ registro.documento.nombre_archivo }}</p>
+    </div>
+    <div>
+      <strong>Registrado por</strong>
+      <p>{{ registro.registrado_por.nombre_completo|default:registro.registrado_por }}</p>
+    </div>
+    <div>
+      <strong>Salida evaluador</strong>
+      <p>{% if registro.fecha_envio_revision %}HABILITADA{% else %}PENDIENTE{% endif %}</p>
+    </div>
+    <div>
+      <strong>Habilitado por</strong>
+      <p>
+        {% if registro.enviado_revision_por %}
+          {{ registro.enviado_revision_por.nombre_completo|default:registro.enviado_revision_por }}
+        {% else %}
+          -
+        {% endif %}
+      </p>
+    </div>
+    <div>
+      <strong>Fecha salida</strong>
+      <p>{{ registro.fecha_envio_revision|date:"d/m/Y H:i"|default:"-" }}</p>
+    </div>
+  </div>
+</article>
+
+<article class="card">
+  <h3>Evaluaciones relacionadas</h3>
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Estado</th>
+          <th>Evaluador</th>
+          <th>Calificacion</th>
+          <th>Comentario</th>
+          <th>Fecha</th>
+          <th>Observaciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for evaluacion in evaluaciones %}
+          <tr>
+            <td>#{{ evaluacion.pk }}</td>
+            <td>{{ evaluacion.estado.descripcion }}</td>
+            <td>{{ evaluacion.usuario_evaluador.nombre_completo|default:evaluacion.usuario_evaluador }}</td>
+            <td>{{ evaluacion.calificacion|default:"-" }}</td>
+            <td>{{ evaluacion.comentario|default:"-" }}</td>
+            <td>{{ evaluacion.fecha_evaluacion|date:"d/m/Y H:i"|default:"-" }}</td>
+            <td><a href="{% url 'evaluacion-observaciones' %}?evaluacion={{ evaluacion.pk }}">Gestionar</a></td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted">Aun no existen evaluaciones registradas para esta evidencia.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<article class="card">
+  <h3>Observaciones recientes</h3>
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Observacion</th>
+          <th>Emisor</th>
+          <th>Fecha</th>
+          <th>Atendida</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for observacion in observaciones %}
+          <tr>
+            <td>{{ observacion.observacion }}</td>
+            <td>{{ observacion.usuario_emisor.nombre_completo|default:observacion.usuario_emisor }}</td>
+            <td>{{ observacion.fecha_observacion|date:"d/m/Y H:i"|default:"-" }}</td>
+            <td>{{ observacion.atendida|yesno:"Si,No" }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">No existen observaciones registradas.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}

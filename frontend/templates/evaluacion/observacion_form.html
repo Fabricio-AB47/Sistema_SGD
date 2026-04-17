@@ -1,1 +1,78 @@
-{% extends "shared/admin_page.html" %}
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+<div class="two-column-layout">
+  <article class="card">
+    <div class="page-header">
+      <div>
+        <h2>Registrar observacion</h2>
+        <p class="text-muted">Documenta devoluciones, ajustes y solicitudes de correccion sobre la evaluacion.</p>
+      </div>
+    </div>
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="ciclos-form-grid">
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>{{ form.evaluacion.label }}</span>
+          {{ form.evaluacion }}
+          {{ form.evaluacion.errors }}
+        </label>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>{{ form.observacion.label }}</span>
+          {{ form.observacion }}
+          {{ form.observacion.errors }}
+        </label>
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar observacion</button>
+      </div>
+    </form>
+  </article>
+
+  <aside class="card">
+    <h3>Evaluacion seleccionada</h3>
+    {% if evaluacion %}
+      <ul class="admin-sections__list">
+        <li><strong>Registro:</strong> #{{ evaluacion.registro_id }}</li>
+        <li><strong>Ciclo:</strong> {{ evaluacion.registro.ciclo.nombre }}</li>
+        <li><strong>Indicador:</strong> {{ evaluacion.registro.indicador.codigo_indicador }}</li>
+        <li><strong>Elemento:</strong> {{ evaluacion.registro.elemento_fundamental.codigo_elemento }}</li>
+        <li><strong>Estado:</strong> {{ evaluacion.estado.descripcion }}</li>
+      </ul>
+    {% else %}
+      <p class="text-muted">Selecciona una evaluacion para ver su contexto operativo.</p>
+    {% endif %}
+  </aside>
+</div>
+
+<article class="card">
+  <h3>Historial de observaciones</h3>
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Observacion</th>
+          <th>Emisor</th>
+          <th>Fecha</th>
+          <th>Atendida</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for observacion in observaciones %}
+          <tr>
+            <td>{{ observacion.observacion }}</td>
+            <td>{{ observacion.usuario_emisor.nombre_completo|default:observacion.usuario_emisor }}</td>
+            <td>{{ observacion.fecha_observacion|date:"d/m/Y H:i"|default:"-" }}</td>
+            <td>{{ observacion.atendida|yesno:"Si,No" }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">No existen observaciones registradas.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}
