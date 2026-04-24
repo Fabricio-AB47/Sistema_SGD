@@ -1,0 +1,107 @@
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<div class="acreditacion-overview">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Nueva carga de informacion</h3>
+        <p class="text-muted">Registra evidencia, descripcion y metadatos para la revision posterior.</p>
+      </div>
+      <span class="acreditacion-status {% if completion.steps.cargas %}acreditacion-status--success{% else %}acreditacion-status--warning{% endif %}">
+        {{ workflow_data.cargas|length }} cargas
+      </span>
+    </div>
+
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="ciclos-form-grid">
+        {% for field in form %}
+          <label class="acreditacion-form__field {% if field.name == 'descripcion' or field.name == 'metadatos' %}acreditacion-form__field--full{% endif %}">
+            <span>{{ field.label }}</span>
+            {{ field }}
+            {{ field.errors }}
+          </label>
+        {% endfor %}
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Registrar carga</button>
+        <a class="btn btn-secondary" href="{% url 'mejora-revision-jefatura' %}">Continuar a revision</a>
+        <a class="btn btn-ghost" href="{% url 'mejora-asignacion-responsables' %}">Volver</a>
+      </div>
+    </form>
+  </article>
+
+  <aside class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Base de asignacion</h3>
+        <p class="text-muted">Responsables disponibles antes de cargar informacion.</p>
+      </div>
+    </div>
+    <div class="acreditacion-steps">
+      {% for row in workflow_data.asignaciones|slice:":4" %}
+        <div class="acreditacion-steps__item">
+          <span class="acreditacion-steps__index">{{ forloop.counter }}</span>
+          <div>
+            <strong>{{ row.subordinado_responsable }}</strong>
+            <p class="text-muted">{{ row.indicador }} / {{ row.elemento }}</p>
+          </div>
+        </div>
+      {% empty %}
+        <p class="text-muted">Aun no existen asignaciones registradas.</p>
+      {% endfor %}
+    </div>
+  </aside>
+</div>
+
+<article class="card">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Cargas registradas</h3>
+      <p class="text-muted">Evidencias y metadatos capturados para el proceso.</p>
+    </div>
+    {% if workflow_data.cargas %}
+      <form method="post" class="acreditacion-inline-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="clear">
+        <button class="btn btn-ghost" type="submit">Limpiar cargas</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Responsable</th>
+          <th>Indicador</th>
+          <th>Elemento</th>
+          <th>Evidencia</th>
+          <th>Descripcion</th>
+          <th>Metadatos</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in workflow_data.cargas %}
+          <tr>
+            <td>{{ row.responsable }}</td>
+            <td>{{ row.indicador }}</td>
+            <td>{{ row.elemento }}</td>
+            <td>{{ row.nombre_evidencia }}</td>
+            <td>{{ row.descripcion|default:"-" }}</td>
+            <td>{{ row.metadatos|default:"-" }}</td>
+            <td>{{ row.fecha_carga }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted">No hay cargas de informacion registradas.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}

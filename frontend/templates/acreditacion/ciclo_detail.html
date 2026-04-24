@@ -63,16 +63,16 @@
         {% csrf_token %}
         {{ ciclo_form.non_field_errors }}
         <input type="hidden" name="ciclo_id" value="{{ ciclo.pk }}">
-        <label class="acreditacion-form__field">
+        <div class="acreditacion-form__field">
           <span>Estado actual</span>
           {{ ciclo_form.estado }}
           {{ ciclo_form.estado.errors }}
-        </label>
-        <label class="acreditacion-form__field">
-          <span>Observacion</span>
-          {{ ciclo_form.observacion_aprobacion }}
+        </div>
+        <div class="acreditacion-form__field">
+          <span>{% if is_quality_actor %}Respuesta / correccion aplicada{% else %}Observacion{% endif %}</span>
+          {{ ciclo_form.observacion_aprobacion|safe }}
           {{ ciclo_form.observacion_aprobacion.errors }}
-        </label>
+        </div>
 
         <div class="ciclo-detail-card__header ciclo-detail-card__header--nested">
           <div>
@@ -81,16 +81,16 @@
           </div>
         </div>
 
-        <label class="acreditacion-form__field acreditacion-form__field--full">
+        <div class="acreditacion-form__field acreditacion-form__field--full">
           <span>Descripcion de la nueva version</span>
           {{ ciclo_form.descripcion_documento }}
           {{ ciclo_form.descripcion_documento.errors }}
-        </label>
-        <label class="acreditacion-form__field acreditacion-form__field--full">
+        </div>
+        <div class="acreditacion-form__field acreditacion-form__field--full">
           <span>Documento firmado</span>
           {{ ciclo_form.archivo }}
           {{ ciclo_form.archivo.errors }}
-        </label>
+        </div>
         <div class="acreditacion-form__actions">
           <button class="btn btn-primary" type="submit">Guardar todo</button>
         </div>
@@ -150,7 +150,6 @@
           <a
             class="btn btn-ghost"
             href="{% url 'documentos-protegidos-descargar' ciclo.authorization_document.pk %}"
-            target="_blank"
             rel="noopener"
           >
             Descargar

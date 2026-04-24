@@ -7,6 +7,11 @@ from apps.usuarios.models import Usuario, UsuarioAreaCargo
 
 ROLE_ADMIN = "ADMINISTRADOR"
 ROLE_QUALITY = "CALIDAD ACADEMICA"
+ROLE_QUALITY_ALIASES = {
+    "DIRECTOR DE CALIDAD",
+    "DIRECCION DE CALIDAD",
+    "CALIDAD",
+}
 ROLE_RECTOR = "RECTOR"
 ROLE_EVALUATOR = "EVALUADOR"
 ROLE_CONSULTA = "CONSULTA"
@@ -26,6 +31,11 @@ AREA_ROLES = {
     "ADMISIONES",
     "ACADEMICO",
     "BIENESTAR",
+}
+QUALITY_ALLOWED_GROUPS = {
+    "Acreditacion y estructura",
+    "Operacion documental",
+    "Informes y mejora",
 }
 
 
@@ -260,6 +270,13 @@ NAVIGATION_GROUPS = (
                 permissions=(PERM_EVIDENCIAS_REGISTRAR, PERM_EVALUACION_REVISAR, PERM_CONSULTA_VER),
             ),
             NavigationItem(
+                label="Tareas de evidencia",
+                url_name="evaluacion-tareas",
+                active_names=("evaluacion-tareas",),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, *AREA_ROLES),
+                permissions=(PERM_EVIDENCIAS_REGISTRAR, PERM_EVALUACION_REVISAR),
+            ),
+            NavigationItem(
                 label="Bandeja de evaluacion",
                 url_name="evaluacion-bandeja",
                 active_names=("evaluacion-bandeja",),
@@ -307,16 +324,25 @@ NAVIGATION_GROUPS = (
                 permissions=("informes.aprobar",),
             ),
             NavigationItem(
-                label="Planes de mejora",
+                label="Proceso de mejora",
                 url_name="mejora-lista",
                 active_names=("mejora-lista", "mejora-detalle"),
                 roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA),
                 permissions=(PERM_MEJORA_GESTIONAR, PERM_CONSULTA_VER),
             ),
             NavigationItem(
-                label="Crear plan",
+                label="Iniciar proceso",
                 url_name="mejora-crear",
-                active_names=("mejora-crear",),
+                active_names=(
+                    "mejora-crear",
+                    "mejora-ciclo-aprobacion",
+                    "mejora-asignacion-responsables",
+                    "mejora-carga-informacion",
+                    "mejora-revision-jefatura",
+                    "mejora-detalle",
+                    "mejora-envio-formal",
+                    "mejora-recepcion-evaluador",
+                ),
                 roles=(ROLE_ADMIN, ROLE_QUALITY),
                 permissions=(PERM_MEJORA_GESTIONAR,),
             ),
@@ -359,7 +385,10 @@ ROLE_PRIORITY = (
 
 
 def _normalize_roles(role_names: list[str] | tuple[str, ...]) -> set[str]:
-    return {str(role).strip().upper() for role in role_names if str(role).strip()}
+    normalized_roles = {str(role).strip().upper() for role in role_names if str(role).strip()}
+    if normalized_roles.intersection(ROLE_QUALITY_ALIASES):
+        normalized_roles.add(ROLE_QUALITY)
+    return normalized_roles
 
 
 def _normalize_permissions(permission_codes: list[str] | tuple[str, ...]) -> set[str]:
@@ -406,6 +435,13 @@ def build_navigation_groups(*, role_names=(), permission_codes=()):
                     "items": visible_items,
                 }
             )
+
+    # The quality role must only see the operational modules requested by business.
+    if ROLE_QUALITY in normalized_roles and not has_global_access:
+        visible_groups = [
+            group for group in visible_groups if group["label"] in QUALITY_ALLOWED_GROUPS
+        ]
+
     return visible_groups
 
 

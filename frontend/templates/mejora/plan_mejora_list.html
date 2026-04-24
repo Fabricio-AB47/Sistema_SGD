@@ -1,1 +1,65 @@
-{% extends "shared/admin_page.html" %}
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<div class="admin-highlights">
+	<article class="admin-highlights__card">
+		<span class="admin-highlights__label">Etapas completadas</span>
+		<strong class="admin-highlights__value">{{ completion.completed }} / {{ completion.total }}</strong>
+	</article>
+	<article class="admin-highlights__card">
+		<span class="admin-highlights__label">Asignaciones registradas</span>
+		<strong class="admin-highlights__value">{{ workflow_data.asignaciones|length }}</strong>
+	</article>
+	<article class="admin-highlights__card">
+		<span class="admin-highlights__label">Cargas registradas</span>
+		<strong class="admin-highlights__value">{{ workflow_data.cargas|length }}</strong>
+	</article>
+</div>
+
+<article class="card admin-sections__card">
+	<h3>Checklist de avance por etapa</h3>
+	<div class="table-responsive">
+		<table class="acreditacion-table">
+			<thead>
+				<tr>
+					<th>Etapa</th>
+					<th>Estado</th>
+					<th>Accion</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td>1. Aprobacion del ciclo</td>
+					<td>{{ completion.steps.ciclo_aprobacion|yesno:"Completada,Pendiente" }}</td>
+					<td><a href="{% url 'mejora-ciclo-aprobacion' %}">Gestionar</a></td>
+				</tr>
+				<tr>
+					<td>2. Asignacion de responsables</td>
+					<td>{{ completion.steps.asignaciones|yesno:"Completada,Pendiente" }}</td>
+					<td><a href="{% url 'mejora-asignacion-responsables' %}">Gestionar</a></td>
+				</tr>
+				<tr>
+					<td>3. Carga de informacion</td>
+					<td>{{ completion.steps.cargas|yesno:"Completada,Pendiente" }}</td>
+					<td><a href="{% url 'mejora-carga-informacion' %}">Gestionar</a></td>
+				</tr>
+				<tr>
+					<td>4. Revision de jefatura</td>
+					<td>{{ completion.steps.revision_jefatura|yesno:"Completada,Pendiente" }}</td>
+					<td><a href="{% url 'mejora-revision-jefatura' %}">Gestionar</a></td>
+				</tr>
+				<tr>
+					<td>5. Envio formal</td>
+					<td>{{ completion.steps.envio_formal|yesno:"Completada,Pendiente" }}</td>
+					<td><a href="{% url 'mejora-envio-formal' %}">Gestionar</a></td>
+				</tr>
+				<tr>
+					<td>6. Recepcion del evaluador</td>
+					<td>{{ completion.steps.recepcion_evaluador|yesno:"Completada,Pendiente" }}</td>
+					<td><a href="{% url 'mejora-recepcion-evaluador' %}">Gestionar</a></td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+</article>
+{% endblock %}

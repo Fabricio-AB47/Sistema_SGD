@@ -1,0 +1,90 @@
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<div class="acreditacion-overview">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Revision de jefatura</h3>
+        <p class="text-muted">Registra el visto del jefe antes del envio formal.</p>
+      </div>
+      {% if completion.steps.revision_jefatura %}
+        <span class="acreditacion-status acreditacion-status--success">Registrada</span>
+      {% else %}
+        <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+      {% endif %}
+    </div>
+
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="ciclos-form-grid">
+        {% for field in form %}
+          <label class="acreditacion-form__field {% if field.name == 'comentario' %}acreditacion-form__field--full{% endif %}">
+            <span>{{ field.label }}</span>
+            {{ field }}
+            {{ field.errors }}
+          </label>
+        {% endfor %}
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar revision</button>
+        <a class="btn btn-secondary" href="{% url 'mejora-envio-formal' %}">Continuar a envio formal</a>
+        <a class="btn btn-ghost" href="{% url 'mejora-carga-informacion' %}">Volver</a>
+      </div>
+    </form>
+  </article>
+
+  <aside class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Contexto para revisar</h3>
+        <p class="text-muted">Registros disponibles para validar la etapa.</p>
+      </div>
+    </div>
+    <dl class="acreditacion-detail-list">
+      <div>
+        <dt>Ciclo</dt>
+        <dd>{{ workflow_data.ciclo_aprobacion.ciclo_nombre|default:"Pendiente" }}</dd>
+      </div>
+      <div>
+        <dt>Asignaciones</dt>
+        <dd>{{ workflow_data.asignaciones|length }} registradas</dd>
+      </div>
+      <div>
+        <dt>Cargas</dt>
+        <dd>{{ workflow_data.cargas|length }} registradas</dd>
+      </div>
+    </dl>
+  </aside>
+</div>
+
+{% if workflow_data.revision_jefatura %}
+<article class="card">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Ultima revision guardada</h3>
+      <p class="text-muted">Esta informacion se precarga al volver a la etapa.</p>
+    </div>
+  </div>
+  <dl class="acreditacion-detail-list">
+    <div>
+      <dt>Jefe revisor</dt>
+      <dd>{{ workflow_data.revision_jefatura.jefe_revisor }}</dd>
+    </div>
+    <div>
+      <dt>Decision</dt>
+      <dd>{{ workflow_data.revision_jefatura.decision }}</dd>
+    </div>
+    <div>
+      <dt>Comentario</dt>
+      <dd>{{ workflow_data.revision_jefatura.comentario }}</dd>
+    </div>
+    <div>
+      <dt>Fecha</dt>
+      <dd>{{ workflow_data.revision_jefatura.fecha_revision }}</dd>
+    </div>
+  </dl>
+</article>
+{% endif %}
+{% endblock %}

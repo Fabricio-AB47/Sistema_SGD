@@ -21,26 +21,26 @@
     </div>
 
     {% if can_upload_documents %}
-      <form method="post" enctype="multipart/form-data" class="documentos-form">
+      <form method="post" enctype="multipart/form-data" class="documentos-form documentos-form--upload">
         {% csrf_token %}
         {{ upload_form.non_field_errors }}
         <div class="documentos-form__grid">
-          <div class="documentos-form__field documentos-form__field--full">
+          <div class="documentos-form__field">
             <label for="{{ upload_form.ciclo.id_for_label }}">Ciclo aprobado</label>
             {{ upload_form.ciclo }}
             {{ upload_form.ciclo.errors }}
           </div>
-          <div class="documentos-form__field documentos-form__field--full">
+          <div class="documentos-form__field">
             <label for="{{ upload_form.indicador.id_for_label }}">Indicador</label>
             {{ upload_form.indicador }}
             {{ upload_form.indicador.errors }}
           </div>
-          <div class="documentos-form__field documentos-form__field--full">
+          <div class="documentos-form__field">
             <label for="{{ upload_form.elemento_fundamental.id_for_label }}">Elemento fundamental</label>
             {{ upload_form.elemento_fundamental }}
             {{ upload_form.elemento_fundamental.errors }}
           </div>
-          <div class="documentos-form__field documentos-form__field--full">
+          <div class="documentos-form__field">
             <label for="{{ upload_form.clasificacion.id_for_label }}">Clasificacion</label>
             {{ upload_form.clasificacion }}
             {{ upload_form.clasificacion.errors }}

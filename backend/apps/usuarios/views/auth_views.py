@@ -66,8 +66,8 @@ class LoginView(FormView):
                 request=self.request,
             )
             self.request.session["pending_otp_user"] = result.usuario.id_user
-            self.request.session["pending_otp_roles"] = list(result.roles)
-            self.request.session["pending_otp_permissions"] = list(result.permissions)
+            # Keep OTP pending session minimal because signed-cookie sessions have size limits.
+            # Roles/permissions are resolved again after OTP validation.
             self.request.session["pending_requires_password_change"] = result.requires_password_change
             self.request.session["pending_otp_remember"] = bool(form.cleaned_data.get("remember", False))
             self.request.session["pending_otp_redirect"] = redirect_target

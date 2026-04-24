@@ -1,0 +1,591 @@
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+<div class="admin-highlights">
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Tareas activas</span>
+    <strong class="admin-highlights__value">{{ tarea_metrics.total }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Pendientes</span>
+    <strong class="admin-highlights__value">{{ tarea_metrics.pendientes }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Cerradas</span>
+    <strong class="admin-highlights__value">{{ tarea_metrics.cerradas }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Vencidas</span>
+    <strong class="admin-highlights__value">{{ tarea_metrics.vencidas }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Avance</span>
+    <strong class="admin-highlights__value">{{ tarea_metrics.avance }}%</strong>
+  </article>
+</div>
+
+<div class="acreditacion-overview acreditacion-overview--tasks">
+  {% if scope_flags.can_assign_tasks %}
+  <article class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Asignacion puntual</h3>
+        <p class="text-muted">Calidad puede delegar un elemento puntual a un director o jefe de area.</p>
+      </div>
+    </div>
+
+    <form method="post" class="documentos-form documentos-form--task" data-task-assignment-form>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="documentos-form__grid">
+        <div class="documentos-form__field">
+          <label for="{{ form.ciclo.id_for_label }}">Ciclo</label>
+          {{ form.ciclo }}
+          {{ form.ciclo.errors }}
+        </div>
+        <div class="documentos-form__field">
+          <label for="{{ form.area.id_for_label }}">Area responsable</label>
+          {{ form.area }}
+          {{ form.area.errors }}
+        </div>
+        <div class="documentos-form__field documentos-form__field--full">
+          <label for="{{ form.usuario_responsable.id_for_label }}">Director o jefe de area</label>
+          <select name="{{ form.usuario_responsable.html_name }}" id="{{ form.usuario_responsable.id_for_label }}" data-responsable-select>
+            <option value="">Selecciona un director o jefe</option>
+            {% for choice in task_responsable_choices %}
+              <option
+                value="{{ choice.value }}"
+                data-area-ids="{{ choice.area_ids|join:',' }}"
+                {% if choice.selected %}selected{% endif %}
+              >
+                {{ choice.label }}
+              </option>
+            {% endfor %}
+          </select>
+          {{ form.usuario_responsable.errors }}
+        </div>
+        <div class="documentos-form__field">
+          <label for="{{ form.indicador.id_for_label }}">Indicador</label>
+          {{ form.indicador }}
+          {{ form.indicador.errors }}
+        </div>
+        <div class="documentos-form__field">
+          <label for="{{ form.elemento_fundamental.id_for_label }}">Elemento fundamental</label>
+          {{ form.elemento_fundamental }}
+          {{ form.elemento_fundamental.errors }}
+        </div>
+        <div class="documentos-form__field">
+          <label for="{{ form.estado.id_for_label }}">Estado</label>
+          {{ form.estado }}
+          {{ form.estado.errors }}
+        </div>
+        <div class="documentos-form__field">
+          <label for="{{ form.fecha_limite.id_for_label }}">Fecha limite</label>
+          {{ form.fecha_limite }}
+          {{ form.fecha_limite.errors }}
+        </div>
+        <div class="documentos-form__field">
+          <label for="{{ form.prioridad.id_for_label }}">Prioridad</label>
+          {{ form.prioridad }}
+          {{ form.prioridad.errors }}
+        </div>
+        <div class="documentos-form__field documentos-form__field--full">
+          <label for="{{ form.observacion.id_for_label }}">Observacion operativa</label>
+          {{ form.observacion }}
+          {{ form.observacion.errors }}
+        </div>
+      </div>
+      <div class="documentos-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar tarea</button>
+      </div>
+    </form>
+  </article>
+  {% endif %}
+
+  <article class="card acreditacion-panel acreditacion-panel--filters">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Filtros</h3>
+        <p class="text-muted">Consulta tareas por estado, ciclo, area o responsable.</p>
+      </div>
+    </div>
+    <form method="get" class="filters-grid acreditacion-filters">
+      <label>
+        <span>Busqueda</span>
+        <input type="text" name="q" value="{{ selected_filters.q }}" placeholder="Indicador, elemento o responsable">
+      </label>
+      <label>
+        <span>Estado</span>
+        <select name="estado">
+          <option value="">Todos</option>
+          {% for estado in estado_tarea_options %}
+            <option value="{{ estado.pk }}" {% if selected_filters.estado == estado.pk|stringformat:"s" %}selected{% endif %}>
+              {{ estado.descripcion }}
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Ciclo ID</span>
+        <input type="text" name="ciclo" value="{{ selected_filters.ciclo }}" placeholder="ID ciclo">
+      </label>
+      {% if scope_flags.can_assign_tasks %}
+        <label>
+          <span>Area</span>
+          <select name="area">
+            <option value="">Todas</option>
+            {% for area in area_options %}
+              <option value="{{ area.pk }}" {% if selected_filters.area == area.pk|stringformat:"s" %}selected{% endif %}>
+                {{ area.codigo_area }} - {{ area.nombre_area }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span>Responsable ID</span>
+          <input type="text" name="responsable" value="{{ selected_filters.responsable }}" placeholder="ID usuario">
+        </label>
+      {% endif %}
+      <div class="page-header__actions acreditacion-filter-actions">
+        <button class="btn btn-secondary" type="submit">Filtrar</button>
+        <a class="btn btn-ghost" href="{% url 'evaluacion-tareas' %}">Limpiar</a>
+      </div>
+    </form>
+  </article>
+</div>
+
+{% if scope_flags.can_assign_tasks %}
+<article class="card acreditacion-panel evaluacion-bulk-assignment">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Asignacion parcial por criterio, indicador o elemento</h3>
+      <p class="text-muted">Calidad puede bajar por criterio, subcriterio, indicador o elemento para delegar solo el tramo que gestionara cada director o jefe.</p>
+    </div>
+  </div>
+
+  <form method="post" class="documentos-form documentos-form--task" data-bulk-assignment-form>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="bulk_assign">
+    {{ bulk_form.non_field_errors }}
+
+    <div class="documentos-form__grid">
+      <div class="documentos-form__field">
+        <label for="{{ bulk_form.ciclo.id_for_label }}">Ciclo</label>
+        {{ bulk_form.ciclo }}
+        {{ bulk_form.ciclo.errors }}
+      </div>
+      <div class="documentos-form__field">
+        <label for="{{ bulk_form.area.id_for_label }}">Area responsable</label>
+        {{ bulk_form.area }}
+        {{ bulk_form.area.errors }}
+      </div>
+      <div class="documentos-form__field documentos-form__field--full">
+        <label for="{{ bulk_form.usuario_responsable.id_for_label }}">Director o jefe de area</label>
+        <select name="{{ bulk_form.usuario_responsable.html_name }}" id="{{ bulk_form.usuario_responsable.id_for_label }}" data-responsable-select>
+          <option value="">Selecciona un director o jefe</option>
+          {% for choice in bulk_responsable_choices %}
+            <option
+              value="{{ choice.value }}"
+              data-area-ids="{{ choice.area_ids|join:',' }}"
+              {% if choice.selected %}selected{% endif %}
+            >
+              {{ choice.label }}
+            </option>
+          {% endfor %}
+        </select>
+        {{ bulk_form.usuario_responsable.errors }}
+      </div>
+      <div class="documentos-form__field">
+        <label for="{{ bulk_form.estado.id_for_label }}">Estado</label>
+        {{ bulk_form.estado }}
+        {{ bulk_form.estado.errors }}
+      </div>
+      <div class="documentos-form__field">
+        <label for="{{ bulk_form.fecha_limite.id_for_label }}">Fecha limite</label>
+        {{ bulk_form.fecha_limite }}
+        {{ bulk_form.fecha_limite.errors }}
+      </div>
+      <div class="documentos-form__field">
+        <label for="{{ bulk_form.prioridad.id_for_label }}">Prioridad</label>
+        {{ bulk_form.prioridad }}
+        {{ bulk_form.prioridad.errors }}
+      </div>
+      <div class="documentos-form__field documentos-form__field--full">
+        <label for="{{ bulk_form.observacion.id_for_label }}">Observacion operativa</label>
+        {{ bulk_form.observacion }}
+        {{ bulk_form.observacion.errors }}
+      </div>
+    </div>
+
+    <section class="evaluacion-bulk-toolbar">
+      <label class="evaluacion-bulk-select-all">
+        <input type="checkbox" data-select-all-checkbox>
+        <span>
+          <strong>Seleccionar todo</strong>
+          <small>Marca todos los criterios, indicadores y elementos del checklist para una delegacion completa.</small>
+        </span>
+      </label>
+
+      <div class="evaluacion-bulk-assignment__summary">
+        <span class="evaluacion-bulk-assignment__chip">
+          Indicadores seleccionados: <strong data-selected-indicadores>0</strong> / {{ bulk_structure_summary.indicators_total }}
+        </span>
+        <span class="evaluacion-bulk-assignment__chip">
+          Elementos seleccionados: <strong data-selected-elementos>0</strong> / {{ bulk_structure_summary.elements_total }}
+        </span>
+      </div>
+    </section>
+
+    <div class="evaluacion-bulk-criteria-list">
+      {% for criterion in bulk_criteria_groups %}
+        <section class="evaluacion-bulk-criterion" data-criterion-group>
+          <label class="evaluacion-bulk-criterion__header">
+            <input type="checkbox" data-criterion-checkbox>
+            <span>
+              <strong>{{ criterion.criterio.codigo_criterio }} - {{ criterion.criterio.nombre_criterio }}</strong>
+              <small>{{ criterion.indicators_total }} indicadores | {{ criterion.elements_total }} elementos</small>
+            </span>
+          </label>
+
+          <div class="evaluacion-bulk-subcriteria">
+            {% for subcriterion in criterion.subcriterios %}
+              <section class="evaluacion-bulk-subcriterion" data-subcriterion-group>
+                <label class="evaluacion-bulk-subcriterion__header">
+                  <input type="checkbox" data-subcriterion-checkbox>
+                  <span>
+                    <strong>{{ subcriterion.subcriterio.codigo_subcriterio }} - {{ subcriterion.subcriterio.nombre_subcriterio }}</strong>
+                    <small>{{ subcriterion.indicators_total }} indicadores | {{ subcriterion.elements_total }} elementos</small>
+                  </span>
+                </label>
+
+                <div class="evaluacion-bulk-groups">
+                  {% for group in subcriterion.indicator_groups %}
+                    <section class="evaluacion-bulk-group" data-indicador-group>
+                      <label class="evaluacion-bulk-group__head">
+                        <input type="checkbox" data-indicador-toggle>
+                        <span>
+                          <strong>{{ group.indicador.codigo_indicador }} - {{ group.indicador.nombre_indicador }}</strong>
+                          <small>{{ group.elementos|length }} elementos fundamentales</small>
+                        </span>
+                      </label>
+
+                      <div class="evaluacion-bulk-group__elements">
+                        {% for elemento in group.elementos %}
+                          <label class="evaluacion-bulk-check">
+                            <input
+                              type="checkbox"
+                              name="{{ bulk_form.elementos_fundamentales.html_name }}"
+                              value="{{ elemento.pk }}"
+                              data-elemento-checkbox
+                              {% if elemento.pk in bulk_selected_element_ids %}checked{% endif %}
+                            >
+                            <span>{{ elemento.codigo_elemento }} - {{ elemento.nombre_elemento }}</span>
+                          </label>
+                        {% empty %}
+                          <p class="text-muted">Este indicador no tiene elementos activos.</p>
+                        {% endfor %}
+                      </div>
+                    </section>
+                  {% endfor %}
+                </div>
+              </section>
+            {% endfor %}
+          </div>
+        </section>
+      {% empty %}
+        <p class="text-muted">No existen criterios activos para asignacion parcial.</p>
+      {% endfor %}
+    </div>
+
+    {{ bulk_form.elementos_fundamentales.errors }}
+
+    <div class="documentos-form__actions">
+      <button class="btn btn-primary" type="submit">Asignar seleccion parcial</button>
+    </div>
+  </form>
+</article>
+{% endif %}
+
+<article class="card evaluacion-tasks-board">
+  <div class="page-header evaluacion-tasks-board__header">
+    <div>
+      <h2>{% if scope_flags.can_assign_tasks %}Tareas asignadas{% else %}Mis tareas asignadas{% endif %}</h2>
+      <p class="text-muted">Control operativo de responsables antes de la salida al evaluador.</p>
+    </div>
+    <a class="btn btn-secondary" href="{% url 'acreditacion-matriz-registro' %}">Matriz de registro</a>
+  </div>
+
+  <div class="table-responsive acreditacion-table-shell">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Tarea</th>
+          <th>Ciclo</th>
+          <th>Indicador / elemento</th>
+          <th>Responsable</th>
+          <th>Estado</th>
+          <th>Fechas</th>
+          <th>Cierre</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tarea in tareas %}
+          <tr>
+            <td>
+              <strong>#{{ tarea.pk }}</strong>
+              <div class="text-muted">{{ tarea.prioridad|default:"Sin prioridad" }}</div>
+              {% if tarea.asignado_por %}
+                <div class="evaluacion-task-meta">
+                  <span>Asignada por {{ tarea.asignado_por.nombre_completo|default:tarea.asignado_por.correo }}</span>
+                </div>
+              {% endif %}
+            </td>
+            <td>{{ tarea.ciclo.nombre }}</td>
+            <td>
+              <strong>{{ tarea.indicador.codigo_indicador }}</strong>
+              <div class="text-muted">{{ tarea.elemento_fundamental.codigo_elemento }} - {{ tarea.elemento_fundamental.nombre_elemento }}</div>
+            </td>
+            <td>
+              <strong>{{ tarea.usuario_responsable.nombre_completo|default:tarea.usuario_responsable.correo }}</strong>
+              {% with assignments=tarea.usuario_responsable.task_area_assignments %}
+                {% if assignments %}
+                  <div class="evaluacion-task-meta">
+                    <span>{{ assignments.0.area.codigo_area }} - {{ assignments.0.area.nombre_area }}</span>
+                    <span>{{ assignments.0.cargo.nombre_cargo }}</span>
+                    {% if assignments|length > 1 %}
+                      <span>+{{ assignments|length|add:"-1" }} asignaciones activas</span>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              {% endwith %}
+            </td>
+            <td>
+              {% if tarea.fecha_cierre %}
+                <span class="acreditacion-status acreditacion-status--success">{{ tarea.estado.descripcion }}</span>
+              {% else %}
+                <span class="acreditacion-status acreditacion-status--warning">{{ tarea.estado.descripcion }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <div>Asignada: {{ tarea.fecha_asignacion|date:"d/m/Y"|default:"-" }}</div>
+              <div class="text-muted">Limite: {{ tarea.fecha_limite|date:"d/m/Y"|default:"-" }}</div>
+            </td>
+            <td>
+              {% if tarea.fecha_cierre %}
+                <strong>{{ tarea.fecha_cierre|date:"d/m/Y H:i" }}</strong>
+                <div class="text-muted">{{ tarea.resultado_tarea|default:"Cerrada" }}</div>
+              {% elif scope_flags.can_assign_tasks or tarea.usuario_responsable_id == current_actor_id %}
+                <form method="post" class="documentos-form evaluacion-task-close-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="close">
+                  <input type="hidden" name="tarea_id" value="{{ tarea.pk }}">
+                  <textarea name="resultado_tarea" rows="2" placeholder="Resultado de cierre"></textarea>
+                  <div class="documentos-form__actions">
+                    <button class="btn btn-ghost" type="submit">Cerrar</button>
+                  </div>
+                </form>
+              {% else %}
+                <span class="text-muted">Asignada a otro responsable</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted">No existen tareas de evidencia con los filtros seleccionados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    function setupAreaResponsableFilter(root) {
+      const areaSelect = root.querySelector("select[name='area']");
+      const responsableSelect = root.querySelector("[data-responsable-select]");
+      if (!areaSelect || !responsableSelect) {
+        return;
+      }
+
+      const options = Array.from(responsableSelect.querySelectorAll("option"));
+
+      function sync() {
+        const selectedArea = (areaSelect.value || "").trim();
+        options.forEach((option) => {
+          if (!option.value) {
+            option.hidden = false;
+            option.disabled = false;
+            return;
+          }
+
+          const areaIds = (option.dataset.areaIds || "")
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean);
+          const visible = !selectedArea || areaIds.length === 0 || areaIds.includes(selectedArea);
+          option.hidden = !visible;
+          option.disabled = !visible;
+          if (!visible && option.selected) {
+            responsableSelect.value = "";
+          }
+        });
+      }
+
+      areaSelect.addEventListener("change", sync);
+      sync();
+    }
+
+    document.querySelectorAll("[data-task-assignment-form], [data-bulk-assignment-form]").forEach(setupAreaResponsableFilter);
+
+    const form = document.querySelector("[data-bulk-assignment-form]");
+    if (!form) {
+      return;
+    }
+
+    const selectAllCheckbox = form.querySelector("[data-select-all-checkbox]");
+    const selectedIndicadoresNode = form.querySelector("[data-selected-indicadores]");
+    const selectedElementosNode = form.querySelector("[data-selected-elementos]");
+    const groups = Array.from(form.querySelectorAll("[data-indicador-group]"));
+
+    function getLeafInputs(container) {
+      const leafInputs = [];
+      container.querySelectorAll("[data-indicador-group]").forEach((group) => {
+        const elementChecks = Array.from(group.querySelectorAll("[data-elemento-checkbox]"));
+        if (elementChecks.length) {
+          leafInputs.push(...elementChecks);
+          return;
+        }
+        const indicatorToggle = group.querySelector("[data-indicador-toggle]");
+        if (indicatorToggle) {
+          leafInputs.push(indicatorToggle);
+        }
+      });
+      return leafInputs;
+    }
+
+    function setAggregateState(checkbox, inputs) {
+      if (!checkbox || inputs.length === 0) {
+        return;
+      }
+      const checkedCount = inputs.filter((input) => input.checked).length;
+      checkbox.checked = checkedCount === inputs.length;
+      checkbox.indeterminate = checkedCount > 0 && checkedCount < inputs.length;
+    }
+
+    function setIndicatorGroup(group, checked) {
+      const indicatorToggle = group.querySelector("[data-indicador-toggle]");
+      const elementChecks = Array.from(group.querySelectorAll("[data-elemento-checkbox]"));
+      if (indicatorToggle) {
+        indicatorToggle.checked = checked;
+        indicatorToggle.indeterminate = false;
+      }
+      elementChecks.forEach((checkbox) => {
+        checkbox.checked = checked;
+      });
+    }
+
+    function setContainer(container, checked) {
+      container.querySelectorAll("[data-indicador-group]").forEach((group) => {
+        setIndicatorGroup(group, checked);
+      });
+      updateStates();
+    }
+
+    function updateIndicatorState(group) {
+      const indicatorToggle = group.querySelector("[data-indicador-toggle]");
+      const elementChecks = Array.from(group.querySelectorAll("[data-elemento-checkbox]"));
+      const checkedElements = elementChecks.filter((checkbox) => checkbox.checked).length;
+
+      if (!indicatorToggle) {
+        return;
+      }
+
+      if (elementChecks.length === 0) {
+        indicatorToggle.indeterminate = false;
+        return;
+      }
+
+      indicatorToggle.checked = checkedElements === elementChecks.length;
+      indicatorToggle.indeterminate = checkedElements > 0 && checkedElements < elementChecks.length;
+    }
+
+    function updateCounters() {
+      let selectedIndicadores = 0;
+      let selectedElementos = 0;
+
+      groups.forEach((group) => {
+        const indicatorToggle = group.querySelector("[data-indicador-toggle]");
+        const elementChecks = Array.from(group.querySelectorAll("[data-elemento-checkbox]"));
+        const checkedElements = elementChecks.filter((checkbox) => checkbox.checked).length;
+
+        selectedElementos += checkedElements;
+        if ((elementChecks.length > 0 && checkedElements > 0) || (elementChecks.length === 0 && indicatorToggle && indicatorToggle.checked)) {
+          selectedIndicadores += 1;
+        }
+      });
+
+      if (selectedIndicadoresNode) {
+        selectedIndicadoresNode.textContent = String(selectedIndicadores);
+      }
+      if (selectedElementosNode) {
+        selectedElementosNode.textContent = String(selectedElementos);
+      }
+    }
+
+    function updateStates() {
+      groups.forEach(updateIndicatorState);
+      form.querySelectorAll("[data-subcriterion-group]").forEach((group) => {
+        setAggregateState(group.querySelector("[data-subcriterion-checkbox]"), getLeafInputs(group));
+      });
+      form.querySelectorAll("[data-criterion-group]").forEach((group) => {
+        setAggregateState(group.querySelector("[data-criterion-checkbox]"), getLeafInputs(group));
+      });
+      if (selectAllCheckbox) {
+        setAggregateState(selectAllCheckbox, getLeafInputs(form));
+      }
+      updateCounters();
+    }
+
+    groups.forEach((group) => {
+      const indicatorToggle = group.querySelector("[data-indicador-toggle]");
+      const elementChecks = Array.from(group.querySelectorAll("[data-elemento-checkbox]"));
+
+      if (indicatorToggle) {
+        indicatorToggle.addEventListener("change", function () {
+          setIndicatorGroup(group, this.checked);
+          updateStates();
+        });
+      }
+
+      elementChecks.forEach((checkbox) => {
+        checkbox.addEventListener("change", function () {
+          updateStates();
+        });
+      });
+    });
+
+    form.querySelectorAll("[data-subcriterion-checkbox]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        setContainer(this.closest("[data-subcriterion-group]"), this.checked);
+      });
+    });
+
+    form.querySelectorAll("[data-criterion-checkbox]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        setContainer(this.closest("[data-criterion-group]"), this.checked);
+      });
+    });
+
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener("change", function () {
+        setContainer(form, this.checked);
+      });
+    }
+
+    updateStates();
+  })();
+</script>
+{% endblock %}

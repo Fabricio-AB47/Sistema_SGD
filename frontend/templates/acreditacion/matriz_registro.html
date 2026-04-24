@@ -1,0 +1,279 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<div class="acreditacion-overview acreditacion-overview--registry">
+  <article class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Cobertura de evidencias</h3>
+        <p class="text-muted">Avance real por elemento fundamental del ciclo seleccionado.</p>
+      </div>
+      <span class="badge">{{ matrix_registration_summary.completion_percent }}%</span>
+    </div>
+    <div class="acreditacion-progress acreditacion-progress--{{ matrix_registration_summary.completion_bucket }}" aria-label="Cobertura documental">
+      <span></span>
+    </div>
+    <div class="acreditacion-steps">
+      <div class="acreditacion-steps__item">
+        <span class="acreditacion-steps__index">{{ matrix_registration_summary.uploaded }}</span>
+        <div>
+          <strong>Elementos con evidencia</strong>
+          <p class="text-muted">{{ matrix_registration_summary.records }} registros documentales.</p>
+        </div>
+      </div>
+      <div class="acreditacion-steps__item">
+        <span class="acreditacion-steps__index">{{ matrix_registration_summary.pending }}</span>
+        <div>
+          <strong>Elementos pendientes</strong>
+          <p class="text-muted">{{ matrix_registration_summary.total }} elementos evaluables.</p>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Ciclo de trabajo</h3>
+        <p class="text-muted">Solo se habilitan ciclos aprobados con autorizacion documental.</p>
+      </div>
+    </div>
+    <form method="get" class="filters-grid acreditacion-filters">
+      <label>
+        <span>Ciclo habilitado</span>
+        <select name="ciclo">
+          {% for ciclo in available_cycles %}
+            <option value="{{ ciclo.pk }}" {% if selected_cycle and selected_cycle.pk == ciclo.pk %}selected{% endif %}>
+              {{ ciclo.nombre }}
+            </option>
+          {% empty %}
+            <option value="">Sin ciclos habilitados</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="page-header__actions acreditacion-filter-actions">
+        <button class="btn btn-secondary" type="submit">Consultar</button>
+        <a class="btn btn-ghost" href="{% url 'acreditacion-ciclos-lista' %}">Ciclos</a>
+      </div>
+    </form>
+  </article>
+</div>
+
+<div class="acreditacion-overview acreditacion-overview--registry">
+  <article class="card acreditacion-panel acreditacion-panel--upload" id="registro-evidencia-form">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Subir evidencia</h3>
+        <p class="text-muted">Carga el documento y deja asociado el registro al elemento seleccionado.</p>
+      </div>
+      {% if has_prefilled_evidence_target %}
+        <span class="acreditacion-status acreditacion-status--info">Seleccion desde matriz</span>
+      {% endif %}
+    </div>
+
+    {% if selected_cycle and matrix_registration_rows %}
+      <form method="post" enctype="multipart/form-data" class="documentos-form documentos-form--evidence">
+        {% csrf_token %}
+        {{ registration_form.non_field_errors }}
+        <div class="documentos-form__grid">
+          <div class="documentos-form__field">
+            <label for="{{ registration_form.ciclo.id_for_label }}">Ciclo</label>
+            {{ registration_form.ciclo }}
+            {{ registration_form.ciclo.errors }}
+          </div>
+          <div class="documentos-form__field">
+            <label for="{{ registration_form.indicador.id_for_label }}">Indicador</label>
+            {{ registration_form.indicador }}
+            {{ registration_form.indicador.errors }}
+          </div>
+          <div class="documentos-form__field">
+            <label for="{{ registration_form.elemento_fundamental.id_for_label }}">Elemento fundamental</label>
+            {{ registration_form.elemento_fundamental }}
+            {{ registration_form.elemento_fundamental.errors }}
+          </div>
+          <div class="documentos-form__field">
+            <label for="{{ registration_form.clasificacion.id_for_label }}">Clasificacion documental</label>
+            {{ registration_form.clasificacion }}
+            {{ registration_form.clasificacion.errors }}
+          </div>
+          <div class="documentos-form__field documentos-form__field--full">
+            <label for="{{ registration_form.descripcion_documento.id_for_label }}">Descripcion del documento</label>
+            {{ registration_form.descripcion_documento }}
+            {{ registration_form.descripcion_documento.errors }}
+          </div>
+          <div class="documentos-form__field documentos-form__field--full">
+            <label for="{{ registration_form.comentario.id_for_label }}">Comentario del registro</label>
+            {{ registration_form.comentario }}
+            {{ registration_form.comentario.errors }}
+          </div>
+          <div class="documentos-form__field documentos-form__field--full">
+            <label for="{{ registration_form.archivo.id_for_label }}">Archivo</label>
+            {{ registration_form.archivo }}
+            {{ registration_form.archivo.errors }}
+          </div>
+        </div>
+        <div class="documentos-form__actions">
+          <button class="btn btn-primary" type="submit">Subir evidencia</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="documentos-empty-state">
+        <strong>Matriz de registro sin habilitacion.</strong>
+        <p class="text-muted">
+          Debe existir un ciclo aprobado, un documento de autorizacion y elementos fundamentales vinculados.
+        </p>
+        <a class="btn btn-primary" href="{% url 'acreditacion-ciclos-lista' %}">Revisar ciclos</a>
+      </div>
+    {% endif %}
+  </article>
+
+  <article class="card acreditacion-panel acreditacion-panel--timeline">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Ultimas cargas</h3>
+        <p class="text-muted">Registros recientes del ciclo activo.</p>
+      </div>
+    </div>
+    <div class="table-responsive acreditacion-table-shell">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Documento</th>
+            <th>Elemento</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for registro in recent_registered_evidences %}
+            <tr>
+              <td>
+                <a href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ registro.pk }}">
+                  {{ registro.documento.nombre_archivo }}
+                </a>
+              </td>
+              <td>{{ registro.elemento_fundamental.codigo_elemento }}</td>
+              <td>{{ registro.estado.descripcion }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-muted">Sin cargas registradas.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div>
+
+<article class="card acreditacion-panel acreditacion-panel--wide">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Matriz de cumplimiento documental</h3>
+      <p class="text-muted">Cada fila muestra la ultima evidencia registrada por elemento.</p>
+    </div>
+    {% if selected_cycle %}
+      <span class="badge">{{ selected_cycle.nombre }}</span>
+    {% endif %}
+  </div>
+
+  <div class="table-responsive acreditacion-table-shell">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Criterio</th>
+          <th>Indicador</th>
+          <th>Elemento</th>
+          <th>Evidencia</th>
+          <th>Registros</th>
+          <th>Accion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in matrix_registration_rows %}
+          <tr>
+            <td>
+              <strong>{{ row.criterio.codigo_criterio }}</strong>
+              <div class="text-muted">{{ row.subcriterio.codigo_subcriterio }}</div>
+            </td>
+            <td>{{ row.indicador.codigo_indicador }} - {{ row.indicador.nombre_indicador }}</td>
+            <td>{{ row.elemento.codigo_elemento }} - {{ row.elemento.nombre_elemento }}</td>
+            <td>
+              {% if row.has_evidence %}
+                <span class="acreditacion-status acreditacion-status--success">Registrada</span>
+                <div class="text-muted">{{ row.latest_record.documento.nombre_archivo }}</div>
+              {% else %}
+                <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+              {% endif %}
+            </td>
+            <td>{{ row.record_count }}</td>
+            <td>
+              <div class="acreditacion-row-actions">
+                <a
+                  class="btn btn-secondary"
+                  href="{% url 'acreditacion-matriz-registro' %}?ciclo={{ selected_cycle.pk }}&indicador={{ row.indicador.pk }}&elemento={{ row.elemento.pk }}#registro-evidencia-form"
+                >
+                  Subir evidencia
+                </a>
+                {% if row.latest_record %}
+                  <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ row.latest_record.pk }}">Detalle</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted">No existen elementos para registrar evidencia.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<article class="card acreditacion-panel">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Estado de habilitacion</h3>
+      <p class="text-muted">Revision rapida de ciclos y autorizaciones disponibles.</p>
+    </div>
+  </div>
+  <div class="table-responsive acreditacion-table-shell">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Ciclo</th>
+          <th>Estado</th>
+          <th>Autorizacion</th>
+          <th>Carga</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ciclo in cycle_statuses %}
+          <tr>
+            <td>{{ ciclo.nombre }}</td>
+            <td>{{ ciclo.estado.descripcion }}</td>
+            <td>
+              {% if ciclo.has_authorization_document %}
+                <span class="acreditacion-status acreditacion-status--success">Disponible</span>
+              {% else %}
+                <span class="acreditacion-status acreditacion-status--muted">Pendiente</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if ciclo.document_upload_enabled %}
+                <a href="{% url 'acreditacion-matriz-registro' %}?ciclo={{ ciclo.pk }}">Usar</a>
+              {% else %}
+                Bloqueada
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">No hay ciclos registrados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}

@@ -230,13 +230,93 @@ def get_role_structure_access_context(*, role_id=None, ciclo_id=None):
             }
         )
 
+    criteria_map = OrderedDict()
+    for group in indicator_groups:
+        indicator = group["indicator"]
+        subcriterio = indicator.subcriterio
+        criterio = subcriterio.criterio
+        criterio_key = criterio.pk
+        subcriterio_key = subcriterio.pk
+
+        criterion_node = criteria_map.setdefault(
+            criterio_key,
+            {
+                "criterio": criterio,
+                "indicators_total": 0,
+                "indicators_selected": 0,
+                "elements_total": 0,
+                "elements_selected": 0,
+                "_subcriterios": OrderedDict(),
+            },
+        )
+        subcriterion_node = criterion_node["_subcriterios"].setdefault(
+            subcriterio_key,
+            {
+                "subcriterio": subcriterio,
+                "indicators_total": 0,
+                "indicators_selected": 0,
+                "elements_total": 0,
+                "elements_selected": 0,
+                "indicator_groups": [],
+            },
+        )
+
+        group_elements_total = len(group["elements"])
+        group_elements_selected = len(group["selected_element_ids"])
+        group_indicator_selected = 1 if group["selected"] else 0
+
+        criterion_node["indicators_total"] += 1
+        criterion_node["indicators_selected"] += group_indicator_selected
+        criterion_node["elements_total"] += group_elements_total
+        criterion_node["elements_selected"] += group_elements_selected
+
+        subcriterion_node["indicators_total"] += 1
+        subcriterion_node["indicators_selected"] += group_indicator_selected
+        subcriterion_node["elements_total"] += group_elements_total
+        subcriterion_node["elements_selected"] += group_elements_selected
+        subcriterion_node["indicator_groups"].append(group)
+
+    criteria_groups = []
+    for criterion_node in criteria_map.values():
+        subcriterios = []
+        for subcriterion_node in criterion_node["_subcriterios"].values():
+            subcriterion_node["checked"] = (
+                subcriterion_node["indicators_total"] > 0
+                and subcriterion_node["indicators_selected"] == subcriterion_node["indicators_total"]
+                and (
+                    subcriterion_node["elements_total"] == 0
+                    or subcriterion_node["elements_selected"] == subcriterion_node["elements_total"]
+                )
+            )
+            subcriterios.append(subcriterion_node)
+
+        criterion_node["subcriterios"] = subcriterios
+        criterion_node["checked"] = (
+            criterion_node["indicators_total"] > 0
+            and criterion_node["indicators_selected"] == criterion_node["indicators_total"]
+            and (
+                criterion_node["elements_total"] == 0
+                or criterion_node["elements_selected"] == criterion_node["elements_total"]
+            )
+        )
+        del criterion_node["_subcriterios"]
+        criteria_groups.append(criterion_node)
+
+    structure_all_selected = (
+        len(indicator_groups) > 0
+        and selected_indicator_total == len(indicator_groups)
+        and (total_elements == 0 or assigned_element_total == total_elements)
+    )
+
     return {
         "roles": roles,
         "cycles": ciclos,
         "selected_role": selected_role,
         "selected_cycle": selected_cycle,
         "indicator_groups": indicator_groups,
+        "criteria_groups": criteria_groups,
         "assignments": active_accesses,
+        "structure_all_selected": structure_all_selected,
         "structure_summary": {
             "indicators_total": len(indicator_groups),
             "indicators_selected": selected_indicator_total,

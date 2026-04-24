@@ -110,8 +110,8 @@ class OTPVerificationView(FormView):
         completion = complete_login_after_otp(
             usuario=usuario,
             remember=bool(self.request.session.get("pending_otp_remember", False)),
-            roles=tuple(self.request.session.get("pending_otp_roles", ())),
-            permissions=tuple(self.request.session.get("pending_otp_permissions", ())),
+            roles=(),
+            permissions=(),
             requires_password_change=bool(self.request.session.get("pending_requires_password_change", False)),
             ip=self.request.META.get("REMOTE_ADDR", ""),
             user_agent=self.request.META.get("HTTP_USER_AGENT", "")[:300],

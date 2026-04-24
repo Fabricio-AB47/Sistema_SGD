@@ -1,1 +1,24 @@
-{% extends "shared/admin_page.html" %}
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<article class="card">
+	<h3>Revision de jefatura</h3>
+	<form method="post" class="acreditacion-form">
+		{% csrf_token %}
+		{{ form.non_field_errors }}
+		<div class="ciclos-form-grid">
+			{% for field in form %}
+				<label class="acreditacion-form__field {% if field.name == 'comentario' %}acreditacion-form__field--full{% endif %}">
+					<span>{{ field.label }}</span>
+					{{ field }}
+					{{ field.errors }}
+				</label>
+			{% endfor %}
+		</div>
+		<div class="acreditacion-form__actions">
+			<button class="btn btn-primary" type="submit">Guardar revision</button>
+			<a class="btn btn-secondary" href="{% url 'mejora-envio-formal' %}">Continuar a envio formal</a>
+		</div>
+	</form>
+</article>
+{% endblock %}

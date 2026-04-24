@@ -1,0 +1,196 @@
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<div class="acreditacion-highlights">
+  <article class="acreditacion-highlights__card">
+    <span class="acreditacion-highlights__label">Etapas completadas</span>
+    <strong class="acreditacion-highlights__value">{{ completion.completed }} / {{ completion.total }}</strong>
+  </article>
+  <article class="acreditacion-highlights__card">
+    <span class="acreditacion-highlights__label">Asignaciones</span>
+    <strong class="acreditacion-highlights__value">{{ workflow_data.asignaciones|length }}</strong>
+  </article>
+  <article class="acreditacion-highlights__card">
+    <span class="acreditacion-highlights__label">Cargas registradas</span>
+    <strong class="acreditacion-highlights__value">{{ workflow_data.cargas|length }}</strong>
+  </article>
+  <article class="acreditacion-highlights__card">
+    <span class="acreditacion-highlights__label">Estado general</span>
+    <strong class="acreditacion-highlights__value">
+      {% if completion.completed == completion.total %}Completo{% else %}En curso{% endif %}
+    </strong>
+  </article>
+</div>
+
+<article class="card">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Ruta operativa</h3>
+      <p class="text-muted">Avance guiado desde la aprobacion del ciclo hasta la recepcion por el evaluador.</p>
+    </div>
+    {% if not completion.steps.ciclo_aprobacion %}
+      <a class="btn btn-primary" href="{% url 'mejora-ciclo-aprobacion' %}">Iniciar proceso</a>
+    {% elif not completion.steps.asignaciones %}
+      <a class="btn btn-primary" href="{% url 'mejora-asignacion-responsables' %}">Continuar asignacion</a>
+    {% elif not completion.steps.cargas %}
+      <a class="btn btn-primary" href="{% url 'mejora-carga-informacion' %}">Continuar carga</a>
+    {% elif not completion.steps.revision_jefatura %}
+      <a class="btn btn-primary" href="{% url 'mejora-revision-jefatura' %}">Continuar revision</a>
+    {% elif not completion.steps.envio_formal %}
+      <a class="btn btn-primary" href="{% url 'mejora-envio-formal' %}">Continuar envio</a>
+    {% elif not completion.steps.recepcion_evaluador %}
+      <a class="btn btn-primary" href="{% url 'mejora-recepcion-evaluador' %}">Continuar recepcion</a>
+    {% else %}
+      <a class="btn btn-secondary" href="{% url 'mejora-seguimiento' %}">Ver seguimiento</a>
+    {% endif %}
+  </div>
+
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Paso</th>
+          <th>Captura requerida</th>
+          <th>Estado</th>
+          <th>Accion</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>1. Aprobacion del ciclo</td>
+          <td>Ciclo, fecha, aprobador, acta y observacion.</td>
+          <td>
+            {% if completion.steps.ciclo_aprobacion %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-ciclo-aprobacion' %}">Gestionar</a></td>
+        </tr>
+        <tr>
+          <td>2. Asignacion de responsables</td>
+          <td>Area, jefe, responsable, indicador, elemento y fecha.</td>
+          <td>
+            {% if completion.steps.asignaciones %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-asignacion-responsables' %}">Gestionar</a></td>
+        </tr>
+        <tr>
+          <td>3. Carga de informacion</td>
+          <td>Evidencia, descripcion, metadatos, indicador, elemento y fecha.</td>
+          <td>
+            {% if completion.steps.cargas %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-carga-informacion' %}">Gestionar</a></td>
+        </tr>
+        <tr>
+          <td>4. Revision de jefatura</td>
+          <td>Revisor, decision, comentario y fecha.</td>
+          <td>
+            {% if completion.steps.revision_jefatura %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-revision-jefatura' %}">Gestionar</a></td>
+        </tr>
+        <tr>
+          <td>5. Envio formal</td>
+          <td>Director, fecha de envio, confirmacion y comentario.</td>
+          <td>
+            {% if completion.steps.envio_formal %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-envio-formal' %}">Gestionar</a></td>
+        </tr>
+        <tr>
+          <td>6. Recepcion del evaluador</td>
+          <td>Evaluador, fecha de recepcion, estado inicial y observacion.</td>
+          <td>
+            {% if completion.steps.recepcion_evaluador %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-recepcion-evaluador' %}">Gestionar</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<div class="acreditacion-overview">
+  <article class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Datos principales</h3>
+        <p class="text-muted">Resumen de las decisiones registradas en el proceso.</p>
+      </div>
+    </div>
+    <dl class="acreditacion-detail-list">
+      <div>
+        <dt>Ciclo aprobado</dt>
+        <dd>{{ workflow_data.ciclo_aprobacion.ciclo_nombre|default:"Pendiente" }}</dd>
+      </div>
+      <div>
+        <dt>Revision de jefatura</dt>
+        <dd>{{ workflow_data.revision_jefatura.decision|default:"Pendiente" }}</dd>
+      </div>
+      <div>
+        <dt>Envio formal</dt>
+        <dd>{% if workflow_data.envio_formal %}Registrado{% else %}Pendiente{% endif %}</dd>
+      </div>
+      <div>
+        <dt>Recepcion evaluador</dt>
+        <dd>{{ workflow_data.recepcion_evaluador.estado_inicial|default:"Pendiente" }}</dd>
+      </div>
+    </dl>
+  </article>
+
+  <article class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Control de avance</h3>
+        <p class="text-muted">Usa las pestañas superiores para editar cada captura sin salir del modulo.</p>
+      </div>
+    </div>
+    <div class="acreditacion-steps">
+      <div class="acreditacion-steps__item">
+        <span class="acreditacion-steps__index">%</span>
+        <div>
+          <strong>{{ completion.percentage }}% completado</strong>
+          <p class="text-muted">Estado calculado con las seis etapas operativas.</p>
+        </div>
+      </div>
+      <div class="acreditacion-steps__item">
+        <span class="acreditacion-steps__index">{{ workflow_data.asignaciones|length }}</span>
+        <div>
+          <strong>Responsables asignados</strong>
+          <p class="text-muted">Cada registro conecta area, indicador y elemento.</p>
+        </div>
+      </div>
+      <div class="acreditacion-steps__item">
+        <span class="acreditacion-steps__index">{{ workflow_data.cargas|length }}</span>
+        <div>
+          <strong>Evidencias cargadas</strong>
+          <p class="text-muted">Las cargas quedan disponibles para revision y envio formal.</p>
+        </div>
+      </div>
+    </div>
+  </article>
+</div>
+{% endblock %}

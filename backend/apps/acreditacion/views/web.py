@@ -1,4 +1,7 @@
 import logging
+import re
+import xml.etree.ElementTree as ET
+from zipfile import BadZipFile, ZipFile
 
 from django.contrib import messages
 from django.db import DatabaseError, IntegrityError, OperationalError, transaction
@@ -46,7 +49,9 @@ from apps.acreditacion.services import (
 from apps.acreditacion.models import CicloEvaluacion
 from apps.documentos.services import (
     AuthorizationServiceError,
+    ProtectedDocumentAccessError,
     StructuredDocumentUploadError,
+    resolve_protected_document_stream,
     upload_cycle_authorization_revision,
 )
 from apps.documentos.selectors import attach_cycle_authorization_status
@@ -61,6 +66,120 @@ from apps.usuarios.models import Usuario
 
 
 logger = logging.getLogger(__name__)
+
+
+RECTOR_ROLE_TOKENS = {"RECTOR", "RECTORADO"}
+QUALITY_ROLE_TOKENS = {
+    "CALIDAD ACADEMICA",
+    "DIRECTOR DE CALIDAD",
+    "DIRECCION DE CALIDAD",
+    "CALIDAD",
+}
+
+
+def _is_rector_role(role: str) -> bool:
+    return str(role).strip().upper() in RECTOR_ROLE_TOKENS
+
+
+def _is_quality_role(role: str) -> bool:
+    return str(role).strip().upper() in QUALITY_ROLE_TOKENS
+
+
+REVIEWER_COMMENTS_PREFIX = "COMENTARIOS REVISOR:"
+QUALITY_RESPONSE_PREFIX = "RESPUESTA CALIDAD:"
+DOCX_COMMENT_NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+
+
+def _split_observation_blocks(raw_text: str | None) -> tuple[str | None, str | None]:
+    text = (raw_text or "").strip()
+    if not text:
+        return None, None
+
+    upper_text = text.upper()
+    reviewer_idx = upper_text.find(REVIEWER_COMMENTS_PREFIX)
+    quality_idx = upper_text.find(QUALITY_RESPONSE_PREFIX)
+
+    if reviewer_idx != -1 and quality_idx != -1 and quality_idx > reviewer_idx:
+        reviewer_part = text[
+            reviewer_idx + len(REVIEWER_COMMENTS_PREFIX) : quality_idx
+        ].strip()
+        quality_part = text[quality_idx + len(QUALITY_RESPONSE_PREFIX) :].strip()
+        return reviewer_part or None, quality_part or None
+
+    if quality_idx != -1:
+        quality_part = text[quality_idx + len(QUALITY_RESPONSE_PREFIX) :].strip()
+        return None, quality_part or None
+
+    return text, None
+
+
+def _build_quality_observation_payload(*, previous_value: str | None, submitted_value: str | None) -> str | None:
+    submitted = (submitted_value or "").strip()
+    if not submitted:
+        return None
+
+    reviewer_comments, _existing_quality_response = _split_observation_blocks(previous_value)
+    if reviewer_comments:
+        return (
+            f"{REVIEWER_COMMENTS_PREFIX}\n{reviewer_comments}\n\n"
+            f"{QUALITY_RESPONSE_PREFIX}\n{submitted}"
+        )
+    return submitted
+
+
+def _extract_comment_items(text: str | None) -> list[str]:
+    raw = (text or "").strip()
+    if not raw:
+        return []
+    normalized = raw.replace("\r", "\n")
+    chunks = re.split(r"[\n;]+", normalized)
+    items = [" ".join(chunk.strip().split()) for chunk in chunks if chunk and chunk.strip()]
+    return items[:12]
+
+
+def _read_word_comment_text(comment_node) -> str:
+    pieces = [node.text for node in comment_node.findall(".//w:t", DOCX_COMMENT_NS) if node.text]
+    return "".join(pieces).strip()
+
+
+def _extract_word_comments_from_document(documento) -> tuple[list[dict[str, str]], str | None]:
+    if documento is None:
+        return [], None
+
+    file_name = (getattr(documento, "nombre_archivo", "") or "").strip()
+    if not file_name.lower().endswith(".docx"):
+        return [], "El analisis de comentarios automatico solo aplica para documentos .docx."
+
+    try:
+        stream, _headers = resolve_protected_document_stream(documento)
+        stream.seek(0)
+        with ZipFile(stream) as archive:
+            if "word/comments.xml" not in archive.namelist():
+                return [], "El documento Word no contiene comentarios insertados."
+
+            root = ET.fromstring(archive.read("word/comments.xml"))
+            comments: list[dict[str, str]] = []
+            for comment in root.findall("w:comment", DOCX_COMMENT_NS):
+                comment_id = comment.attrib.get("{http://schemas.openxmlformats.org/wordprocessingml/2006/main}id", "")
+                comments.append(
+                    {
+                        "id": comment_id,
+                        "author": comment.attrib.get(
+                            "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}author",
+                            "",
+                        ),
+                        "date": comment.attrib.get(
+                            "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}date",
+                            "",
+                        ),
+                        "text": _read_word_comment_text(comment),
+                    }
+                )
+            return comments, None
+    except ProtectedDocumentAccessError as exc:
+        return [], str(exc)
+    except (BadZipFile, ET.ParseError, KeyError, OSError, ValueError):
+        return [], "No fue posible analizar los comentarios del documento Word seleccionado."
 
 MODULE_TITLE = "Acreditacion"
 MODULE_DESCRIPTION = "Gestiona la estructura CACES real del sistema y su relacion con ciclos y evidencia."
@@ -306,6 +425,7 @@ class MatrizRegistroView(AcreditacionBaseView):
     )
     page_actions = [
         {"label": "Ver matriz", "url_name": "acreditacion-matriz", "variant": "secondary"},
+        {"label": "Asignar criterios", "url_name": "permisos-acceso-evaluacion", "variant": "secondary"},
         {"label": "Gestion documental", "url_name": "documentos-lista", "variant": "secondary"},
     ]
     show_acreditacion_overview = False
@@ -317,6 +437,20 @@ class MatrizRegistroView(AcreditacionBaseView):
         )
         selected_cycle = dashboard.get("selected_cycle")
         summary = dashboard.get("matrix_registration_summary", {})
+        completion_percent = int(summary.get("completion_percent", 0) or 0)
+        if completion_percent >= 100:
+            completion_bucket = "100"
+        elif completion_percent >= 75:
+            completion_bucket = "75"
+        elif completion_percent >= 50:
+            completion_bucket = "50"
+        elif completion_percent >= 25:
+            completion_bucket = "25"
+        elif completion_percent > 0:
+            completion_bucket = "10"
+        else:
+            completion_bucket = "0"
+        summary["completion_bucket"] = completion_bucket
         context.update(dashboard)
         context["page_highlights"] = [
             {
@@ -328,10 +462,19 @@ class MatrizRegistroView(AcreditacionBaseView):
             {"label": "Cobertura", "value": f"{summary.get('completion_percent', 0)}%"},
         ]
         allowed_cycle_ids = [ciclo.pk for ciclo in dashboard.get("available_cycles", [])]
+        initial = {}
+        selected_indicator_id = self.request.GET.get("indicador")
+        selected_element_id = self.request.GET.get("elemento")
+        if selected_indicator_id:
+            initial["indicador"] = selected_indicator_id
+        if selected_element_id:
+            initial["elemento_fundamental"] = selected_element_id
         context["registration_form"] = kwargs.get("registration_form") or MatrixEvidenceRegistrationForm(
+            initial=initial,
             ciclo_initial=selected_cycle,
             allowed_cycle_ids=allowed_cycle_ids,
         )
+        context["has_prefilled_evidence_target"] = bool(selected_indicator_id or selected_element_id)
         return context
 
     def post(self, request, *args, **kwargs):
@@ -402,9 +545,11 @@ class CicloListView(AcreditacionBaseView):
         session_roles = tuple(self.request.session.get("sig_roles", []) or [])
         operational_roles = tuple(self.request.session.get("sig_operational_roles", []) or [])
         effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
-        context["can_create_cycles"] = not any(
-            str(role).strip().upper() == "RECTOR" for role in effective_roles
-        )
+        has_quality_role = any(_is_quality_role(role) for role in effective_roles)
+        has_rector_role = any(_is_rector_role(role) for role in effective_roles)
+        # Quality operations have priority over rector-only restrictions on this screen.
+        context["can_create_cycles"] = has_quality_role or not has_rector_role
+        context["is_quality_actor"] = has_quality_role
         context["form"] = kwargs.get("form") or CicloEvaluacionForm(
             usuario_id=self.request.session.get("sig_user_id"),
             assignment_id=self.request.session.get("sig_active_assignment_id"),
@@ -427,7 +572,9 @@ class CicloListView(AcreditacionBaseView):
         session_roles = tuple(request.session.get("sig_roles", []) or [])
         operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
         effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
-        if any(str(role).strip().upper() == "RECTOR" for role in effective_roles):
+        has_quality_role = any(_is_quality_role(role) for role in effective_roles)
+        has_rector_role = any(_is_rector_role(role) for role in effective_roles)
+        if has_rector_role and not has_quality_role:
             messages.warning(request, "El rol RECTOR solo puede revisar, aprobar o rechazar ciclos.")
             return redirect("acreditacion-ciclos-lista")
 
@@ -480,10 +627,15 @@ class CicloDetailView(AcreditacionBaseView):
         operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
         return tuple(dict.fromkeys([*session_roles, *operational_roles]))
 
+    def _is_quality(self, request) -> bool:
+        return any(_is_quality_role(role) for role in self._effective_roles(request))
+
     def _is_rector(self, request) -> bool:
-        return any(str(role).strip().upper() == "RECTOR" for role in self._effective_roles(request))
+        return any(_is_rector_role(role) for role in self._effective_roles(request))
 
     def _allowed_states_for_actor(self, request) -> tuple[str, ...]:
+        if self._is_quality(request):
+            return ESTADOS_FLUJO_CICLO
         if self._is_rector(request):
             return ESTADOS_RECTOR_DECISION
         return ESTADOS_FLUJO_CICLO
@@ -496,6 +648,8 @@ class CicloDetailView(AcreditacionBaseView):
         return None
 
     def _ensure_rector_review_state(self, request, ciclo):
+        if self._is_quality(request):
+            return ciclo
         if not self._is_rector(request):
             return ciclo
 
@@ -525,13 +679,26 @@ class CicloDetailView(AcreditacionBaseView):
         context = super().get_context_data(**kwargs)
         ciclo = kwargs.get("ciclo")
         allowed_states = self._allowed_states_for_actor(self.request)
+        reviewer_comments, quality_response = _split_observation_blocks(
+            getattr(ciclo, "observacion_aprobacion", None)
+        )
+        word_comments, word_comments_error = _extract_word_comments_from_document(
+            getattr(ciclo, "authorization_document", None)
+        )
         context["ciclo"] = ciclo
         context["is_rector_actor"] = self._is_rector(self.request)
+        context["is_quality_actor"] = self._is_quality(self.request)
+        context["reviewer_comments"] = reviewer_comments
+        context["reviewer_comment_items"] = _extract_comment_items(reviewer_comments)
+        context["word_document_comments"] = word_comments
+        context["word_document_comments_error"] = word_comments_error
+        context["has_word_document_comments"] = bool(word_comments)
+        context["quality_response"] = quality_response
         context["ciclo_form"] = kwargs.get("ciclo_form") or CicloEstadoAutorizacionForm(
             initial={
                 "ciclo_id": ciclo.pk,
                 "estado": ciclo.estado,
-                "observacion_aprobacion": ciclo.observacion_aprobacion,
+                "observacion_aprobacion": quality_response or ciclo.observacion_aprobacion,
                 "descripcion_documento": "",
             },
             allowed_states=allowed_states,
@@ -562,10 +729,17 @@ class CicloDetailView(AcreditacionBaseView):
 
             try:
                 with transaction.atomic():
+                    observacion_payload = form.cleaned_data.get("observacion_aprobacion")
+                    if self._is_quality(request):
+                        observacion_payload = _build_quality_observation_payload(
+                            previous_value=getattr(ciclo, "observacion_aprobacion", None),
+                            submitted_value=observacion_payload,
+                        )
+
                     actualizar_estado_ciclo(
                         ciclo=ciclo,
                         estado=form.cleaned_data["estado"],
-                        observacion_aprobacion=form.cleaned_data.get("observacion_aprobacion"),
+                        observacion_aprobacion=observacion_payload,
                         actor=self._actor(),
                         request=request,
                     )
@@ -611,20 +785,33 @@ class CicloEstadoUpdateView(SigLoginRequiredMixin, View):
             return None
         return Usuario.objects.filter(pk=user_id).only("id_user", "primer_nombre", "primer_apellido").first()
 
+    def _is_quality(self, request) -> bool:
+        session_roles = tuple(request.session.get("sig_roles", []) or [])
+        operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
+        effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
+        return any(_is_quality_role(role) for role in effective_roles)
+
     def _is_rector(self, request) -> bool:
         session_roles = tuple(request.session.get("sig_roles", []) or [])
         operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
         effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
-        return any(str(role).strip().upper() == "RECTOR" for role in effective_roles)
+        return any(_is_rector_role(role) for role in effective_roles)
 
     def post(self, request, ciclo_id, *args, **kwargs):
         ciclo = CicloEvaluacion.objects.select_related("estado").filter(pk=ciclo_id).first()
         if ciclo is None:
             raise Http404("El ciclo no existe.")
 
+        if self._is_quality(request):
+            allowed_states = ESTADOS_FLUJO_CICLO
+        elif self._is_rector(request):
+            allowed_states = ESTADOS_RECTOR_DECISION
+        else:
+            allowed_states = ESTADOS_FLUJO_CICLO
+
         form = CicloEstadoUpdateForm(
             request.POST,
-            allowed_states=ESTADOS_RECTOR_DECISION if self._is_rector(request) else ESTADOS_FLUJO_CICLO,
+            allowed_states=allowed_states,
         )
         if form.is_valid():
             if form.cleaned_data["ciclo_id"] != ciclo.pk:

@@ -145,4 +145,44 @@
     </table>
   </div>
 </article>
+
+{% if can_manage_corrections %}
+<article class="card">
+  <h3>Correcciones por recomendacion</h3>
+  <p class="text-muted">
+    Este documento se encuentra rechazado u observado. Edita cada recomendacion con la solucion aplicada y marca si ya fue atendida.
+  </p>
+
+  {% if selected_evaluation %}
+    <div class="text-muted" style="margin-bottom: 12px;">
+      Evaluacion activa #{{ selected_evaluation.pk }} - {{ selected_evaluation.estado.descripcion }}
+    </div>
+  {% endif %}
+
+  {% for observacion in observaciones %}
+    <form method="post" class="acreditacion-form" style="margin-bottom: 14px;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="resolver_observacion">
+      <input type="hidden" name="registro" value="{{ registro.pk }}">
+      <input type="hidden" name="observacion_id" value="{{ observacion.pk }}">
+
+      <label class="acreditacion-form__field acreditacion-form__field--full">
+        <span>Recomendacion #{{ observacion.pk }}</span>
+        <textarea name="solucion" rows="3" required>{{ observacion.observacion }}</textarea>
+      </label>
+
+      <label class="acreditacion-form__checkbox">
+        <input type="checkbox" name="marcar_atendida" value="1" {% if observacion.atendida %}checked{% endif %}>
+        <span>Marcar como atendida</span>
+      </label>
+
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar correccion</button>
+      </div>
+    </form>
+  {% empty %}
+    <p class="text-muted">No hay recomendaciones registradas para resolver en esta evaluacion.</p>
+  {% endfor %}
+</article>
+{% endif %}
 {% endblock %}

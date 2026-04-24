@@ -1,17 +1,27 @@
 import logging
 import unicodedata
+from collections import OrderedDict
 
 from django.contrib import messages
 from django.db import DatabaseError, IntegrityError, OperationalError
+from django.db.models import Prefetch
 from django.http import Http404
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.views import View
 from django.views.generic import RedirectView, TemplateView
 
+from apps.acreditacion.models import ElementoFundamental, Indicador
 from apps.core.mixins import SigLoginRequiredMixin
-from apps.evaluacion.forms import EvaluacionGestionForm, ObservacionGestionForm
+from apps.evaluacion.forms import (
+    CerrarTareaEvidenciaForm,
+    EvaluacionGestionForm,
+    ObservacionGestionForm,
+    TareaEvidenciaBulkForm,
+    TareaEvidenciaForm,
+)
 from apps.evaluacion.selectors import (
+    get_estado_tarea_options,
     get_evaluation_inbox_data,
     get_evaluacion_detail,
     get_evaluaciones_queryset,
@@ -19,14 +29,23 @@ from apps.evaluacion.selectors import (
     get_observaciones_queryset,
     get_registro_detail,
     get_registros_queryset,
+    get_tarea_evidencia_detail,
+    get_tarea_evidencia_metrics,
+    get_tareas_evidencia_queryset,
 )
 from apps.evaluacion.services import (
     EvaluacionWorkflowError,
+    TareaEvidenciaWorkflowError,
+    cerrar_tarea_evidencia,
     habilitar_salida_evaluador,
     registrar_evaluacion,
     registrar_observacion,
+    registrar_tarea_evidencia,
+    registrar_tareas_evidencia_lote,
+    resolver_observacion,
 )
-from apps.usuarios.models import Usuario
+from apps.evaluacion.models import ObservacionEvaluacion
+from apps.usuarios.models import AreaInstitucional, Usuario, UsuarioAreaCargo
 from apps.usuarios.selectors import get_usuario_area_cargo_for_context
 
 
@@ -37,6 +56,15 @@ def _normalize_token(value: str | None) -> str:
     normalized = unicodedata.normalize("NFKD", (value or "").strip())
     ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
     return " ".join(ascii_only.upper().split())
+
+
+QUALITY_ROLE_TOKENS = {
+    "CALIDAD ACADEMICA",
+    "DIRECTOR DE CALIDAD",
+    "DIRECCION DE CALIDAD",
+    "CALIDAD",
+}
+ADMIN_ROLE_TOKEN = "ADMINISTRADOR"
 
 MODULE_TITLE = "Evaluacion"
 MODULE_DESCRIPTION = "Gestiona evidencias registradas, evaluaciones y observaciones del flujo operativo."
@@ -50,6 +78,11 @@ MODULE_TABS = [
         "label": "Lista de evidencias",
         "url_name": "evaluacion-evidencias-lista",
         "active_names": ("evaluacion-evidencias-lista", "evaluacion-evidencia-detalle"),
+    },
+    {
+        "label": "Tareas de evidencia",
+        "url_name": "evaluacion-tareas",
+        "active_names": ("evaluacion-tareas",),
     },
     {
         "label": "Bandeja de evaluacion",
@@ -74,6 +107,82 @@ def _report_operation_error(*, request, exc: Exception, user_message: str, form=
     messages.error(request, user_message)
     if form is not None:
         form.add_error(None, user_message)
+
+
+def _build_bulk_structure_groups():
+    indicators = (
+        Indicador.objects.filter(activo=True)
+        .select_related("subcriterio__criterio")
+        .prefetch_related(
+            Prefetch(
+                "elementos",
+                queryset=ElementoFundamental.objects.filter(activo=True).order_by(
+                    "orden_visual",
+                    "codigo_elemento",
+                ),
+                to_attr="bulk_elementos",
+            )
+        )
+        .order_by(
+            "subcriterio__criterio__codigo_criterio",
+            "subcriterio__codigo_subcriterio",
+            "codigo_indicador",
+        )
+    )
+
+    criteria_map = OrderedDict()
+    indicators_total = 0
+    elements_total = 0
+
+    for indicador in indicators:
+        elementos = list(getattr(indicador, "bulk_elementos", []))
+        criterio = indicador.subcriterio.criterio
+        subcriterio = indicador.subcriterio
+        criterion_node = criteria_map.setdefault(
+            criterio.pk,
+            {
+                "criterio": criterio,
+                "indicators_total": 0,
+                "elements_total": 0,
+                "_subcriterios": OrderedDict(),
+            },
+        )
+        subcriterion_node = criterion_node["_subcriterios"].setdefault(
+            subcriterio.pk,
+            {
+                "subcriterio": subcriterio,
+                "indicators_total": 0,
+                "elements_total": 0,
+                "indicator_groups": [],
+            },
+        )
+
+        criterion_node["indicators_total"] += 1
+        criterion_node["elements_total"] += len(elementos)
+        subcriterion_node["indicators_total"] += 1
+        subcriterion_node["elements_total"] += len(elementos)
+        subcriterion_node["indicator_groups"].append(
+            {
+                "indicador": indicador,
+                "elementos": elementos,
+            }
+        )
+        indicators_total += 1
+        elements_total += len(elementos)
+
+    criteria_groups = []
+    for criterion_node in criteria_map.values():
+        criterion_node["subcriterios"] = list(criterion_node["_subcriterios"].values())
+        del criterion_node["_subcriterios"]
+        criteria_groups.append(criterion_node)
+
+    return {
+        "criteria_groups": criteria_groups,
+        "summary": {
+            "indicators_total": indicators_total,
+            "elements_total": elements_total,
+        },
+    }
 
 
 class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
@@ -116,11 +225,16 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
         is_level_one_approver = bool(cargo_approves and cargo_level == 1)
         is_tech_director = cargo_name == "DIRECTOR DE TECNOLOGIA"
         is_evaluator = any("EVALUADOR" in token for token in role_tokens)
+        is_admin = any(token == ADMIN_ROLE_TOKEN for token in role_tokens)
+        is_quality = any(token in QUALITY_ROLE_TOKENS for token in role_tokens)
 
         return {
+            "is_admin": is_admin,
             "is_level_one_approver": is_level_one_approver,
             "is_tech_director": is_tech_director,
             "is_evaluator": is_evaluator,
+            "is_quality": is_quality,
+            "can_assign_tasks": is_admin or is_quality,
             "can_manage_release": is_level_one_approver or is_tech_director,
         }
 
@@ -178,6 +292,262 @@ class EvidenciaListView(EvaluacionBaseView):
         return context
 
 
+class TareaEvidenciaListView(EvaluacionBaseView):
+    template_name = "evaluacion/tarea_evidencia_list.html"
+    page_title = "Tareas de evidencia"
+    page_description = "Delega y cierra responsables de carga por ciclo, indicador y elemento."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        scope_flags = self._actor_scope_flags()
+        q = self.request.GET.get("q", "")
+        estado = self.request.GET.get("estado", "")
+        ciclo = self.request.GET.get("ciclo", "")
+        area = self.request.GET.get("area", "")
+        responsable = self.request.GET.get("responsable", "")
+        actor = self._actor()
+        can_assign_tasks = scope_flags["can_assign_tasks"]
+        effective_responsable = responsable if can_assign_tasks else getattr(actor, "pk", -1)
+        if can_assign_tasks:
+            context["form"] = kwargs.get("form") or TareaEvidenciaForm()
+            context["bulk_form"] = kwargs.get("bulk_form") or TareaEvidenciaBulkForm()
+            bulk_structure = _build_bulk_structure_groups()
+            context["bulk_criteria_groups"] = bulk_structure["criteria_groups"]
+            context["bulk_structure_summary"] = bulk_structure["summary"]
+            context["bulk_selected_element_ids"] = self._get_bulk_selected_element_ids(context["bulk_form"])
+            context["task_responsable_choices"] = self._serialize_responsable_choices(context["form"])
+            context["bulk_responsable_choices"] = self._serialize_responsable_choices(context["bulk_form"])
+        else:
+            context["form"] = None
+            context["bulk_form"] = None
+            context["bulk_criteria_groups"] = []
+            context["bulk_structure_summary"] = {"indicators_total": 0, "elements_total": 0}
+            context["bulk_selected_element_ids"] = set()
+            context["task_responsable_choices"] = []
+            context["bulk_responsable_choices"] = []
+        context["close_form"] = kwargs.get("close_form") or CerrarTareaEvidenciaForm()
+        context["tareas"] = get_tareas_evidencia_queryset(
+            q=q,
+            estado_id=estado,
+            ciclo_id=ciclo,
+            responsable_id=effective_responsable,
+            area_id=area,
+        )[:100]
+        context["scope_flags"] = scope_flags
+        context["current_actor_id"] = getattr(actor, "pk", None)
+        context["area_options"] = AreaInstitucional.objects.filter(activo=True).order_by("nombre_area")
+        context["tarea_metrics"] = get_tarea_evidencia_metrics(
+            responsable_id=None if can_assign_tasks else getattr(actor, "pk", -1)
+        )
+        context["estado_tarea_options"] = get_estado_tarea_options()
+        context["selected_filters"] = {
+            "q": q,
+            "estado": estado,
+            "ciclo": ciclo,
+            "area": area,
+            "responsable": responsable,
+        }
+        return context
+
+    @staticmethod
+    def _selected_form_value(form, field_name: str):
+        if not form:
+            return None
+        if form.is_bound:
+            return (form.data.get(form.add_prefix(field_name)) or "").strip()
+        initial_value = form.initial.get(field_name)
+        return str(getattr(initial_value, "pk", initial_value or "")).strip()
+
+    def _serialize_responsable_choices(self, form):
+        if not form:
+            return []
+
+        field = form.fields.get("usuario_responsable")
+        if field is None:
+            return []
+
+        responsibles = list(field.queryset)
+        if not responsibles:
+            return []
+
+        user_ids = [usuario.pk for usuario in responsibles]
+        assignments = (
+            UsuarioAreaCargo.objects.select_related("area", "cargo")
+            .filter(
+                usuario_id__in=user_ids,
+                activo=True,
+                area__activo=True,
+                cargo__activo=True,
+            )
+            .order_by("area__nombre_area", "cargo__nivel_jerarquico", "cargo__nombre_cargo")
+        )
+        area_map = {}
+        for assignment in assignments:
+            bucket = area_map.setdefault(assignment.usuario_id, [])
+            area_id = str(assignment.area_id)
+            if area_id not in bucket:
+                bucket.append(area_id)
+
+        selected_value = self._selected_form_value(form, "usuario_responsable")
+        return [
+            {
+                "value": str(usuario.pk),
+                "label": field.label_from_instance(usuario),
+                "area_ids": area_map.get(usuario.pk, []),
+                "selected": str(usuario.pk) == selected_value,
+            }
+            for usuario in responsibles
+        ]
+
+    @staticmethod
+    def _get_bulk_selected_element_ids(form):
+        if not getattr(form, "is_bound", False):
+            return set()
+
+        selected = set()
+        for value in form.data.getlist("elementos_fundamentales"):
+            try:
+                selected.add(int(value))
+            except (TypeError, ValueError):
+                continue
+        return selected
+
+    def _handle_close(self, request):
+        form = CerrarTareaEvidenciaForm(request.POST)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(close_form=form))
+
+        tarea = get_tarea_evidencia_detail(form.cleaned_data["tarea_id"])
+        if tarea is None:
+            messages.error(request, "La tarea seleccionada no existe.")
+            return redirect("evaluacion-tareas")
+
+        actor = self._actor()
+        scope_flags = self._actor_scope_flags()
+        if (
+            not scope_flags.get("can_assign_tasks")
+            and tarea.usuario_responsable_id != getattr(actor, "pk", None)
+        ):
+            messages.error(request, "Solo puedes cerrar tareas asignadas a tu usuario.")
+            return redirect("evaluacion-tareas")
+
+        try:
+            cerrar_tarea_evidencia(
+                tarea=tarea,
+                resultado_tarea=form.cleaned_data["resultado_tarea"],
+                actor=actor,
+                request=request,
+            )
+        except (TareaEvidenciaWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+            _report_operation_error(
+                request=request,
+                exc=exc,
+                user_message="No fue posible cerrar la tarea de evidencia.",
+            )
+        else:
+            messages.success(request, "Tarea de evidencia cerrada correctamente.")
+        return redirect("evaluacion-tareas")
+
+    def _handle_bulk_assign(self, request):
+        scope_flags = self._actor_scope_flags()
+        if not scope_flags.get("can_assign_tasks"):
+            messages.error(
+                request,
+                "Solo Calidad puede realizar asignaciones parciales de indicadores y elementos.",
+            )
+            return redirect("evaluacion-tareas")
+
+        form = TareaEvidenciaBulkForm(request.POST)
+        if not form.is_valid():
+            return self.render_to_response(self.get_context_data(bulk_form=form))
+
+        try:
+            result = registrar_tareas_evidencia_lote(
+                ciclo=form.cleaned_data["ciclo"],
+                elementos_fundamentales=form.cleaned_data["elementos_fundamentales"],
+                usuario_responsable=form.cleaned_data["usuario_responsable"],
+                estado=form.cleaned_data["estado"],
+                fecha_limite=form.cleaned_data.get("fecha_limite"),
+                prioridad=form.cleaned_data.get("prioridad"),
+                observacion=form.cleaned_data.get("observacion"),
+                actor=self._actor(),
+                request=request,
+            )
+        except (
+            TareaEvidenciaWorkflowError,
+            ValueError,
+            IntegrityError,
+            OperationalError,
+            DatabaseError,
+        ) as exc:
+            _report_operation_error(
+                request=request,
+                exc=exc,
+                form=form,
+                user_message="No fue posible registrar la asignacion parcial de tareas.",
+            )
+            return self.render_to_response(self.get_context_data(bulk_form=form))
+
+        messages.success(
+            request,
+            (
+                "Asignacion parcial procesada correctamente: "
+                f"{result['total']} elementos ({result['created']} nuevas, {result['updated']} actualizadas)."
+            ),
+        )
+        return redirect("evaluacion-tareas")
+
+    def post(self, request, *args, **kwargs):
+        action = (request.POST.get("action") or "").strip().lower()
+        if action == "close":
+            return self._handle_close(request)
+        if action == "bulk_assign":
+            return self._handle_bulk_assign(request)
+
+        scope_flags = self._actor_scope_flags()
+        if not scope_flags.get("can_assign_tasks"):
+            messages.error(request, "Solo Calidad puede asignar tareas de evidencia.")
+            return redirect("evaluacion-tareas")
+
+        form = TareaEvidenciaForm(request.POST)
+        if form.is_valid():
+            try:
+                result = registrar_tarea_evidencia(
+                    ciclo=form.cleaned_data["ciclo"],
+                    indicador=form.cleaned_data["indicador"],
+                    elemento_fundamental=form.cleaned_data["elemento_fundamental"],
+                    usuario_responsable=form.cleaned_data["usuario_responsable"],
+                    estado=form.cleaned_data["estado"],
+                    fecha_limite=form.cleaned_data.get("fecha_limite"),
+                    prioridad=form.cleaned_data.get("prioridad"),
+                    observacion=form.cleaned_data.get("observacion"),
+                    actor=self._actor(),
+                    request=request,
+                )
+            except (
+                TareaEvidenciaWorkflowError,
+                ValueError,
+                IntegrityError,
+                OperationalError,
+                DatabaseError,
+            ) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible registrar la tarea de evidencia.",
+                )
+            else:
+                messages.success(
+                    request,
+                    "Tarea de evidencia creada correctamente."
+                    if result["created"]
+                    else "Tarea de evidencia actualizada correctamente.",
+                )
+                return redirect("evaluacion-tareas")
+        return self.render_to_response(self.get_context_data(form=form))
+
+
 class EvidenciaDetailView(EvaluacionBaseView):
     template_name = "evaluacion/evidencia_detail.html"
     page_title = "Detalle de evidencia"
@@ -197,11 +567,16 @@ class EvidenciaDetailView(EvaluacionBaseView):
             get_evaluaciones_queryset(registro_id=registro.pk)[:30] if registro else []
         )
         selected_evaluation = context["evaluaciones"][0] if context["evaluaciones"] else None
+        selected_state = _normalize_token(getattr(getattr(selected_evaluation, "estado", None), "descripcion", ""))
+        rejected_context = selected_state in {"RECHAZADA", "RECHAZADO", "OBSERVADA"}
         context["observaciones"] = (
             get_observaciones_queryset(evaluacion_id=selected_evaluation.pk)[:30]
             if selected_evaluation
             else []
         )
+        context["selected_evaluation"] = selected_evaluation
+        context["is_rejected_context"] = rejected_context
+        context["can_manage_corrections"] = bool(scope_flags.get("is_quality") and rejected_context)
         return context
 
     def get(self, request, *args, **kwargs):
@@ -217,19 +592,61 @@ class EvidenciaDetailView(EvaluacionBaseView):
             return redirect("evaluacion-evidencias-lista")
         return self.render_to_response(self.get_context_data(registro=registro))
 
-    def post(self, request, *args, **kwargs):
-        registro = get_registro_detail(request.POST.get("registro"))
-        if registro is None:
-            raise Http404("La evidencia solicitada no existe.")
+    @staticmethod
+    def _detail_redirect(registro):
+        return redirect(f"{reverse('evaluacion-evidencia-detalle')}?registro={registro.pk}")
 
-        scope_flags = self._actor_scope_flags()
+    def _resolve_observacion_from_request(self, *, request, registro):
+        observacion_id = request.POST.get("observacion_id")
+        return (
+            ObservacionEvaluacion.objects.select_related("evaluacion__estado", "evaluacion__registro")
+            .filter(pk=observacion_id, evaluacion__registro_id=registro.pk)
+            .first()
+        )
+
+    def _handle_resolver_observacion(self, *, request, registro, scope_flags):
+        observacion = self._resolve_observacion_from_request(request=request, registro=registro)
+        if observacion is None:
+            messages.error(request, "La recomendacion seleccionada no existe para este registro.")
+            return self._detail_redirect(registro)
+
+        if not scope_flags.get("is_quality"):
+            messages.error(request, "Solo Calidad puede gestionar correcciones en esta pantalla.")
+            return self._detail_redirect(registro)
+
+        estado_actual = _normalize_token(
+            getattr(getattr(observacion.evaluacion, "estado", None), "descripcion", "")
+        )
+        if estado_actual not in {"RECHAZADA", "RECHAZADO", "OBSERVADA"}:
+            messages.warning(request, "Solo se pueden resolver recomendaciones de evaluaciones rechazadas u observadas.")
+            return self._detail_redirect(registro)
+
+        try:
+            resolver_observacion(
+                observacion=observacion,
+                solucion=request.POST.get("solucion"),
+                marcar_atendida=bool(request.POST.get("marcar_atendida")),
+                actor=self._actor(),
+                request=request,
+            )
+        except (EvaluacionWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+            _report_operation_error(
+                request=request,
+                exc=exc,
+                user_message="No fue posible actualizar la correccion de la recomendacion.",
+            )
+        else:
+            messages.success(request, "Correccion actualizada correctamente.")
+        return self._detail_redirect(registro)
+
+    def _handle_release(self, *, request, registro, scope_flags):
         if not scope_flags["can_manage_release"]:
             messages.error(request, "No tienes permisos para habilitar la salida al evaluador.")
-            return redirect(f"{reverse('evaluacion-evidencia-detalle')}?registro={registro.pk}")
+            return self._detail_redirect(registro)
 
         if request.POST.get("habilitar_salida") != "1":
             messages.warning(request, "Debes marcar la casilla para habilitar la salida al evaluador.")
-            return redirect(f"{reverse('evaluacion-evidencia-detalle')}?registro={registro.pk}")
+            return self._detail_redirect(registro)
 
         try:
             result = habilitar_salida_evaluador(
@@ -251,8 +668,28 @@ class EvidenciaDetailView(EvaluacionBaseView):
                 messages.success(request, "Salida al evaluador reasignada por Director de Tecnologia.")
             else:
                 messages.info(request, "La evidencia ya se encontraba habilitada para evaluacion.")
+        return self._detail_redirect(registro)
 
-        return redirect(f"{reverse('evaluacion-evidencia-detalle')}?registro={registro.pk}")
+    def post(self, request, *args, **kwargs):
+        registro = get_registro_detail(request.POST.get("registro"))
+        if registro is None:
+            raise Http404("La evidencia solicitada no existe.")
+
+        scope_flags = self._actor_scope_flags()
+        post_action = (request.POST.get("action") or "").strip().lower()
+
+        if post_action == "resolver_observacion":
+            return self._handle_resolver_observacion(
+                request=request,
+                registro=registro,
+                scope_flags=scope_flags,
+            )
+
+        return self._handle_release(
+            request=request,
+            registro=registro,
+            scope_flags=scope_flags,
+        )
 
 
 class EvaluacionInboxView(EvaluacionBaseView):

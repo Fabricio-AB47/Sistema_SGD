@@ -15,6 +15,11 @@ from .authorization_service import (
     upload_cycle_authorization_revision,
 )
 from .upload_service import StructuredDocumentUploadError, upload_structured_document
+from .docx_lab_service import (
+    build_docx_lab_result,
+    cleanup_docx_lab_result,
+    load_docx_lab_result,
+)
 
 __all__ = [
     "AuthorizationDocumentRequiredError",
@@ -26,7 +31,10 @@ __all__ = [
     "resolve_graph_document_url",
     "resolve_protected_document_stream",
     "StructuredDocumentUploadError",
+    "build_docx_lab_result",
+    "cleanup_docx_lab_result",
     "supports_inline_preview",
+    "load_docx_lab_result",
     "upload_cycle_authorization_document",
     "upload_cycle_authorization_document_from_form",
     "upload_cycle_authorization_revision",

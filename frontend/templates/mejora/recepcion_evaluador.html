@@ -1,0 +1,90 @@
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<div class="acreditacion-overview">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Recepcion del evaluador</h3>
+        <p class="text-muted">Registra la entrada formal del expediente al responsable evaluador.</p>
+      </div>
+      {% if completion.steps.recepcion_evaluador %}
+        <span class="acreditacion-status acreditacion-status--success">Registrada</span>
+      {% else %}
+        <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+      {% endif %}
+    </div>
+
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="ciclos-form-grid">
+        {% for field in form %}
+          <label class="acreditacion-form__field {% if field.name == 'observacion' %}acreditacion-form__field--full{% endif %}">
+            <span>{{ field.label }}</span>
+            {{ field }}
+            {{ field.errors }}
+          </label>
+        {% endfor %}
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Registrar recepcion</button>
+        <a class="btn btn-secondary" href="{% url 'mejora-seguimiento' %}">Ver seguimiento</a>
+        <a class="btn btn-ghost" href="{% url 'mejora-envio-formal' %}">Volver</a>
+      </div>
+    </form>
+  </article>
+
+  <aside class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Envio formal</h3>
+        <p class="text-muted">Base documental que recibe el evaluador.</p>
+      </div>
+    </div>
+    <dl class="acreditacion-detail-list">
+      <div>
+        <dt>Director de area</dt>
+        <dd>{{ workflow_data.envio_formal.director_area|default:"Pendiente" }}</dd>
+      </div>
+      <div>
+        <dt>Fecha de envio</dt>
+        <dd>{{ workflow_data.envio_formal.fecha_envio|default:"Pendiente" }}</dd>
+      </div>
+      <div>
+        <dt>Aprobacion</dt>
+        <dd>{% if workflow_data.envio_formal.aprobado %}Confirmada{% else %}Pendiente{% endif %}</dd>
+      </div>
+    </dl>
+  </aside>
+</div>
+
+{% if workflow_data.recepcion_evaluador %}
+<article class="card">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Recepcion registrada</h3>
+      <p class="text-muted">Estado inicial del expediente recibido.</p>
+    </div>
+  </div>
+  <dl class="acreditacion-detail-list">
+    <div>
+      <dt>Evaluador responsable</dt>
+      <dd>{{ workflow_data.recepcion_evaluador.evaluador_responsable }}</dd>
+    </div>
+    <div>
+      <dt>Fecha de recepcion</dt>
+      <dd>{{ workflow_data.recepcion_evaluador.fecha_recepcion }}</dd>
+    </div>
+    <div>
+      <dt>Estado inicial</dt>
+      <dd>{{ workflow_data.recepcion_evaluador.estado_inicial }}</dd>
+    </div>
+    <div>
+      <dt>Observacion</dt>
+      <dd>{{ workflow_data.recepcion_evaluador.observacion|default:"Sin observacion" }}</dd>
+    </div>
+  </dl>
+</article>
+{% endif %}
+{% endblock %}

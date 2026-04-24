@@ -13,8 +13,15 @@ from .registro_selector import (
     get_matrix_registration_rows,
     get_recent_registered_evidences,
 )
+from .tareas_selector import (
+    get_estado_tarea_options,
+    get_tarea_evidencia_detail,
+    get_tarea_evidencia_metrics,
+    get_tareas_evidencia_queryset,
+)
 
 __all__ = [
+    "get_estado_tarea_options",
     "get_evaluacion_detail",
     "get_evaluation_inbox_data",
     "get_evaluaciones_queryset",
@@ -25,5 +32,8 @@ __all__ = [
     "get_observaciones_queryset",
     "get_recent_registered_evidences",
     "get_registro_detail",
+    "get_tarea_evidencia_detail",
+    "get_tarea_evidencia_metrics",
+    "get_tareas_evidencia_queryset",
     "get_registros_queryset",
 ]

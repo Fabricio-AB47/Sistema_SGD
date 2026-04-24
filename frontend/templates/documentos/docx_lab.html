@@ -1,0 +1,231 @@
+{% extends "documentos/_page_base.html" %}
+
+{% block documentos_content %}
+<div class="documentos-grid">
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Prueba DOCX</h3>
+        <p class="text-muted">Sube un archivo .docx para extraer comentarios, revisar su contenido y generar una reconstruccion de prueba.</p>
+      </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="documentos-form">
+      {% csrf_token %}
+      {{ lab_form.non_field_errors }}
+      <div class="documentos-form__grid">
+        <div class="documentos-form__field documentos-form__field--full">
+          <label for="{{ lab_form.archivo.id_for_label }}">Archivo DOCX</label>
+          {{ lab_form.archivo }}
+          {{ lab_form.archivo.errors }}
+        </div>
+      </div>
+      <div class="documentos-form__actions">
+        <button class="btn btn-primary" type="submit">Analizar y reconstruir</button>
+        {% if lab_result %}
+          <a class="btn btn-ghost" href="?download=1">Descargar reconstruccion</a>
+          <a class="btn btn-secondary" href="?clear=1">Limpiar resultado</a>
+        {% endif %}
+      </div>
+    </form>
+  </article>
+
+  <article class="card documentos-panel">
+    <h3>Resumen de prueba</h3>
+    {% if lab_result %}
+      <div class="documentos-summary">
+        <div>
+          <span class="documentos-summary__label">Archivo original</span>
+          <strong class="documentos-summary__value">{{ lab_result.source_name }}</strong>
+        </div>
+        <div>
+          <span class="documentos-summary__label">Tamano</span>
+          <strong class="documentos-summary__value">{{ lab_result.metadata.file_size|default:0 }} bytes</strong>
+        </div>
+        <div>
+          <span class="documentos-summary__label">Parrafos</span>
+          <strong class="documentos-summary__value">{{ lab_result.paragraph_count }}</strong>
+        </div>
+        <div>
+          <span class="documentos-summary__label">Comentarios</span>
+          <strong class="documentos-summary__value">{{ lab_result.comment_count }}</strong>
+        </div>
+        <div>
+          <span class="documentos-summary__label">Tablas</span>
+          <strong class="documentos-summary__value">{{ lab_result.metadata.table_count|default:0 }}</strong>
+        </div>
+      </div>
+      <ul class="admin-sections__list">
+        <li>Se extrajo el texto por parrafos desde el DOCX.</li>
+        <li>Se detectaron comentarios embebidos y se agruparon por parrafo.</li>
+        <li>Se identificaron tablas y se incluyen en el resumen tecnico.</li>
+        <li>Se genero una version reconstruida lista para descarga.</li>
+      </ul>
+    {% else %}
+      <div class="documentos-empty-state">
+        <strong>Aun no hay una prueba cargada.</strong>
+        <p class="text-muted">Sube un DOCX para ver el resumen y la reconstruccion.</p>
+      </div>
+    {% endif %}
+  </article>
+</div>
+
+{% if lab_result %}
+<div class="documentos-grid">
+  <article class="card documentos-panel documentos-panel--wide">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Comentarios detectados</h3>
+        <p class="text-muted">Vista de prueba por parrafo para validar la lectura del Word.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="documentos-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Parrafo</th>
+            <th>Comentarios</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for paragraph in lab_result.paragraphs %}
+            <tr>
+              <td>{{ paragraph.index }}</td>
+              <td>
+                <strong>{{ paragraph.text|default:"--" }}</strong>
+                <div class="text-muted">Estilo: {{ paragraph.style }}</div>
+              </td>
+              <td>
+                {% if paragraph.comments %}
+                  <ul class="admin-sections__list">
+                    {% for comment in paragraph.comments %}
+                      <li><strong>{{ comment.id }}</strong>: {{ comment.text|default:"--" }}</li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  Sin comentarios detectados
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card documentos-panel">
+    <div class="documentos-panel__header">
+      <div>
+        <h3>Resumen tecnico</h3>
+        <p class="text-muted">Se conserva la informacion leida desde el DOCX para validar la reconstruccion.</p>
+      </div>
+    </div>
+    <dl class="acreditacion-detail-list">
+      <div>
+        <dt>Ruta origen</dt>
+        <dd class="documentos-table__path">{{ lab_result.source_path }}</dd>
+      </div>
+      <div>
+        <dt>Ruta reconstruida</dt>
+        <dd class="documentos-table__path">{{ lab_result.reconstructed_path }}</dd>
+      </div>
+      <div>
+        <dt>Fecha de analisis</dt>
+        <dd>{{ lab_result.metadata.created_at|default:"--" }}</dd>
+      </div>
+      <div>
+        <dt>Con comentarios</dt>
+        <dd>{% if lab_result.metadata.has_comments %}Si{% else %}No{% endif %}</dd>
+      </div>
+      <div>
+        <dt>Con tablas</dt>
+        <dd>{% if lab_result.metadata.has_tables %}Si{% else %}No{% endif %}</dd>
+      </div>
+    </dl>
+  </article>
+</div>
+
+{% if lab_result.comments %}
+<div class="card documentos-panel documentos-panel--wide">
+  <div class="documentos-panel__header">
+    <div>
+      <h3>Comentarios originales</h3>
+      <p class="text-muted">Listado consolidado de observaciones encontradas en el archivo.</p>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="documentos-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Autor</th>
+          <th>Fecha</th>
+          <th>Texto</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for comment in lab_result.comments %}
+          <tr>
+            <td>{{ comment.id }}</td>
+            <td>{{ comment.author|default:"--" }}</td>
+            <td>{{ comment.date|default:"--" }}</td>
+            <td>{{ comment.text|default:"--" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if lab_result.tables %}
+<div class="card documentos-panel documentos-panel--wide">
+  <div class="documentos-panel__header">
+    <div>
+      <h3>Tablas detectadas</h3>
+      <p class="text-muted">Vista estructural de las tablas incluidas en el DOCX.</p>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="documentos-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Filas</th>
+          <th>Columnas</th>
+          <th>Contenido</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for table in lab_result.tables %}
+          <tr>
+            <td>{{ table.index }}</td>
+            <td>{{ table.row_count }}</td>
+            <td>{{ table.column_count }}</td>
+            <td>
+              <ul class="admin-sections__list">
+                {% for row in table.rows %}
+                  <li>{{ row|join:" | " }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card documentos-panel documentos-panel--wide">
+  <div class="documentos-panel__header">
+    <div>
+      <h3>JSON del analisis</h3>
+      <p class="text-muted">Salida tecnica completa para depuracion y futuras automatizaciones.</p>
+    </div>
+  </div>
+  <pre style="white-space: pre-wrap; word-break: break-word; margin: 0;">{{ lab_result_json|default:"{}" }}</pre>
+</div>
+{% endif %}
+{% endblock %}

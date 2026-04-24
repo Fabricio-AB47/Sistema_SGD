@@ -45,6 +45,16 @@ class EvaluacionGestionForm(forms.Form):
     def clean_comentario(self):
         return _normalize_optional_text(self.cleaned_data.get("comentario"))
 
+    def clean(self):
+        cleaned_data = super().clean()
+        registro = cleaned_data.get("registro")
+        if registro is not None and getattr(registro, "fecha_envio_revision", None) is None:
+            self.add_error(
+                "registro",
+                "La evidencia no esta habilitada para evaluacion. Primero habilita la salida al evaluador.",
+            )
+        return cleaned_data
+
 
 class ObservacionGestionForm(forms.Form):
     evaluacion = forms.ModelChoiceField(

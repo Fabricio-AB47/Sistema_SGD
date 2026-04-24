@@ -19,6 +19,14 @@ def _resolve_evidence_status(description: str):
     ).first()
 
 
+def _resolve_first_available_evidence_status(*descriptions: str):
+    for description in descriptions:
+        estado = _resolve_evidence_status(description)
+        if estado is not None:
+            return estado
+    return None
+
+
 def _sync_registro_estado(*, registro, evaluation_state_description: str):
     normalized = (evaluation_state_description or "").strip().upper()
     status_map = {
@@ -39,10 +47,32 @@ def _sync_registro_estado(*, registro, evaluation_state_description: str):
     registro.save(update_fields=["estado", "fecha_envio_revision"])
 
 
+def _sync_registro_estado_directo(*, registro, estado_objetivo, set_release_metadata: bool = False, actor=None):
+    if estado_objetivo is None:
+        return False
+
+    registro.estado = estado_objetivo
+    update_fields = ["estado"]
+    if set_release_metadata:
+        if registro.fecha_envio_revision is None:
+            registro.fecha_envio_revision = timezone.now()
+            update_fields.append("fecha_envio_revision")
+        if actor is not None and getattr(registro, "enviado_revision_por_id", None) is None:
+            registro.enviado_revision_por = actor
+            update_fields.append("enviado_revision_por")
+
+    registro.save(update_fields=update_fields)
+    return True
+
+
 @transaction.atomic
 def registrar_evaluacion(*, registro, estado, calificacion=None, comentario=None, actor=None, request=None):
     if actor is None:
         raise EvaluacionWorkflowError("No fue posible identificar al usuario evaluador.")
+    if registro.fecha_envio_revision is None:
+        raise EvaluacionWorkflowError(
+            "La evidencia aun no esta habilitada para evaluacion. Primero habilita la salida al evaluador."
+        )
 
     evaluacion = (
         Evaluacion.objects.filter(registro=registro)
@@ -147,6 +177,59 @@ def registrar_observacion(*, evaluacion, observacion: str, actor=None, request=N
 
 
 @transaction.atomic
+def resolver_observacion(*, observacion, solucion: str, actor=None, marcar_atendida: bool = True, request=None):
+    if actor is None:
+        raise EvaluacionWorkflowError("No fue posible identificar al usuario que atiende la observacion.")
+
+    solucion_normalizada = " ".join((solucion or "").strip().split())
+    if not solucion_normalizada:
+        raise EvaluacionWorkflowError("Debes ingresar la solucion de la recomendacion.")
+
+    valores_anteriores = {
+        "observacion": observacion.observacion,
+        "atendida": bool(observacion.atendida),
+        "fecha_atendida": observacion.fecha_atendida.isoformat() if observacion.fecha_atendida else None,
+    }
+
+    now = timezone.now()
+    observacion.observacion = solucion_normalizada
+    observacion.atendida = bool(marcar_atendida)
+    observacion.fecha_atendida = now if marcar_atendida else None
+    observacion.save(update_fields=["observacion", "atendida", "fecha_atendida"])
+
+    if observacion.atendida:
+        estado_reenviada = _resolve_first_available_evidence_status(
+            "REENVIADA",
+            "ENVIADA_EVALUADOR",
+            "EN_REVISION_EVALUADOR",
+        )
+        _sync_registro_estado_directo(
+            registro=observacion.evaluacion.registro,
+            estado_objetivo=estado_reenviada,
+            set_release_metadata=True,
+            actor=actor,
+        )
+
+    registrar_evento(
+        accion="RESOLVER_OBSERVACION_EVALUACION",
+        descripcion=f"Se actualizo la observacion {observacion.id_observacion} para la evaluacion {observacion.evaluacion_id}.",
+        usuario=actor,
+        tipo_evento="EVALUACION",
+        tabla_afectada="observacion_evaluacion",
+        id_registro=observacion.pk,
+        valores_anteriores=valores_anteriores,
+        valores_nuevos={
+            "observacion": observacion.observacion,
+            "atendida": bool(observacion.atendida),
+            "fecha_atendida": observacion.fecha_atendida.isoformat() if observacion.fecha_atendida else None,
+        },
+        criticidad="MEDIA",
+        request=request,
+    )
+    return observacion
+
+
+@transaction.atomic
 def habilitar_salida_evaluador(*, registro, actor=None, allow_reassign: bool = False, request=None):
     if actor is None:
         raise EvaluacionWorkflowError("No fue posible identificar al usuario responsable de la salida.")
@@ -177,7 +260,16 @@ def habilitar_salida_evaluador(*, registro, actor=None, allow_reassign: bool = F
 
     registro.enviado_revision_por = actor
     registro.fecha_envio_revision = now
-    registro.save(update_fields=["enviado_revision_por", "fecha_envio_revision"])
+    estado_salida = _resolve_first_available_evidence_status(
+        "ENVIADA_EVALUADOR",
+        "EN_REVISION_EVALUADOR",
+        "EN_REVISION_INTERNA",
+    )
+    if estado_salida is not None:
+        registro.estado = estado_salida
+        registro.save(update_fields=["enviado_revision_por", "fecha_envio_revision", "estado"])
+    else:
+        registro.save(update_fields=["enviado_revision_por", "fecha_envio_revision"])
 
     was_reassigned = already_released and allow_reassign
     registrar_evento(
@@ -195,6 +287,7 @@ def habilitar_salida_evaluador(*, registro, actor=None, allow_reassign: bool = F
         valores_nuevos={
             "enviado_revision_por": actor_id,
             "fecha_envio_revision": now.isoformat(),
+            "estado": getattr(getattr(registro, "estado", None), "descripcion", None),
         },
         criticidad="MEDIA",
         request=request,

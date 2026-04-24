@@ -1,10 +1,25 @@
 from django.urls import path
 
-from apps.mejora.views.web import module_page
+from apps.mejora.views.web import (
+    ProcesoAsignacionResponsablesView,
+    ProcesoCargaInformacionView,
+    ProcesoCicloAprobacionView,
+    ProcesoDashboardView,
+    ProcesoEnvioFormalView,
+    ProcesoRecepcionEvaluadorView,
+    ProcesoRevisionJefaturaView,
+    ProcesoSeguimientoView,
+)
 
 urlpatterns = [
-    path('', module_page(template_name='mejora/plan_mejora_list.html', page_title='Planes de mejora', page_description='Consulta y monitorea los planes de mejora institucionales.', page_actions=[], page_highlights=[{'label': 'Modulo', 'value': 'Mejora'}, {'label': 'Pantalla', 'value': 'Planes de mejora'}, {'label': 'Estado', 'value': 'Base administrativa'}], page_sections=[{'title': 'Objetivo', 'description': 'Consulta y monitorea los planes de mejora institucionales.', 'items': ['Estructura visual preparada para administracion.', 'Ruta y pestaña integradas al panel.', 'Lista para conectar formularios, selectors y servicios.']}, {'title': 'Siguiente integracion', 'description': 'Pasos naturales para conectar la funcionalidad real.', 'items': ['Conectar selector de lectura.', 'Agregar formulario o tabla operativa.', 'Registrar eventos en auditoria si corresponde.']}]), name='mejora-lista'),
-    path('crear/', module_page(template_name='mejora/plan_mejora_form.html', page_title='Crear plan', page_description='Registra un nuevo plan de mejora manual o derivado de evaluacion.', page_actions=[{'label': 'Planes de mejora', 'url_name': 'mejora-lista', 'variant': 'secondary'}], page_highlights=[{'label': 'Modulo', 'value': 'Mejora'}, {'label': 'Pantalla', 'value': 'Crear plan'}, {'label': 'Estado', 'value': 'Base administrativa'}], page_sections=[{'title': 'Objetivo', 'description': 'Registra un nuevo plan de mejora manual o derivado de evaluacion.', 'items': ['Estructura visual preparada para administracion.', 'Ruta y pestaña integradas al panel.', 'Lista para conectar formularios, selectors y servicios.']}, {'title': 'Siguiente integracion', 'description': 'Pasos naturales para conectar la funcionalidad real.', 'items': ['Conectar selector de lectura.', 'Agregar formulario o tabla operativa.', 'Registrar eventos en auditoria si corresponde.']}]), name='mejora-crear'),
-    path('detalle/', module_page(template_name='mejora/plan_mejora_detail.html', page_title='Detalle de plan', page_description='Consulta informacion, avances y trazabilidad del plan.', page_actions=[{'label': 'Planes de mejora', 'url_name': 'mejora-lista', 'variant': 'secondary'}], page_highlights=[{'label': 'Modulo', 'value': 'Mejora'}, {'label': 'Pantalla', 'value': 'Detalle de plan'}, {'label': 'Estado', 'value': 'Base administrativa'}], page_sections=[{'title': 'Objetivo', 'description': 'Consulta informacion, avances y trazabilidad del plan.', 'items': ['Estructura visual preparada para administracion.', 'Ruta y pestaña integradas al panel.', 'Lista para conectar formularios, selectors y servicios.']}, {'title': 'Siguiente integracion', 'description': 'Pasos naturales para conectar la funcionalidad real.', 'items': ['Conectar selector de lectura.', 'Agregar formulario o tabla operativa.', 'Registrar eventos en auditoria si corresponde.']}]), name='mejora-detalle'),
-    path('seguimiento/', module_page(template_name='mejora/seguimiento_form.html', page_title='Seguimiento', page_description='Registra avances y control de cumplimiento del plan.', page_actions=[{'label': 'Planes de mejora', 'url_name': 'mejora-lista', 'variant': 'secondary'}], page_highlights=[{'label': 'Modulo', 'value': 'Mejora'}, {'label': 'Pantalla', 'value': 'Seguimiento'}, {'label': 'Estado', 'value': 'Base administrativa'}], page_sections=[{'title': 'Objetivo', 'description': 'Registra avances y control de cumplimiento del plan.', 'items': ['Estructura visual preparada para administracion.', 'Ruta y pestaña integradas al panel.', 'Lista para conectar formularios, selectors y servicios.']}, {'title': 'Siguiente integracion', 'description': 'Pasos naturales para conectar la funcionalidad real.', 'items': ['Conectar selector de lectura.', 'Agregar formulario o tabla operativa.', 'Registrar eventos en auditoria si corresponde.']}]), name='mejora-seguimiento'),
+    path("", ProcesoDashboardView.as_view(), name="mejora-lista"),
+    path("crear/", ProcesoCicloAprobacionView.as_view(), name="mejora-crear"),
+    path("detalle/", ProcesoRevisionJefaturaView.as_view(), name="mejora-detalle"),
+    path("seguimiento/", ProcesoSeguimientoView.as_view(), name="mejora-seguimiento"),
+    path("ciclo-aprobacion/", ProcesoCicloAprobacionView.as_view(), name="mejora-ciclo-aprobacion"),
+    path("asignacion-responsables/", ProcesoAsignacionResponsablesView.as_view(), name="mejora-asignacion-responsables"),
+    path("carga-informacion/", ProcesoCargaInformacionView.as_view(), name="mejora-carga-informacion"),
+    path("revision-jefatura/", ProcesoRevisionJefaturaView.as_view(), name="mejora-revision-jefatura"),
+    path("envio-formal/", ProcesoEnvioFormalView.as_view(), name="mejora-envio-formal"),
+    path("recepcion-evaluador/", ProcesoRecepcionEvaluadorView.as_view(), name="mejora-recepcion-evaluador"),
 ]

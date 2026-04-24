@@ -1,0 +1,215 @@
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<div class="acreditacion-highlights">
+  <article class="acreditacion-highlights__card">
+    <span class="acreditacion-highlights__label">Avance</span>
+    <strong class="acreditacion-highlights__value">{{ completion.percentage }}%</strong>
+  </article>
+  <article class="acreditacion-highlights__card">
+    <span class="acreditacion-highlights__label">Etapas cerradas</span>
+    <strong class="acreditacion-highlights__value">{{ completion.completed }} / {{ completion.total }}</strong>
+  </article>
+  <article class="acreditacion-highlights__card">
+    <span class="acreditacion-highlights__label">Responsables</span>
+    <strong class="acreditacion-highlights__value">{{ workflow_data.asignaciones|length }}</strong>
+  </article>
+  <article class="acreditacion-highlights__card">
+    <span class="acreditacion-highlights__label">Evidencias</span>
+    <strong class="acreditacion-highlights__value">{{ workflow_data.cargas|length }}</strong>
+  </article>
+</div>
+
+<article class="card">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Seguimiento por etapa</h3>
+      <p class="text-muted">Vista consolidada del expediente operativo de autoevaluacion.</p>
+    </div>
+    <a class="btn btn-secondary" href="{% url 'mejora-lista' %}">Volver al panel</a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Etapa</th>
+          <th>Registro clave</th>
+          <th>Estado</th>
+          <th>Gestion</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Aprobacion del ciclo</td>
+          <td>{{ workflow_data.ciclo_aprobacion.ciclo_nombre|default:"Sin registro" }}</td>
+          <td>
+            {% if completion.steps.ciclo_aprobacion %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-ciclo-aprobacion' %}">Editar</a></td>
+        </tr>
+        <tr>
+          <td>Asignacion</td>
+          <td>{{ workflow_data.asignaciones|length }} responsables</td>
+          <td>
+            {% if completion.steps.asignaciones %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-asignacion-responsables' %}">Editar</a></td>
+        </tr>
+        <tr>
+          <td>Carga de informacion</td>
+          <td>{{ workflow_data.cargas|length }} cargas</td>
+          <td>
+            {% if completion.steps.cargas %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-carga-informacion' %}">Editar</a></td>
+        </tr>
+        <tr>
+          <td>Revision de jefatura</td>
+          <td>{{ workflow_data.revision_jefatura.decision|default:"Sin decision" }}</td>
+          <td>
+            {% if completion.steps.revision_jefatura %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-revision-jefatura' %}">Editar</a></td>
+        </tr>
+        <tr>
+          <td>Envio formal</td>
+          <td>{{ workflow_data.envio_formal.fecha_envio|default:"Sin envio" }}</td>
+          <td>
+            {% if completion.steps.envio_formal %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-envio-formal' %}">Editar</a></td>
+        </tr>
+        <tr>
+          <td>Recepcion evaluador</td>
+          <td>{{ workflow_data.recepcion_evaluador.estado_inicial|default:"Sin recepcion" }}</td>
+          <td>
+            {% if completion.steps.recepcion_evaluador %}
+              <span class="acreditacion-status acreditacion-status--success">Completada</span>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+            {% endif %}
+          </td>
+          <td><a href="{% url 'mejora-recepcion-evaluador' %}">Editar</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</article>
+
+<div class="acreditacion-overview">
+  <article class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Responsables asignados</h3>
+        <p class="text-muted">Areas e indicadores cubiertos en el proceso.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Responsable</th>
+            <th>Indicador</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in workflow_data.asignaciones %}
+            <tr>
+              <td>{{ row.area }}</td>
+              <td>{{ row.subordinado_responsable }}</td>
+              <td>{{ row.indicador }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-muted">No hay asignaciones registradas.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Cargas de informacion</h3>
+        <p class="text-muted">Evidencias disponibles para evaluacion.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Evidencia</th>
+            <th>Responsable</th>
+            <th>Fecha</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in workflow_data.cargas %}
+            <tr>
+              <td>{{ row.nombre_evidencia }}</td>
+              <td>{{ row.responsable }}</td>
+              <td>{{ row.fecha_carga }}</td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="3" class="text-center text-muted">No hay cargas registradas.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+</div>
+
+<article class="card">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Resultado final</h3>
+      <p class="text-muted">El proceso queda listo cuando las seis etapas aparecen completadas.</p>
+    </div>
+    {% if completion.completed == completion.total %}
+      <span class="acreditacion-status acreditacion-status--success">Proceso completo</span>
+    {% else %}
+      <span class="acreditacion-status acreditacion-status--warning">Proceso en curso</span>
+    {% endif %}
+  </div>
+  <dl class="acreditacion-detail-list">
+    <div>
+      <dt>Director de area</dt>
+      <dd>{{ workflow_data.envio_formal.director_area|default:"Pendiente" }}</dd>
+    </div>
+    <div>
+      <dt>Evaluador responsable</dt>
+      <dd>{{ workflow_data.recepcion_evaluador.evaluador_responsable|default:"Pendiente" }}</dd>
+    </div>
+    <div>
+      <dt>Estado inicial de evaluacion</dt>
+      <dd>{{ workflow_data.recepcion_evaluador.estado_inicial|default:"Pendiente" }}</dd>
+    </div>
+  </dl>
+</article>
+{% endblock %}

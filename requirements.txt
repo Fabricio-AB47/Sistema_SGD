@@ -27,6 +27,7 @@ django-debug-toolbar>=4.3.0
 ipython>=8.21.0
 gunicorn>=21.2.0
 whitenoise>=6.6.0
+python-docx>=1.2.0
 
 # =========================================================
 # Frontend - Node.js / npm

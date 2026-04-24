@@ -1,1 +1,35 @@
-{% extends "shared/admin_page.html" %}
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<article class="card">
+	<h3>Registro de aprobacion del ciclo</h3>
+	<form method="post" class="acreditacion-form">
+		{% csrf_token %}
+		{{ form.non_field_errors }}
+		<div class="ciclos-form-grid">
+			{% for field in form %}
+				<label class="acreditacion-form__field {% if field.name == 'observacion' %}acreditacion-form__field--full{% endif %}">
+					<span>{{ field.label }}</span>
+					{{ field }}
+					{{ field.errors }}
+				</label>
+			{% endfor %}
+		</div>
+		<div class="acreditacion-form__actions">
+			<button class="btn btn-primary" type="submit">Guardar y continuar</button>
+			<a class="btn btn-secondary" href="{% url 'mejora-asignacion-responsables' %}">Ir a asignacion</a>
+		</div>
+	</form>
+</article>
+
+{% if workflow_data.ciclo_aprobacion %}
+<article class="card">
+	<h3>Ultimo registro guardado</h3>
+	<ul class="admin-sections__list">
+		<li><strong>Ciclo:</strong> {{ workflow_data.ciclo_aprobacion.ciclo_nombre }}</li>
+		<li><strong>Aprobado por:</strong> {{ workflow_data.ciclo_aprobacion.aprobado_por }}</li>
+		<li><strong>Fecha:</strong> {{ workflow_data.ciclo_aprobacion.fecha_aprobacion }}</li>
+	</ul>
+</article>
+{% endif %}
+{% endblock %}

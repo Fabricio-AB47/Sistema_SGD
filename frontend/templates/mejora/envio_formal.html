@@ -1,0 +1,100 @@
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<div class="acreditacion-overview">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Envio formal</h3>
+        <p class="text-muted">Confirma la aprobacion del director de area y deja trazabilidad del envio.</p>
+      </div>
+      {% if completion.steps.envio_formal %}
+        <span class="acreditacion-status acreditacion-status--success">Registrado</span>
+      {% else %}
+        <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+      {% endif %}
+    </div>
+
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="ciclos-form-grid">
+        {% for field in form %}
+          {% if field.field.widget.input_type == "checkbox" %}
+            <div class="acreditacion-form__field acreditacion-form__field--full">
+              <label class="acreditacion-form__checkbox">
+                {{ field }}
+                <span>{{ field.label }}</span>
+              </label>
+              {{ field.errors }}
+            </div>
+          {% else %}
+            <label class="acreditacion-form__field {% if field.name == 'comentario' %}acreditacion-form__field--full{% endif %}">
+              <span>{{ field.label }}</span>
+              {{ field }}
+              {{ field.errors }}
+            </label>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Registrar envio</button>
+        <a class="btn btn-secondary" href="{% url 'mejora-recepcion-evaluador' %}">Continuar a recepcion</a>
+        <a class="btn btn-ghost" href="{% url 'mejora-revision-jefatura' %}">Volver</a>
+      </div>
+    </form>
+  </article>
+
+  <aside class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Revision previa</h3>
+        <p class="text-muted">Resultado registrado por jefatura.</p>
+      </div>
+    </div>
+    <dl class="acreditacion-detail-list">
+      <div>
+        <dt>Revisor</dt>
+        <dd>{{ workflow_data.revision_jefatura.jefe_revisor|default:"Pendiente" }}</dd>
+      </div>
+      <div>
+        <dt>Decision</dt>
+        <dd>{{ workflow_data.revision_jefatura.decision|default:"Pendiente" }}</dd>
+      </div>
+      <div>
+        <dt>Fecha</dt>
+        <dd>{{ workflow_data.revision_jefatura.fecha_revision|default:"Pendiente" }}</dd>
+      </div>
+    </dl>
+  </aside>
+</div>
+
+{% if workflow_data.envio_formal %}
+<article class="card">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Envio registrado</h3>
+      <p class="text-muted">Informacion guardada para la recepcion del evaluador.</p>
+    </div>
+  </div>
+  <dl class="acreditacion-detail-list">
+    <div>
+      <dt>Director de area</dt>
+      <dd>{{ workflow_data.envio_formal.director_area }}</dd>
+    </div>
+    <div>
+      <dt>Fecha de envio</dt>
+      <dd>{{ workflow_data.envio_formal.fecha_envio }}</dd>
+    </div>
+    <div>
+      <dt>Aprobacion formal</dt>
+      <dd>{% if workflow_data.envio_formal.aprobado %}Confirmada{% else %}Pendiente{% endif %}</dd>
+    </div>
+    <div>
+      <dt>Comentario</dt>
+      <dd>{{ workflow_data.envio_formal.comentario|default:"Sin comentario" }}</dd>
+    </div>
+  </dl>
+</article>
+{% endif %}
+{% endblock %}

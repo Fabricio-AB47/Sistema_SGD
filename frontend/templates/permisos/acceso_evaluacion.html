@@ -52,11 +52,11 @@
     <div class="permissions-panel__header">
       <div>
         <h2>Checklist de acceso a evaluacion</h2>
-        <p class="text-muted">Indicador y elemento quedan unidos en el mismo checklist. Si marcas <strong>Acceso total</strong>, se seleccionan todos los elementos fundamentales del indicador.</p>
+        <p class="text-muted">Selecciona criterios completos o baja por subcriterio, indicador y elemento fundamental para asignar el acceso de evaluacion.</p>
       </div>
     </div>
 
-    <form method="post" id="structure-access-form">
+    <form method="post" id="structure-access-form" data-structure-access-form>
       {% csrf_token %}
       {{ form.rol.as_hidden }}
       {{ form.ciclo.as_hidden }}
@@ -65,58 +65,112 @@
         <div class="text-muted">{{ form.non_field_errors }}</div>
       {% endif %}
 
-      <div class="permissions-structure-list">
-        {% for group in indicator_groups %}
-          <section class="permissions-structure-card" data-indicator-group="{{ group.indicator.pk }}">
-            <div class="permissions-structure-card__header">
-              <label class="permissions-structure-card__toggle">
-                <input
-                  type="checkbox"
-                  name="indicadores"
-                  value="{{ group.indicator.pk }}"
-                  data-indicator-checkbox
-                  {% if group.selected %}checked{% endif %}
-                >
-                <span>
-                  <strong>{{ group.indicator.codigo_indicador }} - {{ group.indicator.nombre_indicador }}</strong>
-                  <small>{{ group.indicator.subcriterio.criterio.codigo_criterio }} / {{ group.indicator.subcriterio.codigo_subcriterio }}</small>
-                </span>
-              </label>
-              <label class="permissions-structure-card__total">
-                <input
-                  type="checkbox"
-                  name="accesos_totales"
-                  value="{{ group.indicator.pk }}"
-                  data-total-checkbox
-                  {% if group.access_total %}checked{% endif %}
-                >
-                <span>Acceso total</span>
-              </label>
-            </div>
+      <section class="permissions-select-all">
+        <label class="permissions-select-all__control">
+          <input
+            type="checkbox"
+            data-select-all-checkbox
+            {% if structure_all_selected %}checked{% endif %}
+          >
+          <span>
+            <strong>Seleccionar todo</strong>
+            <small>Marca todos los criterios, subcriterios, indicadores y elementos fundamentales disponibles.</small>
+          </span>
+        </label>
+        <div class="permissions-select-all__meta">
+          <span><strong data-selected-indicators-count>{{ structure_summary.indicators_selected }}</strong> / {{ structure_summary.indicators_total }} indicadores</span>
+          <span><strong data-selected-elements-count>{{ structure_summary.elements_selected }}</strong> / {{ structure_summary.elements_total }} elementos</span>
+        </div>
+      </section>
 
-            <div class="permissions-element-checklist">
-              {% for element in group.elements %}
-                <label class="permissions-checklist__item">
-                  <input
-                    type="checkbox"
-                    name="elementos"
-                    value="{{ element.pk }}"
-                    data-element-checkbox
-                    data-parent-indicator="{{ group.indicator.pk }}"
-                    {% if element.pk in group.selected_element_ids %}checked{% endif %}
-                  >
-                  <span>
-                    <strong>{{ element.codigo_elemento }} - {{ element.nombre_elemento }}</strong>
-                    <small>{{ element.nombre_elemento }}</small>
-                  </span>
-                </label>
-              {% empty %}
-                <p class="text-muted">Este indicador no tiene elementos fundamentales asociados.</p>
+      <div class="permissions-criteria-list">
+        {% for criterion in criteria_groups %}
+          <section class="permissions-criterion-card" data-criterion-group>
+            <label class="permissions-criterion-card__header">
+              <input
+                type="checkbox"
+                data-criterion-checkbox
+                {% if criterion.checked %}checked{% endif %}
+              >
+              <span>
+                <strong>{{ criterion.criterio.codigo_criterio }} - {{ criterion.criterio.nombre_criterio }}</strong>
+                <small>{{ criterion.indicators_selected }} / {{ criterion.indicators_total }} indicadores | {{ criterion.elements_selected }} / {{ criterion.elements_total }} elementos</small>
+              </span>
+            </label>
+
+            <div class="permissions-subcriteria-list">
+              {% for subcriterion in criterion.subcriterios %}
+                <section class="permissions-subcriterion-card" data-subcriterion-group>
+                  <label class="permissions-subcriterion-card__header">
+                    <input
+                      type="checkbox"
+                      data-subcriterion-checkbox
+                      {% if subcriterion.checked %}checked{% endif %}
+                    >
+                    <span>
+                      <strong>{{ subcriterion.subcriterio.codigo_subcriterio }} - {{ subcriterion.subcriterio.nombre_subcriterio }}</strong>
+                      <small>{{ subcriterion.indicators_selected }} / {{ subcriterion.indicators_total }} indicadores | {{ subcriterion.elements_selected }} / {{ subcriterion.elements_total }} elementos</small>
+                    </span>
+                  </label>
+
+                  <div class="permissions-structure-list">
+                    {% for group in subcriterion.indicator_groups %}
+                      <section class="permissions-structure-card" data-indicator-group="{{ group.indicator.pk }}">
+                        <div class="permissions-structure-card__header">
+                          <label class="permissions-structure-card__toggle">
+                            <input
+                              type="checkbox"
+                              name="indicadores"
+                              value="{{ group.indicator.pk }}"
+                              data-indicator-checkbox
+                              {% if group.selected %}checked{% endif %}
+                            >
+                            <span>
+                              <strong>{{ group.indicator.codigo_indicador }} - {{ group.indicator.nombre_indicador }}</strong>
+                              <small>{{ group.elements|length }} elementos fundamentales</small>
+                            </span>
+                          </label>
+                          <label class="permissions-structure-card__total">
+                            <input
+                              type="checkbox"
+                              name="accesos_totales"
+                              value="{{ group.indicator.pk }}"
+                              data-total-checkbox
+                              {% if group.access_total %}checked{% endif %}
+                            >
+                            <span>Acceso total</span>
+                          </label>
+                        </div>
+
+                        <div class="permissions-element-checklist">
+                          {% for element in group.elements %}
+                            <label class="permissions-checklist__item">
+                              <input
+                                type="checkbox"
+                                name="elementos"
+                                value="{{ element.pk }}"
+                                data-element-checkbox
+                                data-parent-indicator="{{ group.indicator.pk }}"
+                                {% if element.pk in group.selected_element_ids %}checked{% endif %}
+                              >
+                              <span>
+                                <strong>{{ element.codigo_elemento }} - {{ element.nombre_elemento }}</strong>
+                                <small>{{ element.tipo_elemento }}</small>
+                              </span>
+                            </label>
+                          {% empty %}
+                            <p class="text-muted">Este indicador no tiene elementos fundamentales asociados.</p>
+                          {% endfor %}
+                        </div>
+                      </section>
+                    {% endfor %}
+                  </div>
+                </section>
               {% endfor %}
             </div>
           </section>
         {% empty %}
-          <p class="text-muted">No existen indicadores activos para construir el checklist.</p>
+          <p class="text-muted">No existen criterios activos para construir el checklist.</p>
         {% endfor %}
       </div>
 
@@ -187,53 +241,129 @@
 
 <script>
   (function () {
-    function getGroup(node) {
+    const form = document.querySelector("[data-structure-access-form]");
+    if (!form) {
+      return;
+    }
+
+    const selectAllCheckbox = form.querySelector("[data-select-all-checkbox]");
+    const selectedIndicatorsCounter = form.querySelector("[data-selected-indicators-count]");
+    const selectedElementsCounter = form.querySelector("[data-selected-elements-count]");
+
+    function getIndicatorGroup(node) {
       return node.closest("[data-indicator-group]");
     }
 
-    function syncTotal(group) {
-      const totalCheckbox = group.querySelector("[data-total-checkbox]");
-      const indicatorCheckbox = group.querySelector("[data-indicator-checkbox]");
-      const elementCheckboxes = group.querySelectorAll("[data-element-checkbox]");
+    function getSelectionInputs(container) {
+      return Array.from(container.querySelectorAll("[data-indicator-checkbox], [data-element-checkbox]"));
+    }
 
-      if (totalCheckbox.checked) {
-        indicatorCheckbox.checked = true;
-        elementCheckboxes.forEach((checkbox) => {
-          checkbox.checked = true;
-        });
+    function setIndicatorGroup(group, checked) {
+      group.querySelectorAll("[data-indicator-checkbox], [data-total-checkbox], [data-element-checkbox]").forEach((checkbox) => {
+        checkbox.checked = checked;
+        checkbox.indeterminate = false;
+      });
+    }
+
+    function setContainer(container, checked) {
+      container.querySelectorAll("[data-indicator-group]").forEach((group) => {
+        setIndicatorGroup(group, checked);
+      });
+      updateStates();
+    }
+
+    function setAggregateState(checkbox, inputs) {
+      if (!checkbox || inputs.length === 0) {
+        return;
+      }
+      const checkedCount = inputs.filter((input) => input.checked).length;
+      checkbox.checked = checkedCount === inputs.length;
+      checkbox.indeterminate = checkedCount > 0 && checkedCount < inputs.length;
+    }
+
+    function updateIndicatorState(group) {
+      const indicatorCheckbox = group.querySelector("[data-indicator-checkbox]");
+      const totalCheckbox = group.querySelector("[data-total-checkbox]");
+      const elementCheckboxes = Array.from(group.querySelectorAll("[data-element-checkbox]"));
+      const checkedElements = elementCheckboxes.filter((checkbox) => checkbox.checked).length;
+
+      if (elementCheckboxes.length > 0) {
+        if (checkedElements > 0) {
+          indicatorCheckbox.checked = true;
+        }
+        indicatorCheckbox.indeterminate = checkedElements > 0 && checkedElements < elementCheckboxes.length;
+        totalCheckbox.checked = checkedElements === elementCheckboxes.length;
+        totalCheckbox.indeterminate = checkedElements > 0 && checkedElements < elementCheckboxes.length;
+      } else {
+        indicatorCheckbox.indeterminate = false;
+        totalCheckbox.checked = indicatorCheckbox.checked;
+        totalCheckbox.indeterminate = false;
       }
     }
 
-    document.querySelectorAll("[data-total-checkbox]").forEach((checkbox) => {
-      checkbox.addEventListener("change", function () {
-        syncTotal(getGroup(this));
-      });
-    });
+    function updateCounters() {
+      if (selectedIndicatorsCounter) {
+        selectedIndicatorsCounter.textContent = form.querySelectorAll("[data-indicator-checkbox]:checked").length;
+      }
+      if (selectedElementsCounter) {
+        selectedElementsCounter.textContent = form.querySelectorAll("[data-element-checkbox]:checked").length;
+      }
+    }
 
-    document.querySelectorAll("[data-indicator-checkbox]").forEach((checkbox) => {
-      checkbox.addEventListener("change", function () {
-        const group = getGroup(this);
-        if (!this.checked) {
-          const totalCheckbox = group.querySelector("[data-total-checkbox]");
-          totalCheckbox.checked = false;
-          group.querySelectorAll("[data-element-checkbox]").forEach((elementCheckbox) => {
-            elementCheckbox.checked = false;
-          });
-        }
+    function updateStates() {
+      form.querySelectorAll("[data-indicator-group]").forEach(updateIndicatorState);
+      form.querySelectorAll("[data-subcriterion-group]").forEach((group) => {
+        setAggregateState(group.querySelector("[data-subcriterion-checkbox]"), getSelectionInputs(group));
       });
-    });
+      form.querySelectorAll("[data-criterion-group]").forEach((group) => {
+        setAggregateState(group.querySelector("[data-criterion-checkbox]"), getSelectionInputs(group));
+      });
+      if (selectAllCheckbox) {
+        setAggregateState(selectAllCheckbox, getSelectionInputs(form));
+      }
+      updateCounters();
+    }
 
-    document.querySelectorAll("[data-element-checkbox]").forEach((checkbox) => {
+    form.querySelectorAll("[data-total-checkbox]").forEach((checkbox) => {
       checkbox.addEventListener("change", function () {
-        const group = getGroup(this);
-        const indicatorCheckbox = group.querySelector("[data-indicator-checkbox]");
         if (this.checked) {
-          indicatorCheckbox.checked = true;
+          setIndicatorGroup(getIndicatorGroup(this), true);
         }
+        updateStates();
       });
     });
 
-    document.querySelectorAll("[data-indicator-group]").forEach(syncTotal);
+    form.querySelectorAll("[data-indicator-checkbox]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        setIndicatorGroup(getIndicatorGroup(this), this.checked);
+      });
+    });
+
+    form.querySelectorAll("[data-element-checkbox]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        updateStates();
+      });
+    });
+
+    form.querySelectorAll("[data-subcriterion-checkbox]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        setContainer(this.closest("[data-subcriterion-group]"), this.checked);
+      });
+    });
+
+    form.querySelectorAll("[data-criterion-checkbox]").forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        setContainer(this.closest("[data-criterion-group]"), this.checked);
+      });
+    });
+
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener("change", function () {
+        setContainer(form, this.checked);
+      });
+    }
+
+    updateStates();
   })();
 </script>
 {% endblock %}

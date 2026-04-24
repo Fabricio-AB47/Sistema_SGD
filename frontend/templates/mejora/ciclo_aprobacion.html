@@ -1,0 +1,73 @@
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<div class="acreditacion-overview">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Registro de aprobacion del ciclo</h3>
+        <p class="text-muted">Captura la autorizacion que habilita el trabajo operativo de autoevaluacion.</p>
+      </div>
+      {% if completion.steps.ciclo_aprobacion %}
+        <span class="acreditacion-status acreditacion-status--success">Registrado</span>
+      {% else %}
+        <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+      {% endif %}
+    </div>
+
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="ciclos-form-grid">
+        {% for field in form %}
+          <label class="acreditacion-form__field {% if field.name == 'observacion' %}acreditacion-form__field--full{% endif %}">
+            <span>{{ field.label }}</span>
+            {{ field }}
+            {{ field.errors }}
+          </label>
+        {% endfor %}
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Guardar y continuar</button>
+        <a class="btn btn-secondary" href="{% url 'mejora-asignacion-responsables' %}">Ir a asignacion</a>
+        <a class="btn btn-ghost" href="{% url 'mejora-lista' %}">Volver al panel</a>
+      </div>
+    </form>
+  </article>
+
+  <aside class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Ultimo registro</h3>
+        <p class="text-muted">Datos guardados para esta etapa.</p>
+      </div>
+    </div>
+    {% if workflow_data.ciclo_aprobacion %}
+      <dl class="acreditacion-detail-list">
+        <div>
+          <dt>Ciclo</dt>
+          <dd>{{ workflow_data.ciclo_aprobacion.ciclo_nombre }}</dd>
+        </div>
+        <div>
+          <dt>Fecha</dt>
+          <dd>{{ workflow_data.ciclo_aprobacion.fecha_aprobacion }}</dd>
+        </div>
+        <div>
+          <dt>Aprobado por</dt>
+          <dd>{{ workflow_data.ciclo_aprobacion.aprobado_por }}</dd>
+        </div>
+        <div>
+          <dt>Acta</dt>
+          <dd>{{ workflow_data.ciclo_aprobacion.acta_reunion|default:"Sin referencia" }}</dd>
+        </div>
+        <div>
+          <dt>Observacion</dt>
+          <dd>{{ workflow_data.ciclo_aprobacion.observacion|default:"Sin observacion" }}</dd>
+        </div>
+      </dl>
+    {% else %}
+      <p class="text-muted">Aun no se ha registrado la aprobacion del ciclo.</p>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -1,4 +1,7 @@
 import logging
+import json
+import shutil
+from pathlib import Path
 
 from django.contrib import messages
 from django.db import IntegrityError
@@ -12,7 +15,7 @@ from django.views.decorators.clickjacking import xframe_options_sameorigin
 from apps.acreditacion.models import ElementoFundamental
 from apps.core.mixins import SigLoginRequiredMixin
 from apps.core.views.admin_page import AdminPageView
-from apps.documentos.forms import StructuredDocumentUploadForm
+from apps.documentos.forms import DocxLaboratoryForm, StructuredDocumentUploadForm
 from apps.documentos.selectors import (
     get_documento_for_access,
     get_document_access_logs_queryset,
@@ -29,7 +32,10 @@ from apps.documentos.selectors import (
 from apps.documentos.services import (
     ProtectedDocumentAccessError,
     StructuredDocumentUploadError,
+    build_docx_lab_result,
+    cleanup_docx_lab_result,
     registrar_acceso_documento,
+    load_docx_lab_result,
     resolve_graph_document_url,
     resolve_protected_document_stream,
     supports_inline_preview,
@@ -43,12 +49,16 @@ logger = logging.getLogger(__name__)
 
 MODULE_TITLE = "Documentos"
 MODULE_DESCRIPTION = "Gestiona documentos, versionamiento, accesos y autorizaciones de ciclo."
+MODULE_TAB_LAB_TITLE = "Laboratorio DOCX"
+DEFAULT_BINARY_CONTENT_TYPE = "application/octet-stream"
+ERROR_DOCUMENT_NOT_FOUND = "El documento no existe."
 MODULE_TABS = [
     {"label": "Clasificaciones documentales", "url_name": "documentos-clasificaciones-lista", "active_names": ["documentos-clasificaciones-lista"]},
     {"label": "Documentos", "url_name": "documentos-lista", "active_names": ["documentos-lista"]},
     {"label": "Detalle de documento", "url_name": "documentos-detalle", "active_names": ["documentos-detalle"]},
     {"label": "Historial de versiones", "url_name": "documentos-versiones", "active_names": ["documentos-versiones"]},
     {"label": "Historial de accesos", "url_name": "documentos-accesos", "active_names": ["documentos-accesos"]},
+    {"label": MODULE_TAB_LAB_TITLE, "url_name": "documentos-docx-lab", "active_names": ["documentos-docx-lab"]},
 ]
 
 
@@ -134,10 +144,14 @@ class DocumentDetailView(DocumentosBaseView):
         context["document_options"] = get_document_filter_queryset()
         context["selected_document"] = selected_document
         context["recent_versions"] = (
-            get_document_versions_queryset(selected_document.pk)[:10] if selected_document else []
+            get_document_versions_queryset(documento_id=selected_document.pk)[:10]
+            if selected_document
+            else []
         )
         context["recent_access_logs"] = (
-            get_document_access_logs_queryset(selected_document.pk)[:10] if selected_document else []
+            get_document_access_logs_queryset(documento_id=selected_document.pk)[:10]
+            if selected_document
+            else []
         )
         return context
 
@@ -152,7 +166,7 @@ class DocumentVersionListView(DocumentosBaseView):
         documento_id = self.request.GET.get("documento")
         context["document_options"] = get_document_filter_queryset()
         context["selected_document"] = get_documento_admin_detail(documento_id) if documento_id else None
-        context["versions"] = get_document_versions_queryset(documento_id)[:100]
+        context["versions"] = get_document_versions_queryset(documento_id=documento_id)[:100]
         return context
 
 
@@ -166,7 +180,7 @@ class DocumentAccessLogListView(DocumentosBaseView):
         documento_id = self.request.GET.get("documento")
         context["document_options"] = get_document_filter_queryset()
         context["selected_document"] = get_documento_admin_detail(documento_id) if documento_id else None
-        context["access_logs"] = get_document_access_logs_queryset(documento_id)[:100]
+        context["access_logs"] = get_document_access_logs_queryset(documento_id=documento_id)[:100]
         return context
 
 
@@ -184,6 +198,7 @@ class DocumentUploadView(DocumentosBaseView):
     )
     page_actions = [
         {"label": "Ciclos de evaluacion", "url_name": "acreditacion-ciclos-lista", "variant": "secondary"},
+        {"label": MODULE_TAB_LAB_TITLE, "url_name": "documentos-docx-lab", "variant": "ghost"},
     ]
 
     def _get_cycle_initial(self):
@@ -233,6 +248,84 @@ class DocumentUploadView(DocumentosBaseView):
         return self.render_to_response(self.get_context_data(upload_form=form))
 
 
+class DocxLaboratoryView(DocumentosBaseView):
+    template_name = "documentos/docx_lab.html"
+    page_title = MODULE_TAB_LAB_TITLE
+    page_description = "Carga un DOCX de prueba, extrae comentarios y genera una reconstruccion editable para validar el flujo."
+    page_actions = [
+        {"label": "Subir documento", "url_name": "documentos-subir", "variant": "secondary"},
+    ]
+
+    session_token_key = "docx_lab_result_token"
+
+    def _result_token(self):
+        return self.request.session.get(self.session_token_key)
+
+    def _cleanup_current_result(self):
+        cleanup_docx_lab_result(self._result_token())
+        if self.session_token_key in self.request.session:
+            del self.request.session[self.session_token_key]
+            self.request.session.modified = True
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["lab_form"] = kwargs.get("lab_form") or DocxLaboratoryForm()
+        context["lab_result"] = load_docx_lab_result(self._result_token())
+        if context["lab_result"] is not None:
+            context["lab_result_json"] = json.dumps(context["lab_result"], ensure_ascii=False, indent=2)
+        return context
+
+    def get(self, request, *args, **kwargs):
+        if request.GET.get("clear") == "1":
+            self._cleanup_current_result()
+            messages.success(request, "El resultado temporal del laboratorio fue eliminado.")
+            return redirect("documentos-docx-lab")
+
+        if request.GET.get("download") == "1":
+            result = load_docx_lab_result(self._result_token())
+            if not result:
+                messages.error(request, "No existe una reconstruccion DOCX disponible para descargar.")
+                return redirect("documentos-docx-lab")
+
+            reconstructed_path = Path(result["reconstructed_path"])
+            if not reconstructed_path.exists():
+                messages.error(request, "La reconstruccion DOCX ya no esta disponible en disco.")
+                self._cleanup_current_result()
+                return redirect("documentos-docx-lab")
+
+            return FileResponse(
+                reconstructed_path.open("rb"),
+                as_attachment=True,
+                filename=reconstructed_path.name,
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+
+        return self.render_to_response(self.get_context_data())
+
+    def post(self, request, *args, **kwargs):
+        form = DocxLaboratoryForm(request.POST, request.FILES)
+        if form.is_valid():
+            previous_token = self._result_token()
+            try:
+                result = build_docx_lab_result(uploaded_file=form.cleaned_data["archivo"])
+            except Exception as exc:
+                _report_document_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible procesar el DOCX de prueba.",
+                )
+            else:
+                request.session[self.session_token_key] = result["result_token"]
+                request.session.modified = True
+                if previous_token and previous_token != result["result_token"]:
+                    cleanup_docx_lab_result(previous_token)
+                messages.success(request, "El DOCX se analizo y se genero una reconstruccion de prueba.")
+                return redirect("documentos-docx-lab")
+
+        return self.render_to_response(self.get_context_data(lab_form=form))
+
+
 class ProtectedDocumentAccessView(SigLoginRequiredMixin, View):
     def _actor(self):
         user_id = self.request.session.get("sig_user_id")
@@ -244,7 +337,7 @@ class ProtectedDocumentAccessView(SigLoginRequiredMixin, View):
         actor = self._actor()
         documento = get_documento_for_access(documento_id, actor=actor)
         if documento is None:
-            raise Http404("El documento no existe.")
+            raise Http404(ERROR_DOCUMENT_NOT_FOUND)
 
         try:
             content_stream, headers = resolve_protected_document_stream(documento)
@@ -270,7 +363,7 @@ class ProtectedDocumentAccessView(SigLoginRequiredMixin, View):
             content_type=(
                 documento.mime_type
                 or headers.get("Content-Type")
-                or "application/octet-stream"
+                or DEFAULT_BINARY_CONTENT_TYPE
             ),
         )
 
@@ -281,7 +374,7 @@ class ProtectedDocumentPreviewView(ProtectedDocumentAccessView):
         actor = self._actor()
         documento = get_documento_for_access(documento_id, actor=actor)
         if documento is None:
-            raise Http404("El documento no existe.")
+            raise Http404(ERROR_DOCUMENT_NOT_FOUND)
 
         if not supports_inline_preview(documento):
             messages.error(
@@ -314,7 +407,7 @@ class ProtectedDocumentPreviewView(ProtectedDocumentAccessView):
             content_type=(
                 documento.mime_type
                 or headers.get("Content-Type")
-                or "application/octet-stream"
+                or DEFAULT_BINARY_CONTENT_TYPE
             ),
         )
 
@@ -324,7 +417,7 @@ class ProtectedDocumentDownloadView(ProtectedDocumentAccessView):
         actor = self._actor()
         documento = get_documento_for_access(documento_id, actor=actor)
         if documento is None:
-            raise Http404("El documento no existe.")
+            raise Http404(ERROR_DOCUMENT_NOT_FOUND)
 
         try:
             content_stream, headers = resolve_protected_document_stream(documento)
@@ -350,7 +443,7 @@ class ProtectedDocumentDownloadView(ProtectedDocumentAccessView):
             content_type=(
                 documento.mime_type
                 or headers.get("Content-Type")
-                or "application/octet-stream"
+                or DEFAULT_BINARY_CONTENT_TYPE
             ),
         )
 
@@ -366,7 +459,7 @@ class ProtectedDocumentGraphRedirectView(SigLoginRequiredMixin, View):
         actor = self._actor()
         documento = get_documento_for_access(documento_id, actor=actor)
         if documento is None:
-            raise Http404("El documento no existe.")
+            raise Http404(ERROR_DOCUMENT_NOT_FOUND)
 
         try:
             graph_url = resolve_graph_document_url(documento)

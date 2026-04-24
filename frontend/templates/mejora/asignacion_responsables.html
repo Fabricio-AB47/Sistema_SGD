@@ -1,0 +1,106 @@
+{% extends "mejora/_page_base.html" %}
+
+{% block mejora_content %}
+<div class="acreditacion-overview">
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Nueva asignacion</h3>
+        <p class="text-muted">Registra responsables por area, indicador y elemento fundamental.</p>
+      </div>
+      <span class="acreditacion-status {% if completion.steps.asignaciones %}acreditacion-status--success{% else %}acreditacion-status--warning{% endif %}">
+        {{ workflow_data.asignaciones|length }} registradas
+      </span>
+    </div>
+
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="ciclos-form-grid">
+        {% for field in form %}
+          <label class="acreditacion-form__field">
+            <span>{{ field.label }}</span>
+            {{ field }}
+            {{ field.errors }}
+          </label>
+        {% endfor %}
+      </div>
+      <div class="acreditacion-form__actions">
+        <button class="btn btn-primary" type="submit">Agregar responsable</button>
+        <a class="btn btn-secondary" href="{% url 'mejora-carga-informacion' %}">Continuar a carga</a>
+        <a class="btn btn-ghost" href="{% url 'mejora-ciclo-aprobacion' %}">Volver</a>
+      </div>
+    </form>
+  </article>
+
+  <aside class="card acreditacion-panel">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Dependencia</h3>
+        <p class="text-muted">La asignacion debe partir de un ciclo aprobado.</p>
+      </div>
+    </div>
+    <dl class="acreditacion-detail-list">
+      <div>
+        <dt>Ciclo</dt>
+        <dd>{{ workflow_data.ciclo_aprobacion.ciclo_nombre|default:"Pendiente" }}</dd>
+      </div>
+      <div>
+        <dt>Aprobado por</dt>
+        <dd>{{ workflow_data.ciclo_aprobacion.aprobado_por|default:"Pendiente" }}</dd>
+      </div>
+      <div>
+        <dt>Fecha</dt>
+        <dd>{{ workflow_data.ciclo_aprobacion.fecha_aprobacion|default:"Pendiente" }}</dd>
+      </div>
+    </dl>
+  </aside>
+</div>
+
+<article class="card">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Responsables asignados</h3>
+      <p class="text-muted">Listado operativo acumulado durante la sesion de trabajo.</p>
+    </div>
+    {% if workflow_data.asignaciones %}
+      <form method="post" class="acreditacion-inline-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="clear">
+        <button class="btn btn-ghost" type="submit">Limpiar asignaciones</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Area</th>
+          <th>Director o jefe</th>
+          <th>Responsable</th>
+          <th>Indicador</th>
+          <th>Elemento</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in workflow_data.asignaciones %}
+          <tr>
+            <td>{{ row.area }}</td>
+            <td>{{ row.director_jefe }}</td>
+            <td>{{ row.subordinado_responsable }}</td>
+            <td>{{ row.indicador }}</td>
+            <td>{{ row.elemento }}</td>
+            <td>{{ row.fecha_asignacion }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="text-center text-muted">No hay responsables asignados todavia.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}
