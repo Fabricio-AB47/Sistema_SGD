@@ -68,6 +68,7 @@
           <th>Registro</th>
           <th>Ciclo</th>
           <th>Indicador</th>
+          <th>Tipo</th>
           <th>Elemento</th>
           <th>Documento</th>
           <th>Estado</th>
@@ -82,8 +83,14 @@
             <td>#{{ registro.id_registro }}</td>
             <td>{{ registro.ciclo.nombre }}</td>
             <td>{{ registro.indicador.codigo_indicador }} - {{ registro.indicador.nombre_indicador }}</td>
+            <td>{{ registro.indicador.tipo_indicador.descripcion }}</td>
             <td>{{ registro.elemento_fundamental.codigo_elemento }} - {{ registro.elemento_fundamental.nombre_elemento }}</td>
-            <td>{{ registro.documento.nombre_archivo }}</td>
+            <td>
+              <div class="evaluacion-document-cell">
+                <span>{{ registro.documento.nombre_archivo }}</span>
+                <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' registro.documento.pk %}" target="_blank" rel="noopener">Observar</a>
+              </div>
+            </td>
             <td>{{ registro.estado.descripcion }}</td>
             <td>
               {% if registro.fecha_envio_revision %}
@@ -102,7 +109,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="9" class="text-center text-muted">No existen registros con los filtros seleccionados.</td>
+            <td colspan="10" class="text-center text-muted">No existen registros con los filtros seleccionados.</td>
           </tr>
         {% endfor %}
       </tbody>

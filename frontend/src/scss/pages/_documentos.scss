@@ -40,7 +40,7 @@
 .documentos-form--task {
   padding: 1.1rem;
   border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  border-radius: $card_radius;
   background:
     linear-gradient(180deg, rgba($secondary, 0.09) 0%, rgba(255, 255, 255, 0) 42%),
     #fff;
@@ -148,7 +148,7 @@
   gap: 0.75rem;
   padding: 1.05rem 1.1rem;
   border: 1px dashed rgba($primary, 0.28);
-  border-radius: 16px;
+  border-radius: $card_radius;
   background:
     linear-gradient(135deg, rgba($primary, 0.06) 0%, rgba($secondary, 0.12) 100%),
     #fff;

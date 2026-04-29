@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass
 
 from apps.usuarios.models import Usuario, UsuarioAreaCargo
@@ -32,6 +33,16 @@ AREA_ROLES = {
     "ACADEMICO",
     "BIENESTAR",
 }
+HEAD_CARGO_ROLES = {
+    "DIRECTOR DE TECNOLOGIA",
+    "DIRECTOR FINANCIERO",
+    "DIRECTOR DE ADMISIONES",
+    "DIRECTOR ACADEMICO",
+    "DIRECTOR DE BIENESTAR",
+    "DIRECTOR DE CALIDAD",
+    ROLE_RECTOR,
+}
+REASSIGNMENT_BLOCKED_ROLES = {ROLE_EVALUATOR, ROLE_CONSULTA}
 QUALITY_ALLOWED_GROUPS = {
     "Acreditacion y estructura",
     "Operacion documental",
@@ -74,63 +85,56 @@ NAVIGATION_GROUPS = (
                     "usuarios-asignar-roles",
                     "usuarios-estructura",
                 ),
-                roles=(ROLE_ADMIN, ROLE_QUALITY),
-                permissions=(PERM_USUARIOS_VER, PERM_USUARIOS_CREAR, PERM_USUARIOS_EDITAR),
+                roles=(ROLE_ADMIN,),
                 icon="users",
             ),
             NavigationItem(
                 label="Roles",
                 url_name="roles-lista",
                 active_names=("roles-lista", "roles-crear"),
-                roles=(ROLE_ADMIN, ROLE_QUALITY),
-                permissions=(PERM_ROLES_GESTIONAR,),
+                roles=(ROLE_ADMIN,),
                 icon="shield",
             ),
             NavigationItem(
                 label="Areas institucionales",
                 url_name="usuarios-areas",
                 active_names=("usuarios-areas",),
-                roles=(ROLE_ADMIN, ROLE_QUALITY),
-                permissions=(PERM_USUARIOS_EDITAR,),
+                roles=(ROLE_ADMIN,),
                 icon="map",
             ),
             NavigationItem(
                 label="Cargos por area",
                 url_name="usuarios-cargos",
                 active_names=("usuarios-cargos",),
-                roles=(ROLE_ADMIN, ROLE_QUALITY),
-                permissions=(PERM_USUARIOS_EDITAR,),
+                roles=(ROLE_ADMIN,),
                 icon="briefcase",
             ),
             NavigationItem(
                 label="Organigrama institucional",
                 url_name="usuarios-organigrama",
                 active_names=("usuarios-organigrama",),
-                roles=(ROLE_ADMIN, ROLE_QUALITY),
-                permissions=(PERM_USUARIOS_VER, PERM_USUARIOS_EDITAR),
+                roles=(ROLE_ADMIN,),
                 icon="orgchart",
             ),
             NavigationItem(
                 label="Sesiones",
                 url_name="seguridad-sesiones",
                 active_names=("seguridad-sesiones",),
-                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_EVALUATOR, ROLE_CONSULTA),
+                roles=(ROLE_ADMIN,),
                 icon="clock",
             ),
             NavigationItem(
                 label="Permisos por rol",
                 url_name="permisos-roles-permisos",
                 active_names=("permisos-roles-permisos", "permisos-roles-detalle"),
-                roles=(ROLE_ADMIN, ROLE_QUALITY),
-                permissions=(PERM_ROLES_GESTIONAR,),
+                roles=(ROLE_ADMIN,),
                 icon="key",
             ),
             NavigationItem(
                 label="Asignacion usuario-rol",
                 url_name="permisos-usuario-rol",
                 active_names=("permisos-usuario-rol",),
-                roles=(ROLE_ADMIN, ROLE_QUALITY),
-                permissions=(PERM_ROLES_GESTIONAR,),
+                roles=(ROLE_ADMIN,),
                 icon="swap",
             ),
             NavigationItem(
@@ -138,12 +142,12 @@ NAVIGATION_GROUPS = (
                 url_name="permisos-acceso-evaluacion",
                 active_names=(
                     "permisos-acceso-evaluacion",
+                    "permisos-acceso-evaluacion-directores",
                     "permisos-acceso-estructural",
                     "permisos-acceso-indicador",
                     "permisos-acceso-elemento",
                 ),
-                roles=(ROLE_ADMIN, ROLE_QUALITY),
-                permissions=(PERM_ROLES_GESTIONAR,),
+                roles=(ROLE_ADMIN,),
             ),
             NavigationItem(
                 label="Servicios API",
@@ -227,9 +231,16 @@ NAVIGATION_GROUPS = (
                 url_name="acreditacion-matriz-registro",
                 active_names=(
                     "acreditacion-matriz-registro",
+                    "acreditacion-matriz-registro-subir",
                     "acreditacion-matriz-evidencias",
-                    "acreditacion-matriz",
                 ),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA, *AREA_ROLES),
+                permissions=(PERM_ACREDITACION_VER, PERM_EVIDENCIAS_REGISTRAR, PERM_CONSULTA_VER),
+            ),
+            NavigationItem(
+                label="Matriz de acreditacion",
+                url_name="acreditacion-matriz",
+                active_names=("acreditacion-matriz",),
                 roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA, *AREA_ROLES),
                 permissions=(PERM_ACREDITACION_VER, PERM_EVIDENCIAS_REGISTRAR, PERM_CONSULTA_VER),
             ),
@@ -248,15 +259,15 @@ NAVIGATION_GROUPS = (
                     "documentos-versiones",
                     "documentos-accesos",
                 ),
-                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_EVALUATOR, ROLE_CONSULTA, *AREA_ROLES),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_EVALUATOR, ROLE_CONSULTA),
                 permissions=("documentos.ver", PERM_CONSULTA_VER),
             ),
             NavigationItem(
                 label="Subir documento",
                 url_name="documentos-subir",
                 active_names=("documentos-subir",),
-                roles=(ROLE_ADMIN, ROLE_QUALITY, *AREA_ROLES),
-                permissions=("documentos.subir", "documentos.versionar", PERM_EVIDENCIAS_REGISTRAR),
+                roles=(ROLE_ADMIN, ROLE_QUALITY),
+                permissions=("documentos.subir", "documentos.versionar"),
             ),
             NavigationItem(
                 label="Evidencias",
@@ -266,15 +277,22 @@ NAVIGATION_GROUPS = (
                     "evaluacion-evidencia-registrar",
                     "evaluacion-evidencia-detalle",
                 ),
-                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_EVALUATOR, ROLE_CONSULTA, *AREA_ROLES),
-                permissions=(PERM_EVIDENCIAS_REGISTRAR, PERM_EVALUACION_REVISAR, PERM_CONSULTA_VER),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_EVALUATOR, ROLE_CONSULTA),
+                permissions=(PERM_EVALUACION_REVISAR, PERM_CONSULTA_VER),
             ),
             NavigationItem(
                 label="Tareas de evidencia",
                 url_name="evaluacion-tareas",
                 active_names=("evaluacion-tareas",),
-                roles=(ROLE_ADMIN, ROLE_QUALITY, *AREA_ROLES),
-                permissions=(PERM_EVIDENCIAS_REGISTRAR, PERM_EVALUACION_REVISAR),
+                roles=(ROLE_ADMIN, ROLE_QUALITY),
+                permissions=(PERM_EVALUACION_REVISAR,),
+            ),
+            NavigationItem(
+                label="Reasignacion de tareas",
+                url_name="evaluacion-tareas-reasignacion",
+                active_names=("evaluacion-tareas-reasignacion",),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, *HEAD_CARGO_ROLES),
+                permissions=(PERM_EVALUACION_REVISAR,),
             ),
             NavigationItem(
                 label="Bandeja de evaluacion",
@@ -385,7 +403,14 @@ ROLE_PRIORITY = (
 
 
 def _normalize_roles(role_names: list[str] | tuple[str, ...]) -> set[str]:
-    normalized_roles = {str(role).strip().upper() for role in role_names if str(role).strip()}
+    normalized_roles = set()
+    for role in role_names:
+        raw_role = str(role).strip()
+        if not raw_role:
+            continue
+        normalized = unicodedata.normalize("NFKD", raw_role)
+        ascii_role = normalized.encode("ascii", "ignore").decode("ascii")
+        normalized_roles.add(" ".join(ascii_role.upper().split()))
     if normalized_roles.intersection(ROLE_QUALITY_ALIASES):
         normalized_roles.add(ROLE_QUALITY)
     return normalized_roles
@@ -424,8 +449,19 @@ def build_navigation_groups(*, role_names=(), permission_codes=()):
             if has_global_access:
                 visible_items.append(item)
                 continue
-            role_ok = _has_matching_role(normalized_roles, item.roles)
-            permission_ok = _has_matching_permission(normalized_permissions, item.permissions)
+            if (
+                item.url_name == "evaluacion-tareas-reasignacion"
+                and normalized_roles.intersection(REASSIGNMENT_BLOCKED_ROLES)
+            ):
+                continue
+            if not item.roles and not item.permissions:
+                visible_items.append(item)
+                continue
+            role_ok = bool(item.roles) and _has_matching_role(normalized_roles, item.roles)
+            permission_ok = bool(item.permissions) and _has_matching_permission(
+                normalized_permissions,
+                item.permissions,
+            )
             if role_ok or permission_ok:
                 visible_items.append(item)
         if visible_items:

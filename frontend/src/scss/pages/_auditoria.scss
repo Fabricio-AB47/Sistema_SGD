@@ -8,10 +8,12 @@
 }
 
 .auditoria__kpi {
-  background: #fff;
-  border-radius: 14px;
-  padding: 1rem 1.1rem;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  background: $card_surface;
+  border: $card_border;
+  border-radius: $card_radius;
+  padding: $card_padding;
+  min-height: $card_min_height;
+  box-shadow: $card_shadow;
 }
 
 .auditoria__kpi-label {
@@ -63,7 +65,7 @@
   padding: 1rem;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  border-radius: $card_radius;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;

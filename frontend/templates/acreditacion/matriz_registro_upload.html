@@ -1,0 +1,113 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<article class="card acreditacion-panel acreditacion-panel--upload" id="registro-evidencia-form">
+  <div class="acreditacion-panel__header">
+    <div>
+      <h3>Subir informacion</h3>
+      <p class="text-muted">Carga el documento asociado al elemento seleccionado de la matriz.</p>
+    </div>
+    {% if selected_cycle %}
+      <span class="acreditacion-status acreditacion-status--info">Ciclo {{ selected_cycle.nombre }}</span>
+    {% endif %}
+  </div>
+
+  {% if not selected_cycle %}
+    <div class="documentos-empty-state">
+      <strong>No hay un ciclo aprobado para carga.</strong>
+      <p class="text-muted">La matriz de registro solo permite subir informacion cuando existe un ciclo APROBADO con documento de autorizacion.</p>
+      <a class="btn btn-secondary" href="{% url 'acreditacion-matriz-registro' %}">Volver a matriz</a>
+    </div>
+  {% elif not can_register_matrix_evidence %}
+    <div class="documentos-empty-state">
+      <strong>Tu usuario no puede registrar evidencia.</strong>
+      <p class="text-muted">Puedes consultar el avance y las cargas registradas, pero no subir archivos.</p>
+      <a class="btn btn-secondary" href="{% url 'acreditacion-matriz-registro' %}?ciclo={{ selected_cycle.pk }}">Volver a matriz</a>
+    </div>
+  {% elif not selected_target %}
+    <div class="documentos-empty-state">
+      <strong>Selecciona primero un elemento de la matriz.</strong>
+      <p class="text-muted">Usa el boton Subir en la fila que corresponde a la informacion que vas a cargar.</p>
+      <a class="btn btn-primary" href="{% url 'acreditacion-matriz-registro' %}?ciclo={{ selected_cycle.pk }}">Volver a matriz</a>
+    </div>
+  {% else %}
+    <div class="acreditacion-steps">
+      <div class="acreditacion-steps__item">
+        <span class="acreditacion-steps__index">1</span>
+        <div>
+          <strong>{{ selected_target.criterio.codigo_criterio }} / {{ selected_target.subcriterio.codigo_subcriterio }}</strong>
+          <p class="text-muted">Criterio y subcriterio.</p>
+        </div>
+      </div>
+      <div class="acreditacion-steps__item">
+        <span class="acreditacion-steps__index">2</span>
+        <div>
+          <strong>{{ selected_target.indicador.codigo_indicador }} - {{ selected_target.indicador.nombre_indicador }}</strong>
+          <p class="text-muted">Indicador bloqueado para esta carga.</p>
+        </div>
+      </div>
+      <div class="acreditacion-steps__item">
+        <span class="acreditacion-steps__index">3</span>
+        <div>
+          <strong>{{ selected_target.elemento.codigo_elemento }} - {{ selected_target.elemento.nombre_elemento }}</strong>
+          <p class="text-muted">
+            {% if selected_target.has_evidence %}
+              Ya registra {{ selected_target.record_count }} carga(s). Puedes subir una nueva version.
+            {% elif selected_target.has_pending_review %}
+              La carga esta pendiente de check del nivel jerarquico 1.
+            {% else %}
+              Pendiente de evidencia.
+            {% endif %}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="documentos-form documentos-form--evidence">
+      {% csrf_token %}
+      {{ registration_form.non_field_errors }}
+      <div class="documentos-form__grid">
+        <div class="documentos-form__field">
+          <label for="{{ registration_form.ciclo.id_for_label }}">Ciclo</label>
+          {{ registration_form.ciclo }}
+          {{ registration_form.ciclo.errors }}
+        </div>
+        <div class="documentos-form__field">
+          <label for="{{ registration_form.indicador.id_for_label }}">Indicador</label>
+          {{ registration_form.indicador }}
+          {{ registration_form.indicador.errors }}
+        </div>
+        <div class="documentos-form__field">
+          <label for="{{ registration_form.elemento_fundamental.id_for_label }}">Elemento fundamental</label>
+          {{ registration_form.elemento_fundamental }}
+          {{ registration_form.elemento_fundamental.errors }}
+        </div>
+        <div class="documentos-form__field">
+          <label for="{{ registration_form.clasificacion.id_for_label }}">Clasificacion documental</label>
+          {{ registration_form.clasificacion }}
+          {{ registration_form.clasificacion.errors }}
+        </div>
+        <div class="documentos-form__field documentos-form__field--full">
+          <label for="{{ registration_form.descripcion_documento.id_for_label }}">Descripcion del documento</label>
+          {{ registration_form.descripcion_documento }}
+          {{ registration_form.descripcion_documento.errors }}
+        </div>
+        <div class="documentos-form__field documentos-form__field--full">
+          <label for="{{ registration_form.comentario.id_for_label }}">Comentario del registro</label>
+          {{ registration_form.comentario }}
+          {{ registration_form.comentario.errors }}
+        </div>
+        <div class="documentos-form__field documentos-form__field--full">
+          <label for="{{ registration_form.archivo.id_for_label }}">Archivo</label>
+          {{ registration_form.archivo }}
+          {{ registration_form.archivo.errors }}
+        </div>
+      </div>
+      <div class="documentos-form__actions">
+        <button class="btn btn-primary" type="submit">Subir documento</button>
+        <a class="btn btn-secondary" href="{% url 'acreditacion-matriz-registro' %}?ciclo={{ selected_cycle.pk }}">Cancelar</a>
+      </div>
+    </form>
+  {% endif %}
+</article>
+{% endblock %}

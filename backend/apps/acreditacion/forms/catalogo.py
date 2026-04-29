@@ -1,7 +1,9 @@
 from django import forms
+from django.db.models import Max
 
 from apps.acreditacion.models import (
     CicloEvaluacion,
+    ClasificacionElementoFundamental,
     Criterio,
     ElementoFundamental,
     Indicador,
@@ -38,6 +40,7 @@ ERROR_ELEMENT_ALREADY_LINKED = "El elemento ya pertenece al indicador selecciona
 ERROR_END_DATE_BEFORE_START = "La fecha fin no puede ser menor a la fecha inicio."
 ERROR_ASSIGNMENT_REQUIRED = "Debes tener un area/cargo activo para gestionar este recurso."
 
+CLASIFICACION_ELEMENTO_DEFAULT = "EV-DOC"
 CLASIFICACION_AUT_CICLO = "AUT_CICLO"
 CLASIFICACION_ACTA = "ACTA"
 ESTADO_ENVIADO = "ENVIADO"
@@ -83,6 +86,55 @@ def _filter_estados(queryset, allowed_states: tuple[str, ...]):
         if _normalize_estado(getattr(estado, "descripcion", "")) in normalized_allowed
     ]
     return queryset.filter(pk__in=allowed_ids).order_by("id_estado_ciclo")
+
+
+def _default_elemento_clasificacion():
+    queryset = ClasificacionElementoFundamental.objects.filter(activo=True).order_by("codigo")
+    return (
+        queryset.filter(codigo__iexact=CLASIFICACION_ELEMENTO_DEFAULT).first()
+        or queryset.first()
+    )
+
+
+def _next_elemento_orden_visual(indicador_id, *, exclude_elemento_id=None) -> int:
+    if not indicador_id:
+        return 1
+    queryset = ElementoFundamental.objects.filter(indicador_id=indicador_id)
+    if exclude_elemento_id:
+        queryset = queryset.exclude(pk=exclude_elemento_id)
+    max_order = queryset.aggregate(max_order=Max("orden_visual"))["max_order"] or 0
+    return int(max_order) + 1
+
+
+def _closest_available_elemento_orden_visual(indicador_id, orden_visual, *, exclude_elemento_id=None) -> int:
+    if not indicador_id:
+        return int(orden_visual or 1)
+    orden = max(int(orden_visual or 1), 1)
+    queryset = ElementoFundamental.objects.filter(
+        indicador_id=indicador_id,
+        orden_visual__isnull=False,
+    )
+    if exclude_elemento_id:
+        queryset = queryset.exclude(pk=exclude_elemento_id)
+    used_orders = set(queryset.values_list("orden_visual", flat=True))
+    while orden in used_orders:
+        orden += 1
+    return orden
+
+
+def get_elemento_orden_visual_defaults():
+    indicator_ids = list(
+        Indicador.objects.filter(activo=True).values_list("pk", flat=True)
+    )
+    defaults = {str(indicator_id): 1 for indicator_id in indicator_ids}
+    grouped_orders = (
+        ElementoFundamental.objects.filter(indicador_id__in=indicator_ids)
+        .values("indicador_id")
+        .annotate(max_order=Max("orden_visual"))
+    )
+    for item in grouped_orders:
+        defaults[str(item["indicador_id"])] = int(item["max_order"] or 0) + 1
+    return defaults
 
 
 class CriterioForm(forms.ModelForm):
@@ -207,7 +259,73 @@ class ElementoFundamentalForm(forms.ModelForm):
                 f"{indicador.codigo_indicador} - {indicador.nombre_indicador}"
             )
         )
+        self.fields["clasificacion"].queryset = (
+            ClasificacionElementoFundamental.objects.filter(activo=True).order_by("codigo")
+        )
+        default_clasificacion = _default_elemento_clasificacion()
+        if default_clasificacion and not self.is_bound and not self.instance.pk:
+            self.fields["clasificacion"].initial = default_clasificacion
+            self.initial.setdefault("clasificacion", default_clasificacion.pk)
+
+        self._initial_indicator_id = self._selected_indicator_id()
+        self._initial_orden_visual = None
+        if self._initial_indicator_id and not self.is_bound and not self.instance.pk:
+            default_order = _next_elemento_orden_visual(self._initial_indicator_id)
+            self._initial_orden_visual = default_order
+            self.fields["orden_visual"].initial = default_order
+            self.initial.setdefault("orden_visual", default_order)
+        elif self.instance.pk:
+            self._initial_orden_visual = self.instance.orden_visual
+
         self.fields["tipo_elemento"].initial = self.instance.tipo_elemento or "ESENCIAL"
+
+    def _selected_indicator_id(self):
+        if self.is_bound:
+            try:
+                return int(self.data.get(self.add_prefix("indicador")) or 0) or None
+            except (TypeError, ValueError):
+                return None
+        if self.instance.pk and self.instance.indicador_id:
+            return self.instance.indicador_id
+        try:
+            initial_indicator = self.initial.get("indicador")
+            if initial_indicator:
+                return getattr(initial_indicator, "pk", initial_indicator)
+        except (TypeError, ValueError):
+            return None
+        first_indicator = self.fields["indicador"].queryset.first()
+        return first_indicator.pk if first_indicator else None
+
+    def clean_clasificacion(self):
+        return self.cleaned_data.get("clasificacion") or _default_elemento_clasificacion()
+
+    def clean_orden_visual(self):
+        indicador = self.cleaned_data.get("indicador")
+        if indicador is None:
+            return self.cleaned_data.get("orden_visual")
+
+        submitted_order = self.cleaned_data.get("orden_visual")
+        if submitted_order in (None, ""):
+            return _next_elemento_orden_visual(
+                indicador.pk,
+                exclude_elemento_id=self.instance.pk,
+            )
+
+        if (
+            self._initial_indicator_id
+            and self._initial_indicator_id != indicador.pk
+            and self._initial_orden_visual == submitted_order
+        ):
+            return _next_elemento_orden_visual(
+                indicador.pk,
+                exclude_elemento_id=self.instance.pk,
+            )
+
+        return _closest_available_elemento_orden_visual(
+            indicador.pk,
+            submitted_order,
+            exclude_elemento_id=self.instance.pk,
+        )
 
     def clean_codigo_elemento(self):
         codigo = _normalize_code(self.cleaned_data["codigo_elemento"])

@@ -5,7 +5,12 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import ListView, CreateView, UpdateView, DetailView, FormView, TemplateView, View
 from django.db import models
 
-from apps.core.mixins import SigAdminRoleRequiredMixin, SigLoginRequiredMixin
+from apps.core.mixins import (
+    SigAdminRoleRequiredMixin,
+    SigLoginRequiredMixin,
+    SigRoleOrPermissionRequiredMixin,
+)
+from apps.core.services.navigation_service import ROLE_ADMIN
 from apps.usuarios.forms.estructura import (
     AreaInstitucionalForm,
     CargoAreaForm,
@@ -32,7 +37,13 @@ from apps.usuarios.services import (
 from apps.usuarios.services.user_context_service import hydrate_request_session_context
 
 
-class UsuarioListView(SigLoginRequiredMixin, ListView):
+class SeguridadAdministracionRequiredMixin(SigRoleOrPermissionRequiredMixin):
+    allowed_roles = (ROLE_ADMIN,)
+    include_operational_roles = False
+    access_denied_message = "No tienes acceso a seguridad y administracion."
+
+
+class UsuarioListView(SeguridadAdministracionRequiredMixin, ListView):
     model = Usuario
     template_name = "usuarios/lista.html"
     context_object_name = "usuarios"
@@ -82,7 +93,7 @@ class UsuarioCreateView(SigAdminRoleRequiredMixin, CreateView):
         return super().form_valid(form)
 
 
-class UsuarioUpdateView(SigLoginRequiredMixin, UpdateView):
+class UsuarioUpdateView(SeguridadAdministracionRequiredMixin, UpdateView):
     model = Usuario
     form_class = UsuarioEditarForm
     template_name = "usuarios/editar.html"
@@ -93,13 +104,13 @@ class UsuarioUpdateView(SigLoginRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
-class UsuarioDetailView(SigLoginRequiredMixin, DetailView):
+class UsuarioDetailView(SeguridadAdministracionRequiredMixin, DetailView):
     model = Usuario
     template_name = "usuarios/detalle.html"
     context_object_name = "usuario"
 
 
-class UsuarioAsignarRolesView(SigLoginRequiredMixin, FormView):
+class UsuarioAsignarRolesView(SeguridadAdministracionRequiredMixin, FormView):
     template_name = "usuarios/asignar_roles.html"
     form_class = AsignarRolForm
 
@@ -131,7 +142,7 @@ class UsuarioAsignarRolesView(SigLoginRequiredMixin, FormView):
         return reverse("usuarios-asignar-roles", args=[self.usuario.pk])
 
 
-class RolListView(SigLoginRequiredMixin, ListView):
+class RolListView(SeguridadAdministracionRequiredMixin, ListView):
     model = Rol
     template_name = "roles/lista.html"
     context_object_name = "roles"
@@ -141,7 +152,7 @@ class RolListView(SigLoginRequiredMixin, ListView):
         return Rol.objects.order_by("nombre_rol")
 
 
-class RolCreateView(SigLoginRequiredMixin, CreateView):
+class RolCreateView(SeguridadAdministracionRequiredMixin, CreateView):
     model = Rol
     form_class = RolCrearForm
     template_name = "roles/crear.html"
@@ -154,7 +165,7 @@ class RolCreateView(SigLoginRequiredMixin, CreateView):
         return f"{reverse('permisos-roles-detalle')}?rol={self.object.pk}"
 
 
-class AreaInstitucionalListView(SigLoginRequiredMixin, TemplateView):
+class AreaInstitucionalListView(SeguridadAdministracionRequiredMixin, TemplateView):
     template_name = "usuarios/areas.html"
 
     def get_context_data(self, **kwargs):
@@ -176,7 +187,7 @@ class AreaInstitucionalListView(SigLoginRequiredMixin, TemplateView):
         return self.render_to_response(self.get_context_data(area_form=form))
 
 
-class CargoAreaListView(SigLoginRequiredMixin, TemplateView):
+class CargoAreaListView(SeguridadAdministracionRequiredMixin, TemplateView):
     template_name = "usuarios/cargos.html"
 
     def get_context_data(self, **kwargs):
@@ -201,7 +212,7 @@ class CargoAreaListView(SigLoginRequiredMixin, TemplateView):
         return self.render_to_response(self.get_context_data(cargo_form=form))
 
 
-class OrganigramaInstitucionalView(SigLoginRequiredMixin, TemplateView):
+class OrganigramaInstitucionalView(SeguridadAdministracionRequiredMixin, TemplateView):
     template_name = "usuarios/organigrama.html"
 
     def get_context_data(self, **kwargs):
@@ -238,7 +249,7 @@ class CambiarContextoOperativoView(SigLoginRequiredMixin, View):
         return redirect(redirect_to)
 
 
-class UsuarioEstructuraView(SigLoginRequiredMixin, TemplateView):
+class UsuarioEstructuraView(SeguridadAdministracionRequiredMixin, TemplateView):
     template_name = "usuarios/estructura.html"
 
     def dispatch(self, request, *args, **kwargs):

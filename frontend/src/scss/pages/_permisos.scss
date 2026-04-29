@@ -9,10 +9,12 @@
 }
 
 .permissions-metrics__card {
-  background: #fff;
-  border-radius: 14px;
-  padding: 1rem 1.1rem;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  background: $card_surface;
+  border: $card_border;
+  border-radius: $card_radius;
+  padding: $card_padding;
+  min-height: $card_min_height;
+  box-shadow: $card_shadow;
 }
 
 .permissions-metrics__label {
@@ -97,7 +99,7 @@
 
 .permissions-group {
   padding: 1rem;
-  border-radius: 14px;
+  border-radius: $card_radius;
   background: #f8fafc;
   box-shadow: inset 0 0 0 1px #e2e8f0;
 
@@ -149,11 +151,11 @@
   margin-bottom: 1rem;
   padding: 1rem 1.1rem;
   border: 1px solid rgba($primary, 0.16);
-  border-radius: 16px;
+  border-radius: $card_radius;
   background:
     linear-gradient(135deg, rgba($primary, 0.07) 0%, rgba($secondary, 0.16) 100%),
     #fff;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  box-shadow: $card_shadow;
 }
 
 .permissions-select-all__control,
@@ -229,10 +231,10 @@
 
 .permissions-criterion-card {
   border: 1px solid #dbe5ee;
-  border-radius: 16px;
+  border-radius: $card_radius;
   overflow: hidden;
   background: #fff;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+  box-shadow: $card_shadow;
 }
 
 .permissions-criterion-card__header {
@@ -250,7 +252,7 @@
 
 .permissions-subcriterion-card {
   border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  border-radius: $card_radius;
   overflow: hidden;
   background: #fff;
 }
@@ -269,7 +271,7 @@
 
 .permissions-structure-card {
   border: 1px solid #e5e7eb;
-  border-radius: 14px;
+  border-radius: $card_radius;
   background: #fff;
   overflow: hidden;
 }

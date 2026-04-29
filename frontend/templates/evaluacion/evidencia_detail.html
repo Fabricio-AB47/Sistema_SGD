@@ -9,7 +9,7 @@
     </div>
     <div class="page-header__actions">
       <a class="btn btn-secondary" href="{% url 'evaluacion-evaluar' %}?registro={{ registro.pk }}">Evaluar</a>
-      <a class="btn btn-ghost" href="{% url 'documentos-protegidos-abrir' registro.documento.pk %}">Abrir documento</a>
+      <a class="btn btn-ghost" href="{% url 'documentos-protegidos-abrir' registro.documento.pk %}" target="_blank" rel="noopener">Observar documento</a>
     </div>
   </div>
 
@@ -17,19 +17,39 @@
     <form method="post" class="acreditacion-form acreditacion-form--compact">
       {% csrf_token %}
       <input type="hidden" name="registro" value="{{ registro.pk }}">
+      <div class="detail-grid">
+        <div>
+          <strong>Aprobacion principal</strong>
+          <p>
+            {% if release_controls.approval.approved %}
+              APROBADA
+            {% else %}
+              PENDIENTE
+            {% endif %}
+          </p>
+        </div>
+        <div>
+          <strong>Revision operativa</strong>
+          <p>{{ release_controls.approval.message }}</p>
+        </div>
+      </div>
       <label class="acreditacion-form__checkbox">
-        <input type="checkbox" name="habilitar_salida" value="1" {% if release_controls.is_released %}checked{% endif %}>
+        <input
+          type="checkbox"
+          name="habilitar_salida"
+          value="1"
+          {% if release_controls.is_released %}checked{% endif %}
+          {% if not release_controls.can_release %}disabled{% endif %}
+        >
         <span>Habilitar salida para el evaluador</span>
       </label>
       <div class="acreditacion-form__actions">
-        <button class="btn btn-primary" type="submit">Guardar salida</button>
+        <button class="btn btn-primary" type="submit" {% if not release_controls.can_release %}disabled{% endif %}>
+          Guardar salida
+        </button>
       </div>
       <small class="text-muted">
-        {% if release_controls.can_reassign %}
-          Como Director de Tecnologia puedes reasignar la salida marcando la casilla y guardando nuevamente.
-        {% else %}
-          Solo cargos de nivel 1 con aprobacion interna habilitan la visibilidad para evaluacion.
-        {% endif %}
+        Solo la cabeza de rango 1 que registro el check de revision puede habilitar la visibilidad para evaluacion.
       </small>
     </form>
   {% endif %}
@@ -89,8 +109,8 @@
           <th>ID</th>
           <th>Estado</th>
           <th>Evaluador</th>
-          <th>Calificacion</th>
-          <th>Comentario</th>
+          <th>Resultado / calificacion</th>
+          <th>Retroalimentacion</th>
           <th>Fecha</th>
           <th>Observaciones</th>
         </tr>
@@ -101,7 +121,17 @@
             <td>#{{ evaluacion.pk }}</td>
             <td>{{ evaluacion.estado.descripcion }}</td>
             <td>{{ evaluacion.usuario_evaluador.nombre_completo|default:evaluacion.usuario_evaluador }}</td>
-            <td>{{ evaluacion.calificacion|default:"-" }}</td>
+            <td>
+              {% if evaluacion.registro.indicador.tipo_indicador.descripcion == "CUALITATIVO" %}
+                {% if evaluacion.aprobado %}
+                  <span class="acreditacion-status acreditacion-status--success">Cumple</span>
+                {% else %}
+                  <span class="acreditacion-status acreditacion-status--danger">No cumple</span>
+                {% endif %}
+              {% else %}
+                {{ evaluacion.calificacion|default:"-" }}
+              {% endif %}
+            </td>
             <td>{{ evaluacion.comentario|default:"-" }}</td>
             <td>{{ evaluacion.fecha_evaluacion|date:"d/m/Y H:i"|default:"-" }}</td>
             <td><a href="{% url 'evaluacion-observaciones' %}?evaluacion={{ evaluacion.pk }}">Gestionar</a></td>

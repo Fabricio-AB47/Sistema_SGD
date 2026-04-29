@@ -7,6 +7,7 @@ from .catalogo import (  # noqa: F401
     ESTADOS_RECTOR_DECISION,
     CriterioForm,
     ElementoFundamentalForm,
+    get_elemento_orden_visual_defaults,
     IndicadorElementoForm,
     IndicadorForm,
     SubcriterioForm,

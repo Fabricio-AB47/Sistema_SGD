@@ -1,0 +1,31 @@
+{% extends "seguridad/emails/base.html" %}
+
+{% block hero_text %}Documento aprobado por la cabeza principal{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 16px;">Hola <strong>{{ responsable_name }}</strong>,</p>
+<p style="margin:0 0 18px;">
+  <strong>{{ actor_name }}</strong> aprobo el documento cargado para el elemento
+  <strong>{{ elemento_codigo }} - {{ elemento_nombre }}</strong> mediante el check de subida.
+</p>
+
+<div style="margin:0 0 18px;padding:16px;border-radius:{{ theme.radius }};background:{{ theme.canvas }};">
+  <p style="margin:0 0 8px;"><strong>Ciclo:</strong> {{ ciclo_nombre }}</p>
+  <p style="margin:0 0 8px;"><strong>Indicador:</strong> {{ indicador_codigo }} - {{ indicador_nombre }}</p>
+  <p style="margin:0 0 8px;"><strong>Documento:</strong> {{ documento_nombre }}</p>
+  <p style="margin:0;"><strong>Fecha:</strong> {{ fecha_evento|date:"d/m/Y H:i" }}</p>
+</div>
+
+{% if comentario %}
+<div style="margin:0 0 18px;padding:14px 16px;border-left:4px solid {{ theme.primary }};background:{{ theme.meta_background }};">
+  <strong>Comentario de revision:</strong><br>
+  {{ comentario }}
+</div>
+{% endif %}
+
+<p style="margin:0;">
+  <a href="{{ evidence_url }}" style="display:inline-block;padding:12px 18px;border-radius:{{ theme.radius }};background:{{ theme.primary }};color:#ffffff;text-decoration:none;font-weight:700;">
+    Ver evidencia
+  </a>
+</p>
+{% endblock %}

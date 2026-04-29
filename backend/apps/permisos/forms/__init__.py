@@ -1,5 +1,7 @@
 from .gestion import (
+    DirectorEstructuraAccesoForm,
     PermisoGestionForm,
+    ResponsableCargaGestionForm,
     RolGestionForm,
     RolEstructuraAccesoForm,
     RolIndicadorElementoGestionForm,
@@ -9,7 +11,9 @@ from .gestion import (
 )
 
 __all__ = [
+    "DirectorEstructuraAccesoForm",
     "PermisoGestionForm",
+    "ResponsableCargaGestionForm",
     "RolGestionForm",
     "RolEstructuraAccesoForm",
     "RolIndicadorElementoGestionForm",

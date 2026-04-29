@@ -83,7 +83,8 @@ document.getElementById("login-form").addEventListener("submit", async (event) =
     // Llama al endpoint de autenticación (ajustar URL real en backend).
     const response = await fetch("/api/auth/login/", {
       method: "POST",
-      body: data
+      body: data,
+      credentials: "same-origin"
     });
     const json = await response.json();   // Lee respuesta JSON.
 
@@ -93,9 +94,8 @@ document.getElementById("login-form").addEventListener("submit", async (event) =
       return;
     }
 
-    // Limpia errores y guarda token para llamadas AJAX.
+    // Limpia errores; la sesion segura se mantiene en cookie HttpOnly.
     errorBox.hidden = true;
-    localStorage.setItem("sig_token", json.token);
     window.location.href = "/dashboard/"; // Redirige al panel principal.
   } catch (err) {
     // Muestra error genérico ante fallos de red.

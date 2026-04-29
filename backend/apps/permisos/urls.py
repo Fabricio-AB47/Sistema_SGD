@@ -1,6 +1,7 @@
 from django.urls import path
 
 from apps.permisos.views.web import (
+    DirectorStructureAccessView,
     RoleDetailView,
     RoleIndicatorAccessRedirectView,
     RoleIndicatorElementAccessRedirectView,
@@ -17,6 +18,11 @@ urlpatterns = [
     path("roles/permisos/", RolePermissionView.as_view(), name="permisos-roles-permisos"),
     path("usuario-rol/", UserRoleAssignmentView.as_view(), name="permisos-usuario-rol"),
     path("acceso-evaluacion/", RoleStructureAccessView.as_view(), name="permisos-acceso-evaluacion"),
+    path(
+        "acceso-evaluacion-directores/",
+        DirectorStructureAccessView.as_view(),
+        name="permisos-acceso-evaluacion-directores",
+    ),
     path("acceso-estructural/", RoleStructureAccessRedirectView.as_view(), name="permisos-acceso-estructural"),
     path("acceso-indicador/", RoleIndicatorAccessRedirectView.as_view(), name="permisos-acceso-indicador"),
     path("acceso-elemento/", RoleIndicatorElementAccessRedirectView.as_view(), name="permisos-acceso-elemento"),

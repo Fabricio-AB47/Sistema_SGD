@@ -7,9 +7,67 @@
     </div>
   </div>
   <div class="navbar__actions">
-    <button class="pill-btn pill-secondary" type="button" id="notif-btn">
-      <span class="dot"></span> Notificaciones
-    </button>
+    <div class="notifications-menu" data-notifications-menu>
+      <button
+        class="pill-btn pill-secondary notifications-menu__button"
+        type="button"
+        id="notif-btn"
+        data-notifications-toggle
+        aria-expanded="false"
+        aria-controls="notifications-panel"
+      >
+        <span class="dot{% if sig_notifications.unread_count %} dot-alert{% endif %}"></span>
+        Notificaciones
+        {% if sig_notifications.unread_count %}
+          <span class="notifications-menu__count">{{ sig_notifications.unread_count }}</span>
+        {% endif %}
+      </button>
+
+      <section class="notifications-menu__panel" id="notifications-panel" data-notifications-panel hidden>
+        <div class="notifications-menu__header">
+          <div>
+            <strong>Notificaciones</strong>
+            <span>{{ sig_notifications.unread_count }} pendiente(s)</span>
+          </div>
+          {% if sig_notifications.unread_count %}
+            <form method="post" action="{% url 'core-notificaciones-leer-todas' %}">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button type="submit">Marcar todas</button>
+            </form>
+          {% endif %}
+        </div>
+
+        <div class="notifications-menu__list">
+          {% for notification in sig_notifications.items %}
+            <article class="notifications-menu__item{% if not notification.leida %} is-unread{% endif %}">
+              <div class="notifications-menu__item-main">
+                <strong>{{ notification.titulo }}</strong>
+                <p>{{ notification.mensaje }}</p>
+                <span>{{ notification.fecha_creacion|date:"d/m/Y H:i" }}</span>
+              </div>
+              <div class="notifications-menu__item-actions">
+                {% if notification.url %}
+                  <a href="{{ notification.url }}">Ver</a>
+                {% endif %}
+                {% if not notification.leida %}
+                  <form method="post" action="{% url 'core-notificacion-leer' notification.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit">Leida</button>
+                  </form>
+                {% endif %}
+              </div>
+            </article>
+          {% empty %}
+            <div class="notifications-menu__empty">
+              <strong>Sin notificaciones</strong>
+              <p>No hay cambios pendientes por revisar.</p>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
     {# Se omite avatar/usuario en barra para vista limpia #}
   </div>
 </header>

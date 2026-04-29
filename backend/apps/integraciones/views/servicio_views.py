@@ -3,7 +3,7 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, UpdateView
 
 from apps.auditoria.services import registrar_evento
-from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.mixins import SigAdminRoleRequiredMixin
 from apps.integraciones.forms import ServicioForm
 from apps.integraciones.models import ApiServicio
 from apps.usuarios.models import Usuario
@@ -16,7 +16,7 @@ def _get_current_usuario(request):
     return Usuario.objects.filter(pk=user_id).first()
 
 
-class ServicioListView(SigLoginRequiredMixin, ListView):
+class ServicioListView(SigAdminRoleRequiredMixin, ListView):
     model = ApiServicio
     template_name = "integraciones/servicio_list.html"
     context_object_name = "servicios"
@@ -26,7 +26,7 @@ class ServicioListView(SigLoginRequiredMixin, ListView):
         return ApiServicio.objects.prefetch_related("credenciales").order_by("nombre_servicio", "proveedor")
 
 
-class ServicioCreateView(SigLoginRequiredMixin, CreateView):
+class ServicioCreateView(SigAdminRoleRequiredMixin, CreateView):
     model = ApiServicio
     form_class = ServicioForm
     template_name = "integraciones/servicio_form.html"
@@ -54,7 +54,7 @@ class ServicioCreateView(SigLoginRequiredMixin, CreateView):
         return response
 
 
-class ServicioUpdateView(SigLoginRequiredMixin, UpdateView):
+class ServicioUpdateView(SigAdminRoleRequiredMixin, UpdateView):
     model = ApiServicio
     form_class = ServicioForm
     template_name = "integraciones/servicio_form.html"

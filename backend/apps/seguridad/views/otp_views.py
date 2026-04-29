@@ -64,6 +64,8 @@ class OTPVerificationView(FormView):
 
     def dispatch(self, request, *args, **kwargs):
         if _pending_user(request) is None:
+            if request.session.get("sig_user_id"):
+                return redirect(getattr(settings, "LOGIN_REDIRECT_URL", "/dashboard/") or "/dashboard/")
             messages.info(request, "Primero debes iniciar sesion para generar un OTP.")
             return redirect(build_login_redirect_url(request, settings.LOGIN_URL or "/login/"))
         return super().dispatch(request, *args, **kwargs)

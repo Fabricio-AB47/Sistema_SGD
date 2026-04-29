@@ -56,6 +56,7 @@
 
   <article class="card acreditacion-panel">
     <h3>Nuevo elemento</h3>
+    {{ element_order_map|json_script:"element-order-map" }}
     <form method="post" class="acreditacion-form">
         {% csrf_token %}
         {{ form.non_field_errors }}

@@ -9,6 +9,29 @@ from apps.acreditacion.models import (
     Subcriterio,
 )
 from apps.core.models import EstadoCiclo
+from apps.evidencias.models import RegistroEvidencia
+
+
+UPLOADED_EVIDENCE_STATES = {
+    "APROBADA",
+    "CARGADA",
+    "EN_REVISION_EVALUADOR",
+    "ENVIADA_EVALUADOR",
+    "REGISTRADA",
+    "VALIDADA",
+}
+
+
+def _normalize_state(value):
+    return " ".join((value or "").strip().upper().split())
+
+
+def _coerce_pk(value):
+    try:
+        pk = int(value)
+    except (TypeError, ValueError):
+        return None
+    return pk if pk > 0 else None
 
 
 def get_acreditacion_metrics():
@@ -97,7 +120,7 @@ def get_elementos_queryset():
     )
 
 
-def get_matrix_rows():
+def get_matrix_rows(*, ciclo_id=None):
     rows = []
     indicadores = (
         Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador")
@@ -140,6 +163,37 @@ def get_matrix_rows():
                     "elemento": relacion,
                 }
             )
+
+    element_ids = [row["elemento"].pk for row in rows if row["elemento"] is not None]
+    if not element_ids:
+        return rows
+
+    registros = (
+        RegistroEvidencia.objects.select_related("documento", "estado", "ciclo")
+        .filter(elemento_fundamental_id__in=element_ids)
+        .order_by("elemento_fundamental_id", "-fecha_registro", "-id_registro")
+    )
+    selected_cycle_pk = _coerce_pk(ciclo_id)
+    if selected_cycle_pk:
+        registros = registros.filter(ciclo_id=selected_cycle_pk)
+
+    latest_by_element = {}
+    for registro in registros:
+        latest_by_element.setdefault(registro.elemento_fundamental_id, registro)
+
+    for row in rows:
+        elemento = row["elemento"]
+        latest_record = latest_by_element.get(elemento.pk) if elemento is not None else None
+        latest_state = _normalize_state(
+            getattr(getattr(latest_record, "estado", None), "descripcion", None)
+        )
+        row["latest_record"] = latest_record
+        row["latest_document"] = latest_record.documento if latest_record else None
+        row["has_evidence"] = bool(
+            latest_record is not None and latest_state in UPLOADED_EVIDENCE_STATES
+        )
+        row["has_pending_review"] = bool(latest_record is not None and not row["has_evidence"])
+        row["evidence_status"] = latest_state
     return rows
 
 

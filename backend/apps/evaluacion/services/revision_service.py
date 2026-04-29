@@ -5,7 +5,9 @@ from django.utils import timezone
 
 from apps.auditoria.services.auditoria_service import registrar_evento
 from apps.core.models import EstadoEvidencia
-from apps.evaluacion.models import Evaluacion, ObservacionEvaluacion
+from apps.evaluacion.models import Evaluacion, ObservacionEvaluacion, TareaEvidencia
+from apps.evaluacion.services.tareas_service import tarea_tiene_visto_bueno_director
+from apps.usuarios.models import UsuarioAreaCargo, UsuarioRol
 
 
 class EvaluacionWorkflowError(Exception):
@@ -65,6 +67,121 @@ def _sync_registro_estado_directo(*, registro, estado_objetivo, set_release_meta
     return True
 
 
+def _is_first_rank_approver_for_task(tarea) -> bool:
+    approver_id = getattr(tarea, "asignado_por_id", None)
+    if not approver_id:
+        return False
+    if UsuarioRol.objects.filter(
+        usuario_id=approver_id,
+        activo=True,
+        rol__activo=True,
+        rol__nombre_rol__iexact="Administrador",
+    ).exists():
+        return True
+
+    responsible_area_ids = list(
+        UsuarioAreaCargo.objects.filter(
+            usuario_id=tarea.usuario_responsable_id,
+            activo=True,
+            area__activo=True,
+            cargo__activo=True,
+        ).values_list("area_id", flat=True)
+    )
+    if not responsible_area_ids:
+        return False
+
+    return UsuarioAreaCargo.objects.filter(
+        usuario_id=approver_id,
+        activo=True,
+        area_id__in=responsible_area_ids,
+        area__activo=True,
+        cargo__activo=True,
+        cargo__nivel_jerarquico=1,
+        cargo__aprueba_interno=True,
+    ).exists()
+
+
+def obtener_aprobacion_principal_registro(registro):
+    if registro is None:
+        return {
+            "approved": False,
+            "status": "sin_registro",
+            "message": "No fue posible identificar la evidencia.",
+            "task": None,
+        }
+
+    tareas = list(
+        TareaEvidencia.objects.select_related(
+            "usuario_responsable",
+            "asignado_por",
+            "estado",
+        )
+        .filter(
+            ciclo_id=registro.ciclo_id,
+            indicador_id=registro.indicador_id,
+            elemento_fundamental_id=registro.elemento_fundamental_id,
+            activo=True,
+        )
+        .order_by("-fecha_asignacion", "-id_tarea_evidencia")
+    )
+    if not tareas:
+        return {
+            "approved": False,
+            "status": "sin_tarea",
+            "message": (
+                "Primero debe existir una tarea operativa para esta evidencia y su responsable debe cerrarla."
+            ),
+            "task": None,
+        }
+
+    closed_without_signoff = None
+    pending_task = None
+    invalid_approver_task = None
+    for tarea in tareas:
+        if not tarea.fecha_cierre:
+            pending_task = pending_task or tarea
+            continue
+        if not tarea_tiene_visto_bueno_director(tarea):
+            closed_without_signoff = closed_without_signoff or tarea
+            continue
+        if not _is_first_rank_approver_for_task(tarea):
+            invalid_approver_task = invalid_approver_task or tarea
+            continue
+
+        return {
+            "approved": True,
+            "status": "aprobada",
+            "message": "La evidencia cuenta con aprobacion de la cabeza principal.",
+            "task": tarea,
+        }
+
+    if closed_without_signoff is not None:
+        return {
+            "approved": False,
+            "status": "pendiente_visto_bueno",
+            "message": (
+                "La tarea ya fue cerrada por el responsable, pero falta el check de revision de la cabeza de rango 1."
+            ),
+            "task": closed_without_signoff,
+        }
+    if invalid_approver_task is not None:
+        return {
+            "approved": False,
+            "status": "aprobador_no_principal",
+            "message": (
+                "El check registrado no corresponde a una cabeza de rango 1 del area responsable."
+            ),
+            "task": invalid_approver_task,
+        }
+
+    return {
+        "approved": False,
+        "status": "pendiente_cierre",
+        "message": "La tarea operativa debe cerrarse antes del check de revision de la cabeza de rango 1.",
+        "task": pending_task or tareas[0],
+    }
+
+
 @transaction.atomic
 def registrar_evaluacion(*, registro, estado, calificacion=None, comentario=None, actor=None, request=None):
     if actor is None:
@@ -73,6 +190,9 @@ def registrar_evaluacion(*, registro, estado, calificacion=None, comentario=None
         raise EvaluacionWorkflowError(
             "La evidencia aun no esta habilitada para evaluacion. Primero habilita la salida al evaluador."
         )
+    approval = obtener_aprobacion_principal_registro(registro)
+    if not approval["approved"]:
+        raise EvaluacionWorkflowError(approval["message"])
 
     evaluacion = (
         Evaluacion.objects.filter(registro=registro)
@@ -230,9 +350,24 @@ def resolver_observacion(*, observacion, solucion: str, actor=None, marcar_atend
 
 
 @transaction.atomic
-def habilitar_salida_evaluador(*, registro, actor=None, allow_reassign: bool = False, request=None):
+def habilitar_salida_evaluador(
+    *,
+    registro,
+    actor=None,
+    allow_reassign: bool = False,
+    require_actor_approver: bool = True,
+    request=None,
+):
     if actor is None:
         raise EvaluacionWorkflowError("No fue posible identificar al usuario responsable de la salida.")
+
+    approval = obtener_aprobacion_principal_registro(registro)
+    if not approval["approved"]:
+        raise EvaluacionWorkflowError(approval["message"])
+    if require_actor_approver and getattr(approval["task"], "asignado_por_id", None) != getattr(actor, "pk", None):
+        raise EvaluacionWorkflowError(
+            "Solo la cabeza de rango 1 que registro el check de revision puede habilitar la salida al evaluador."
+        )
 
     already_released = registro.fecha_envio_revision is not None
     previous_sender_id = getattr(registro, "enviado_revision_por_id", None)

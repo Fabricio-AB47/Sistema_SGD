@@ -4,7 +4,7 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView
 
 from apps.auditoria.services import registrar_evento
-from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.mixins import SigAdminRoleRequiredMixin
 from apps.integraciones.forms import CredencialForm
 from apps.integraciones.models import ApiCredencial
 from apps.integraciones.services import api_service
@@ -18,7 +18,7 @@ def _get_current_usuario(request):
     return Usuario.objects.filter(pk=user_id).first()
 
 
-class CredencialListView(SigLoginRequiredMixin, ListView):
+class CredencialListView(SigAdminRoleRequiredMixin, ListView):
     model = ApiCredencial
     template_name = "integraciones/credencial_list.html"
     context_object_name = "credenciales"
@@ -39,7 +39,7 @@ class CredencialListView(SigLoginRequiredMixin, ListView):
         return context
 
 
-class CredencialCreateView(SigLoginRequiredMixin, CreateView):
+class CredencialCreateView(SigAdminRoleRequiredMixin, CreateView):
     model = ApiCredencial
     form_class = CredencialForm
     template_name = "integraciones/credencial_form.html"

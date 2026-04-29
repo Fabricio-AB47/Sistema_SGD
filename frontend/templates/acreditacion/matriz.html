@@ -7,47 +7,78 @@
       <h3>Matriz de acreditacion</h3>
       <p class="text-muted">Lectura real de la jerarquia usando `criterio`, `subcriterio`, `indicador` y `elemento_fundamental.id_indicador`.</p>
     </div>
-    <button
-      class="btn btn-ghost acreditacion-info-trigger"
-      type="button"
-      data-matriz-info-trigger
-      aria-haspopup="dialog"
-      aria-controls="matriz-calificacion-dialog"
-      aria-label="Ver informacion de calificacion"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle" aria-hidden="true" focusable="false"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg>
-    </button>
+    <div class="acreditacion-panel__actions">
+      {% if selected_cycle %}
+        <span class="acreditacion-status acreditacion-status--info">Ciclo {{ selected_cycle.nombre }}</span>
+      {% endif %}
+      <button
+        class="btn btn-ghost acreditacion-info-trigger"
+        type="button"
+        data-matriz-info-trigger
+        aria-haspopup="dialog"
+        aria-controls="matriz-calificacion-dialog"
+        aria-label="Ver informacion de calificacion"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-info-circle" aria-hidden="true" focusable="false"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" /><path d="M12 9h.01" /><path d="M11 12h1v4h1" /></svg>
+      </button>
+    </div>
   </div>
 
-  <div class="acreditacion-matrix">
-    <div class="acreditacion-matrix__header">
-        <span>Criterio</span>
-        <span>Subcriterio</span>
-        <span>Indicador</span>
-        <span>Elemento</span>
-        <span>Tipo elemento</span>
-        <span>Estado</span>
-    </div>
+  <div class="acreditacion-matrix acreditacion-matrix--hierarchy">
     {% for row in matrix_rows %}
+      {% ifchanged row.criterio.pk %}
+        <div class="acreditacion-matrix__group acreditacion-matrix__group--criterion">
+          <span>Criterio</span>
+          <strong>{{ row.criterio.codigo_criterio }} - {{ row.criterio.nombre_criterio }}</strong>
+        </div>
+      {% endifchanged %}
+      {% ifchanged row.subcriterio.pk %}
+        <div class="acreditacion-matrix__group acreditacion-matrix__group--subcriterion">
+          <span>Subcriterio</span>
+          <strong>{{ row.subcriterio.codigo_subcriterio }} - {{ row.subcriterio.nombre_subcriterio }}</strong>
+        </div>
+      {% endifchanged %}
+      {% ifchanged row.indicador.pk %}
+        <div class="acreditacion-matrix__group acreditacion-matrix__group--indicator">
+          <span>Indicador</span>
+          <strong>{{ row.indicador.codigo_indicador }} - {{ row.indicador.nombre_indicador }}</strong>
+        </div>
+        <div class="acreditacion-matrix__header">
+          <span>Elemento fundamental</span>
+          <span>Estado</span>
+          <span>Archivo subido</span>
+          <span>Observar documento</span>
+        </div>
+      {% endifchanged %}
       <div class="acreditacion-matrix__row">
-        <span>{{ row.criterio.codigo_criterio }}</span>
-        <span>{{ row.subcriterio.codigo_subcriterio }}</span>
-        <span>{{ row.indicador.codigo_indicador }} - {{ row.indicador.nombre_indicador }}</span>
         <span>{% if row.elemento %}{{ row.elemento.codigo_elemento }} - {{ row.elemento.nombre_elemento }}{% else %}Sin elemento{% endif %}</span>
-        <span>{% if row.elemento %}{{ row.elemento.tipo_elemento }}{% else %}--{% endif %}</span>
         <span>
-          {% if row.indicador.activo %}
-            <strong class="acreditacion-status acreditacion-status--success">Activo</strong>
+          {% if row.has_evidence %}
+            <strong class="acreditacion-status acreditacion-status--success">Cargada</strong>
+          {% elif row.has_pending_review %}
+            <strong class="acreditacion-status acreditacion-status--warning">Pendiente de check</strong>
           {% else %}
-            <strong class="acreditacion-status acreditacion-status--muted">Inactivo</strong>
+            <strong class="acreditacion-status acreditacion-status--muted">Sin documento</strong>
+          {% endif %}
+        </span>
+        <span class="acreditacion-matrix__file">
+          {% if row.latest_document %}
+            {{ row.latest_document.nombre_archivo }}
+          {% else %}
+            --
+          {% endif %}
+        </span>
+        <span class="acreditacion-row-actions">
+          {% if row.latest_record and can_access_evidence_detail %}
+            <a class="btn btn-secondary" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ row.latest_record.pk }}">Observar</a>
+          {% else %}
+            --
           {% endif %}
         </span>
       </div>
     {% empty %}
       <div class="acreditacion-matrix__row">
         <span>No existe informacion registrada en la matriz.</span>
-        <span>--</span>
-        <span>--</span>
         <span>--</span>
         <span>--</span>
         <span>--</span>

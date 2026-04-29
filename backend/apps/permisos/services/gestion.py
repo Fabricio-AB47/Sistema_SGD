@@ -10,7 +10,7 @@ from apps.acreditacion.models import (
 )
 from apps.auditoria.services import registrar_evento
 from apps.permisos.models import Permiso
-from apps.usuarios.models import RolPermiso, UsuarioRol
+from apps.usuarios.models import Rol, RolPermiso, UsuarioAreaCargo, UsuarioRol
 
 
 @transaction.atomic
@@ -571,3 +571,131 @@ def sincronizar_acceso_estructura(
         "deactivated_count": deactivated_count,
         "synced_element_count": synced_element_count,
     }
+
+
+def _director_user_ids_queryset():
+    return (
+        UsuarioAreaCargo.objects.filter(
+            activo=True,
+            usuario__activo=True,
+            area__activo=True,
+            cargo__activo=True,
+            cargo__nombre_cargo__icontains="DIRECTOR",
+        )
+        .values_list("usuario_id", flat=True)
+        .distinct()
+    )
+
+
+def _active_role_ids_for_users(user_ids):
+    if not user_ids:
+        return {}, set()
+
+    role_rows = UsuarioRol.objects.filter(
+        activo=True,
+        usuario_id__in=user_ids,
+        rol__activo=True,
+    ).values_list("usuario_id", "rol_id")
+
+    role_ids_by_user = defaultdict(set)
+    role_ids = set()
+
+    for user_id, role_id in role_rows:
+        role_ids_by_user[user_id].add(role_id)
+        role_ids.add(role_id)
+
+    return role_ids_by_user, role_ids
+
+
+@transaction.atomic
+def sincronizar_acceso_estructura_directores(
+    *,
+    ciclo,
+    indicator_ids,
+    total_indicator_ids,
+    element_ids,
+    director_ids,
+    assign_all_directors=False,
+    actor=None,
+    request=None,
+):
+    director_ids = {int(value) for value in (director_ids or [])}
+    all_director_ids = set(_director_user_ids_queryset())
+
+    if assign_all_directors:
+        target_director_ids = all_director_ids
+    else:
+        target_director_ids = director_ids & all_director_ids
+
+    if not target_director_ids:
+        return {
+            "directors_targeted": 0,
+            "roles_synced": 0,
+            "directors_without_roles": 0,
+            "activated_count": 0,
+            "deactivated_count": 0,
+            "synced_element_count": 0,
+        }
+
+    role_ids_by_user, role_ids = _active_role_ids_for_users(target_director_ids)
+    roles = {
+        role.pk: role
+        for role in Rol.objects.filter(pk__in=role_ids, activo=True).only("id_rol", "nombre_rol", "activo")
+    }
+
+    summary = {
+        "directors_targeted": len(target_director_ids),
+        "roles_synced": 0,
+        "directors_without_roles": 0,
+        "activated_count": 0,
+        "deactivated_count": 0,
+        "synced_element_count": 0,
+    }
+
+    consolidated_role_ids = set()
+    for user_id in target_director_ids:
+        user_role_ids = {role_id for role_id in role_ids_by_user.get(user_id, set()) if role_id in roles}
+        if not user_role_ids:
+            summary["directors_without_roles"] += 1
+            continue
+        consolidated_role_ids.update(user_role_ids)
+
+    for role_id in sorted(consolidated_role_ids):
+        role = roles[role_id]
+        result = sincronizar_acceso_estructura(
+            rol=role,
+            ciclo=ciclo,
+            indicator_ids=indicator_ids,
+            total_indicator_ids=total_indicator_ids,
+            element_ids=element_ids,
+            actor=actor,
+            request=request,
+        )
+        summary["roles_synced"] += 1
+        summary["activated_count"] += result["activated_count"]
+        summary["deactivated_count"] += result["deactivated_count"]
+        summary["synced_element_count"] += result["synced_element_count"]
+
+    registrar_evento(
+        usuario=actor,
+        accion="SINCRONIZAR ACCESO ESTRUCTURAL DIRECTORES",
+        tipo_evento="PERMISOS",
+        tabla_afectada="usuario_area_cargo / usuario_rol / rol_indicador",
+        id_registro=getattr(ciclo, "pk", None),
+        descripcion=(
+            f"Se sincronizó el acceso estructural para directores en el ciclo {ciclo.nombre}."
+        ),
+        valores_nuevos={
+            "ciclo_id": ciclo.pk,
+            "assign_all_directors": bool(assign_all_directors),
+            "target_director_ids": sorted(target_director_ids),
+            "indicator_ids": sorted({int(value) for value in (indicator_ids or [])}),
+            "total_indicator_ids": sorted({int(value) for value in (total_indicator_ids or [])}),
+            "element_ids": sorted({int(value) for value in (element_ids or [])}),
+            **summary,
+        },
+        criticidad="MEDIA",
+        request=request,
+    )
+
+    return summary

@@ -217,3 +217,125 @@ class RolEstructuraAccesoForm(forms.Form):
         cleaned["accesos_totales"] = sorted(total_ids)
         cleaned["elementos"] = sorted(element_ids)
         return cleaned
+
+
+class DirectorEstructuraAccesoForm(forms.Form):
+    ciclo = forms.ModelChoiceField(
+        queryset=CicloEvaluacion.objects.select_related("estado").order_by("-fecha_inicio"),
+        label="Ciclo",
+    )
+    directores = forms.MultipleChoiceField(
+        required=False,
+        choices=(),
+        widget=forms.MultipleHiddenInput,
+    )
+    asignar_a_todos = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Asignar a todos los directores",
+    )
+    indicadores = forms.MultipleChoiceField(
+        required=False,
+        choices=(),
+        widget=forms.MultipleHiddenInput,
+    )
+    accesos_totales = forms.MultipleChoiceField(
+        required=False,
+        choices=(),
+        widget=forms.MultipleHiddenInput,
+    )
+    elementos = forms.MultipleChoiceField(
+        required=False,
+        choices=(),
+        widget=forms.MultipleHiddenInput,
+    )
+
+    def __init__(self, *args, indicator_groups=None, director_choices=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        indicator_groups = indicator_groups or []
+        director_choices = director_choices or []
+
+        self._director_ids = {int(value) for value, _ in director_choices}
+        self._indicator_map = {}
+        self._indicator_element_map = {}
+        self._element_indicator_map = {}
+
+        indicator_choices = []
+        element_choices = []
+
+        for group in indicator_groups:
+            indicador = group["indicator"]
+            self._indicator_map[indicador.pk] = indicador
+            indicator_choices.append((str(indicador.pk), indicador.codigo_indicador))
+
+            element_ids = set()
+            for elemento in group["elements"]:
+                element_choices.append((str(elemento.pk), elemento.codigo_elemento))
+                self._element_indicator_map[elemento.pk] = indicador.pk
+                element_ids.add(elemento.pk)
+
+            self._indicator_element_map[indicador.pk] = element_ids
+
+        self.fields["directores"].choices = director_choices
+        self.fields["indicadores"].choices = indicator_choices
+        self.fields["accesos_totales"].choices = indicator_choices
+        self.fields["elementos"].choices = element_choices
+
+    def clean(self):
+        cleaned = super().clean()
+        selected_directors = {int(value) for value in cleaned.get("directores", [])}
+        assign_all = bool(cleaned.get("asignar_a_todos"))
+
+        selected_directors &= self._director_ids
+        cleaned["directores"] = sorted(selected_directors)
+
+        if not assign_all and not selected_directors:
+            self.add_error(
+                "directores",
+                "Selecciona al menos un director o marca la opcion de asignacion masiva.",
+            )
+
+        indicator_ids = {int(value) for value in cleaned.get("indicadores", [])}
+        total_ids = {int(value) for value in cleaned.get("accesos_totales", [])}
+        element_ids = {int(value) for value in cleaned.get("elementos", [])}
+
+        valid_indicator_ids = set(self._indicator_map)
+        valid_element_ids = set(self._element_indicator_map)
+
+        indicator_ids &= valid_indicator_ids
+        total_ids &= valid_indicator_ids
+        element_ids &= valid_element_ids
+
+        for element_id in element_ids:
+            indicator_ids.add(self._element_indicator_map[element_id])
+
+        for indicator_id in total_ids:
+            indicator_ids.add(indicator_id)
+            element_ids.update(self._indicator_element_map.get(indicator_id, set()))
+
+        cleaned["indicadores"] = sorted(indicator_ids)
+        cleaned["accesos_totales"] = sorted(total_ids)
+        cleaned["elementos"] = sorted(element_ids)
+        return cleaned
+
+
+class ResponsableCargaGestionForm(forms.Form):
+    rol = forms.ModelChoiceField(
+        queryset=(
+            Rol.objects.filter(activo=True)
+            .exclude(nombre_rol__icontains="EVALUADOR")
+            .exclude(nombre_rol__icontains="EXTERNO")
+            .exclude(nombre_rol__icontains="CONSULTA")
+            .order_by("nombre_rol")
+        ),
+        label="Rol para responsables",
+    )
+    usuarios = forms.ModelMultipleChoiceField(
+        queryset=Usuario.objects.filter(activo=True).order_by(
+            "primer_apellido",
+            "primer_nombre",
+        ),
+        label="Usuarios responsables",
+        widget=forms.SelectMultiple(attrs={"size": 10}),
+    )
+    activo = forms.BooleanField(required=False, initial=True, label="Asignacion activa")

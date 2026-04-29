@@ -8,6 +8,7 @@ from apps.evaluacion.views.web import (
     EvidenciaRegistroRedirectView,
     ObservacionFormView,
     TareaEvidenciaListView,
+    TareaReasignacionView,
 )
 
 urlpatterns = [
@@ -18,6 +19,11 @@ urlpatterns = [
     ),
     path("evidencias/", EvidenciaListView.as_view(), name="evaluacion-evidencias-lista"),
     path("tareas/", TareaEvidenciaListView.as_view(), name="evaluacion-tareas"),
+    path(
+        "tareas/reasignacion/",
+        TareaReasignacionView.as_view(),
+        name="evaluacion-tareas-reasignacion",
+    ),
     path(
         "evidencias/detalle/",
         EvidenciaDetailView.as_view(),

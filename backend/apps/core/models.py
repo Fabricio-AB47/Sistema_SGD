@@ -10,6 +10,36 @@ class TimeStampedModel(models.Model):
         ordering = ("-creado_en",)
 
 
+class Notificacion(models.Model):
+    id_notificacion = models.AutoField(primary_key=True)
+    id_user = models.IntegerField(db_index=True)
+    actor_id = models.IntegerField(null=True, blank=True)
+    titulo = models.CharField(max_length=160)
+    mensaje = models.CharField(max_length=800)
+    tipo = models.CharField(max_length=40, default="INFO", db_index=True)
+    modulo = models.CharField(max_length=80, null=True, blank=True)
+    referencia_tipo = models.CharField(max_length=80, null=True, blank=True)
+    referencia_id = models.IntegerField(null=True, blank=True)
+    url = models.CharField(max_length=500, null=True, blank=True)
+    leida = models.BooleanField(default=False, db_index=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True, db_index=True)
+    fecha_lectura = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "notificacion"
+        managed = False
+        verbose_name = "Notificacion"
+        verbose_name_plural = "Notificaciones"
+        ordering = ("-fecha_creacion", "-id_notificacion")
+        indexes = [
+            models.Index(fields=["id_user", "leida", "-fecha_creacion"], name="ix_notif_user_leida_fecha"),
+            models.Index(fields=["referencia_tipo", "referencia_id"], name="ix_notif_referencia"),
+        ]
+
+    def __str__(self) -> str:
+        return self.titulo
+
+
 class TipoIdentificacion(models.Model):
     id_tipo_identificacion = models.AutoField(primary_key=True)
     descripcion = models.CharField(max_length=100, unique=True)

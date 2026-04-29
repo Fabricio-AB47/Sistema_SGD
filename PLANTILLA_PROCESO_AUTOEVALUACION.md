@@ -22,7 +22,7 @@ Aplica desde la aprobacion del ciclo de autoevaluacion hasta la recepcion formal
 4. Revision de jefe para visto de avance (aprobacion parcial o devolucion).
 5. Envio formal del proceso con aprobacion del director de area.
 6. Recepcion por responsable evaluador.
-
+a
 ## 5. Checklist Maestro De Ejecucion
 
 ### Etapa 1. Aprobacion Del Ciclo

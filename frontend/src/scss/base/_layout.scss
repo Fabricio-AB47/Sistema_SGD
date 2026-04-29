@@ -299,10 +299,12 @@ body {
 }
 
 .card {
-  background: #fff;
-  border-radius: $radius;
+  background: $card_surface;
+  border: $card_border;
+  border-radius: $card_radius;
   box-shadow: $card_shadow;
-  padding: 1.5rem;
+  padding: $card_padding;
+  min-width: 0;
 }
 
 .badge {
@@ -330,9 +332,10 @@ body {
 // Navbar y acciones
 .navbar {
   background: #fff;
-  border-radius: 14px;
+  border: $card_border;
+  border-radius: $card_radius;
   padding: 0.9rem 1.1rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  box-shadow: $card_shadow;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -395,6 +398,169 @@ body {
   box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15);
 }
 
+.pill-btn .dot-alert {
+  animation: notification-pulse 1.4s ease-in-out infinite;
+}
+
+.notifications-menu {
+  position: relative;
+}
+
+.notifications-menu__button {
+  position: relative;
+  cursor: pointer;
+}
+
+.notifications-menu__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.38rem;
+  border-radius: 999px;
+  background: $primary;
+  color: $blanco;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.notifications-menu__panel {
+  position: absolute;
+  top: calc(100% + 0.7rem);
+  right: 0;
+  z-index: 1000;
+  width: min(420px, calc(100vw - 2rem));
+  border: $card_border;
+  border-radius: $card_radius;
+  background: #fff;
+  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.notifications-menu__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+
+  div {
+    display: grid;
+    gap: 0.2rem;
+  }
+
+  strong {
+    color: #0f172a;
+    font-size: 1rem;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 0.86rem;
+  }
+
+  button {
+    border: 0;
+    background: rgba($primary, 0.08);
+    color: $primary;
+    border-radius: 999px;
+    padding: 0.45rem 0.7rem;
+    font-weight: 800;
+    cursor: pointer;
+  }
+}
+
+.notifications-menu__list {
+  display: grid;
+  max-height: 28rem;
+  overflow-y: auto;
+}
+
+.notifications-menu__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid #eef2f7;
+  background: #fff;
+
+  &.is-unread {
+    background: linear-gradient(90deg, rgba($primary, 0.06), #fff 48%);
+    box-shadow: inset 4px 0 0 $primary;
+  }
+}
+
+.notifications-menu__item-main {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+
+  strong {
+    color: #0f172a;
+    line-height: 1.3;
+  }
+
+  p {
+    margin: 0;
+    color: #475569;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  span {
+    color: #64748b;
+    font-size: 0.78rem;
+  }
+}
+
+.notifications-menu__item-actions {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+
+  a,
+  button {
+    border: 1px solid rgba($primary, 0.18);
+    border-radius: 999px;
+    background: #fff;
+    color: $primary;
+    padding: 0.4rem 0.65rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 800;
+    text-decoration: none;
+    cursor: pointer;
+  }
+}
+
+.notifications-menu__empty {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1.2rem 1rem;
+  color: #64748b;
+
+  strong {
+    color: #0f172a;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+@keyframes notification-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(239, 68, 68, 0.08);
+  }
+}
+
 .breadcrumbs {
   display: flex;
   align-items: center;
@@ -408,20 +574,22 @@ body {
 // Hero y KPIs (dashboard)
 .hero-card {
   background: linear-gradient(120deg, #f8fafc 0%, #eef2ff 60%, #e0f2fe 100%);
-  border-radius: 16px;
+  border: $card_border;
+  border-radius: $card_radius;
   padding: 1.7rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1.8rem;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.06);
+  box-shadow: $card_shadow;
   margin: 0;
 }
 .hero-badge {
   background: #fff;
   padding: 0.65rem 1rem;
-  border-radius: 12px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+  border: $card_border;
+  border-radius: $card_radius;
+  box-shadow: $card_shadow;
   font-weight: 700;
   color: #111827;
 }
@@ -444,9 +612,11 @@ body {
 
 .kpi-card {
   background: #fff;
-  border-radius: 12px;
-  padding: 1.25rem 1.35rem;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.05);
+  border: $card_border;
+  border-radius: $card_radius;
+  padding: $card_padding;
+  min-height: $card_min_height;
+  box-shadow: $card_shadow;
 }
 
 .kpi-label {

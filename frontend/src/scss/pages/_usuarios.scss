@@ -27,8 +27,9 @@
 .filters {
   padding: 1rem;
   background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+  border: $card_border;
+  border-radius: $card_radius;
+  box-shadow: $card_shadow;
   margin-bottom: 1rem;
 
   &__grid {
@@ -184,10 +185,11 @@
 }
 
 .card {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
-  padding: 1rem;
+  background: $card_surface;
+  border: $card_border;
+  border-radius: $card_radius;
+  box-shadow: $card_shadow;
+  padding: $card_padding;
   margin-bottom: 1rem;
 }
 

@@ -1,4 +1,5 @@
 from apps.core.services.navigation_service import get_user_profile_context
+from apps.core.services.notification_service import obtener_resumen_notificaciones
 
 
 def sig_navigation(request):
@@ -14,7 +15,11 @@ def sig_navigation(request):
         active_assignment_id=request.session.get("sig_active_assignment_id"),
         assignment_options=assignment_options,
     )
+    notification_summary = obtener_resumen_notificaciones(
+        user_id=request.session.get("sig_user_id"),
+    )
     return {
         "sig_profile": profile,
         "sig_navigation_groups": profile["navigation_groups"],
+        "sig_notifications": notification_summary,
     }

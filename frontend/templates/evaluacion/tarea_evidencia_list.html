@@ -24,6 +24,7 @@
   </article>
 </div>
 
+{% if not scope_flags.is_admin %}
 <div class="acreditacion-overview acreditacion-overview--tasks">
   {% if scope_flags.can_assign_tasks %}
   <article class="card acreditacion-panel">
@@ -153,8 +154,9 @@
     </form>
   </article>
 </div>
+{% endif %}
 
-{% if scope_flags.can_assign_tasks %}
+{% if scope_flags.can_assign_tasks and not scope_flags.is_admin %}
 <article class="card acreditacion-panel evaluacion-bulk-assignment">
   <div class="acreditacion-panel__header">
     <div>
@@ -374,6 +376,17 @@
               {% if tarea.fecha_cierre %}
                 <strong>{{ tarea.fecha_cierre|date:"d/m/Y H:i" }}</strong>
                 <div class="text-muted">{{ tarea.resultado_tarea|default:"Cerrada" }}</div>
+                {% if tarea.director_can_signoff %}
+                  <form method="post" class="documentos-form evaluacion-task-close-form" style="margin-top: 0.5rem;">
+                    {% csrf_token %}
+                    <input type="hidden" name="tarea_id" value="{{ tarea.pk }}">
+                    <textarea name="comentario_revision" rows="2" placeholder="Comentario de revision"></textarea>
+                    <div class="documentos-form__actions">
+                      <button class="btn btn-secondary" type="submit" name="action" value="director_signoff">Dar visto bueno</button>
+                      <button class="btn btn-danger" type="submit" name="action" value="director_reject">Solicitar correcciones</button>
+                    </div>
+                  </form>
+                {% endif %}
               {% elif scope_flags.can_assign_tasks or tarea.usuario_responsable_id == current_actor_id %}
                 <form method="post" class="documentos-form evaluacion-task-close-form">
                   {% csrf_token %}
@@ -384,6 +397,27 @@
                     <button class="btn btn-ghost" type="submit">Cerrar</button>
                   </div>
                 </form>
+                {% if tarea.director_can_redirect %}
+                  {% if subordinate_options %}
+                    <form method="post" class="documentos-form evaluacion-task-close-form" style="margin-top: 0.5rem;">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="director_redirect">
+                      <input type="hidden" name="tarea_id" value="{{ tarea.pk }}">
+                      <select name="subordinado_id" required>
+                        <option value="">Reasignar a usuario del rol</option>
+                        {% for option in subordinate_options %}
+                          <option value="{{ option.value }}">{{ option.label }}</option>
+                        {% endfor %}
+                      </select>
+                      <textarea name="comentario_redireccion" rows="2" placeholder="Comentario para el usuario (opcional)"></textarea>
+                      <div class="documentos-form__actions">
+                        <button class="btn btn-secondary" type="submit">Desglosar</button>
+                      </div>
+                    </form>
+                  {% else %}
+                    <span class="text-muted">No hay usuarios activos del mismo rol para desglosar.</span>
+                  {% endif %}
+                {% endif %}
               {% else %}
                 <span class="text-muted">Asignada a otro responsable</span>
               {% endif %}

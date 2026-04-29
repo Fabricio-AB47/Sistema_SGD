@@ -10,6 +10,7 @@ from apps.acreditacion.views.web import (
     ElementoListView,
     IndicadorDetailView,
     IndicadorListView,
+    MatrizRegistroUploadView,
     MatrizRegistroView,
     MatrizView,
     SubcriterioListView,
@@ -22,6 +23,11 @@ urlpatterns = [
     path("indicadores/detalle/", IndicadorDetailView.as_view(), name="acreditacion-indicadores-detalle"),
     path("elementos/", ElementoListView.as_view(), name="acreditacion-elementos-lista"),
     path("matriz-registro/", MatrizRegistroView.as_view(), name="acreditacion-matriz-registro"),
+    path(
+        "matriz-registro/subir/",
+        MatrizRegistroUploadView.as_view(),
+        name="acreditacion-matriz-registro-subir",
+    ),
     path(
         "matriz-evidencias/",
         RedirectView.as_view(

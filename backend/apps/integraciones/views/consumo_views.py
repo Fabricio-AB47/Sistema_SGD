@@ -1,11 +1,11 @@
 from django.views.generic import ListView
 
-from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.mixins import SigAdminRoleRequiredMixin
 from apps.integraciones.models import ApiConsumoLog
 from apps.integraciones.services import api_service
 
 
-class ConsumoLogView(SigLoginRequiredMixin, ListView):
+class ConsumoLogView(SigAdminRoleRequiredMixin, ListView):
     model = ApiConsumoLog
     template_name = "integraciones/consumo_log.html"
     context_object_name = "logs"

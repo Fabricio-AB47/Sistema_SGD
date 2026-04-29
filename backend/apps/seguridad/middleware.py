@@ -38,11 +38,12 @@ class TokenSessionMiddleware(MiddlewareMixin):
                 request.sig_actor = None
 
         auth = request.META.get("HTTP_AUTHORIZATION", "")
-        if not auth.startswith("Bearer "):
+        cookie_token = (request.COOKIES.get("sig_api_token") or "").strip()
+        if not auth.startswith("Bearer ") and not cookie_token:
             if request.sig_actor is None and request.session.get("sig_user_id"):
                 request.sig_actor = Usuario.objects.filter(pk=user_id, activo=True).first()
             return None
-        token_plain = auth.split(" ", 1)[1].strip()
+        token_plain = auth.split(" ", 1)[1].strip() if auth.startswith("Bearer ") else cookie_token
         if not token_plain:
             return None
         token_hash = hashlib.sha256(token_plain.encode()).hexdigest()

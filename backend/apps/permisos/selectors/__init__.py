@@ -1,4 +1,5 @@
 from .panel import (
+    get_director_structure_access_context,
     get_permission_metrics,
     get_permissions_grouped,
     get_role_detail,
@@ -11,6 +12,7 @@ from .panel import (
 )
 
 __all__ = [
+    "get_director_structure_access_context",
     "get_permission_metrics",
     "get_permissions_grouped",
     "get_role_detail",

@@ -28,6 +28,7 @@ SECRET_KEY = os.getenv(
 DEBUG = _env_bool("DJANGO_DEBUG", False)
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") if not DEBUG else ["*"]
+CSRF_TRUSTED_ORIGINS = list(_env_csv("DJANGO_CSRF_TRUSTED_ORIGINS"))
 
 # Rutas de autenticación
 LOGIN_URL = "/login/"
@@ -60,6 +61,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -94,6 +96,9 @@ WSGI_APPLICATION = "SIG.wsgi.application"
 
 # Database
 # Ajusta las variables de entorno para apuntar a tu instancia SQL Server.
+DB_ENCRYPT = (os.getenv("DB_ENCRYPT", "yes") or "yes").strip()
+DB_TRUST_SERVER_CERTIFICATE = _env_bool("DB_TRUST_SERVER_CERTIFICATE", DEBUG)
+DB_CONNECTION_TIMEOUT_SECONDS = int(os.getenv("DB_CONNECTION_TIMEOUT_SECONDS", "30") or "30")
 DATABASES = {
     "default": {
         "ENGINE": "mssql",
@@ -104,7 +109,11 @@ DATABASES = {
         "PORT": os.getenv("DB_PORT"),
         "OPTIONS": {
             "driver": os.getenv("DB_DRIVER"),
-            "extra_params": "Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30;",
+            "extra_params": (
+                f"Encrypt={DB_ENCRYPT};"
+                f"TrustServerCertificate={'yes' if DB_TRUST_SERVER_CERTIFICATE else 'no'};"
+                f"Connection Timeout={DB_CONNECTION_TIMEOUT_SECONDS};"
+            ),
         },
     }
 }
@@ -131,8 +140,20 @@ def _validate_runtime_security_settings():
             "DB_PASSWORD debe configurarse con un valor valido fuera del codigo."
         )
 
+    if not SESSION_COOKIE_SECURE or not CSRF_COOKIE_SECURE:
+        raise ImproperlyConfigured(
+            "SESSION_COOKIE_SECURE y CSRF_COOKIE_SECURE deben estar activos fuera de DEBUG."
+        )
 
-_validate_runtime_security_settings()
+    if DB_TRUST_SERVER_CERTIFICATE:
+        raise ImproperlyConfigured(
+            "DB_TRUST_SERVER_CERTIFICATE no debe estar activo fuera de DEBUG."
+        )
+
+    if DB_ENCRYPT.strip().lower() in {"0", "false", "no", "off", "optional"}:
+        raise ImproperlyConfigured(
+            "DB_ENCRYPT debe exigir cifrado TLS para la conexion SQL Server fuera de DEBUG."
+        )
 
 
 # Password validation
@@ -142,6 +163,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": int(os.getenv("SIG_PASSWORD_MIN_LENGTH", "12") or "12")},
     },
     {
         "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
@@ -174,6 +196,17 @@ STATIC_URL = "/static/"
 # Se sirven desde frontend/static (compilados por Gulp)
 STATICFILES_DIRS = [FRONTEND_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+WHITENOISE_AUTOREFRESH = DEBUG
+WHITENOISE_USE_FINDERS = _env_bool("WHITENOISE_USE_FINDERS", DEBUG)
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -194,6 +227,10 @@ SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", False)
 SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0") or "0")
 SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
 SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", False)
+if _env_bool("DJANGO_USE_X_FORWARDED_PROTO", False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+_validate_runtime_security_settings()
 
 # Limites de carga para reducir abuso y proteger el servidor.
 SIG_MAX_UPLOAD_FILE_MB = int(os.getenv("SIG_MAX_UPLOAD_FILE_MB", "25") or "25")
@@ -229,6 +266,9 @@ GRAPH_CICLO_AUTH_FOLDER = os.getenv("GRAPH_CICLO_AUTH_FOLDER", "DOCUMENTOS CICLO
 GRAPH_CICLO_AUTH_FOLDER_URL = os.getenv("GRAPH_CICLO_AUTH_FOLDER_URL", "").strip()
 GRAPH_REQUEST_TIMEOUT_SECONDS = int(os.getenv("GRAPH_REQUEST_TIMEOUT_SECONDS", "10") or "10")
 GRAPH_UPLOAD_TIMEOUT_SECONDS = int(os.getenv("GRAPH_UPLOAD_TIMEOUT_SECONDS", "30") or "30")
+SIG_ALLOWED_OUTBOUND_HOSTS = _env_csv("SIG_ALLOWED_OUTBOUND_HOSTS")
+SIG_REQUIRE_HTTPS_OUTBOUND = _env_bool("SIG_REQUIRE_HTTPS_OUTBOUND", not DEBUG)
+SIG_BLOCK_PRIVATE_OUTBOUND = _env_bool("SIG_BLOCK_PRIVATE_OUTBOUND", not DEBUG)
 
 # Seguridad de acceso: exigir correo verificado antes de permitir login.
 SIG_REQUIRE_EMAIL_VERIFICATION = _env_bool("SIG_REQUIRE_EMAIL_VERIFICATION", False)

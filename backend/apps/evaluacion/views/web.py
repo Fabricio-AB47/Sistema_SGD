@@ -21,6 +21,8 @@ from apps.evaluacion.forms import (
     TareaEvidenciaForm,
 )
 from apps.evaluacion.selectors import (
+    UPLOADED_EVIDENCE_STATES,
+    get_current_enabled_cycle,
     get_estado_tarea_options,
     get_evaluation_inbox_data,
     get_evaluacion_detail,
@@ -36,20 +38,28 @@ from apps.evaluacion.selectors import (
 from apps.evaluacion.services import (
     EvaluacionWorkflowError,
     TareaEvidenciaWorkflowError,
+    aprobar_tarea_visto_bueno_director,
     cerrar_tarea_evidencia,
     habilitar_salida_evaluador,
+    materializar_tareas_principales_desde_acceso,
+    obtener_aprobacion_principal_registro,
+    redireccionar_tarea_subordinado,
+    rechazar_tarea_revision_director,
     registrar_evaluacion,
     registrar_observacion,
     registrar_tarea_evidencia,
     registrar_tareas_evidencia_lote,
     resolver_observacion,
+    tarea_tiene_visto_bueno_director,
 )
 from apps.evaluacion.models import ObservacionEvaluacion
-from apps.usuarios.models import AreaInstitucional, Usuario, UsuarioAreaCargo
+from apps.evidencias.models import RegistroEvidencia
+from apps.usuarios.models import AreaInstitucional, Usuario, UsuarioAreaCargo, UsuarioRol
 from apps.usuarios.selectors import get_usuario_area_cargo_for_context
 
 
 logger = logging.getLogger(__name__)
+TASK_NOT_FOUND_MESSAGE = "La tarea seleccionada no existe."
 
 
 def _normalize_token(value: str | None) -> str:
@@ -65,6 +75,10 @@ QUALITY_ROLE_TOKENS = {
     "CALIDAD",
 }
 ADMIN_ROLE_TOKEN = "ADMINISTRADOR"
+DIRECTOR_REDIRECT_BLOCKED_ROLE_TOKENS = {
+    "EVALUADOR",
+    "CONSULTA",
+}
 
 MODULE_TITLE = "Evaluacion"
 MODULE_DESCRIPTION = "Gestiona evidencias registradas, evaluaciones y observaciones del flujo operativo."
@@ -83,6 +97,11 @@ MODULE_TABS = [
         "label": "Tareas de evidencia",
         "url_name": "evaluacion-tareas",
         "active_names": ("evaluacion-tareas",),
+    },
+    {
+        "label": "Reasignacion de tareas",
+        "url_name": "evaluacion-tareas-reasignacion",
+        "active_names": ("evaluacion-tareas-reasignacion",),
     },
     {
         "label": "Bandeja de evaluacion",
@@ -224,7 +243,9 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
 
         is_level_one_approver = bool(cargo_approves and cargo_level == 1)
         is_tech_director = cargo_name == "DIRECTOR DE TECNOLOGIA"
+        is_area_director = "DIRECTOR" in cargo_name if cargo_name else False
         is_evaluator = any("EVALUADOR" in token for token in role_tokens)
+        is_consulta = any("CONSULTA" in token for token in role_tokens)
         is_admin = any(token == ADMIN_ROLE_TOKEN for token in role_tokens)
         is_quality = any(token in QUALITY_ROLE_TOKENS for token in role_tokens)
 
@@ -232,14 +253,36 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
             "is_admin": is_admin,
             "is_level_one_approver": is_level_one_approver,
             "is_tech_director": is_tech_director,
+            "is_area_director": is_area_director,
             "is_evaluator": is_evaluator,
+            "is_consulta": is_consulta,
             "is_quality": is_quality,
             "can_assign_tasks": is_admin or is_quality,
-            "can_manage_release": is_level_one_approver or is_tech_director,
+            "can_manage_release": is_admin or is_level_one_approver or is_tech_director,
+            "can_redirect_subordinates": (
+                is_admin
+                or (
+                    is_level_one_approver
+                    and not is_evaluator
+                    and not is_consulta
+                )
+            ),
         }
 
     def _registro_released(self, registro) -> bool:
         return bool(getattr(registro, "fecha_envio_revision", None))
+
+    def _module_tabs(self):
+        scope_flags = self._actor_scope_flags()
+        tabs = []
+        for tab in MODULE_TABS:
+            if (
+                tab["url_name"] == "evaluacion-tareas-reasignacion"
+                and not scope_flags.get("can_redirect_subordinates")
+            ):
+                continue
+            tabs.append(tab)
+        return tabs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -247,7 +290,7 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
             {
                 "module_title": MODULE_TITLE,
                 "module_description": MODULE_DESCRIPTION,
-                "module_tabs": MODULE_TABS,
+                "module_tabs": self._module_tabs(),
                 "page_title": self.page_title,
                 "page_description": self.page_description,
                 "page_status": self.page_status,
@@ -280,7 +323,7 @@ class EvidenciaListView(EvaluacionBaseView):
             q=q,
             estado=estado,
             ciclo_id=ciclo,
-            only_released=scope_flags["is_evaluator"],
+            only_released=scope_flags["is_evaluator"] and not scope_flags["is_admin"],
         )[:100]
         context["registros"] = registros
         context["scope_flags"] = scope_flags
@@ -297,6 +340,179 @@ class TareaEvidenciaListView(EvaluacionBaseView):
     page_title = "Tareas de evidencia"
     page_description = "Delega y cierra responsables de carga por ciclo, indicador y elemento."
 
+    @staticmethod
+    def _active_operational_roles_for_user(user_id, *, include_blocked=False):
+        if not user_id:
+            return set(), []
+
+        role_ids = set()
+        role_names = []
+        for role_id, role_name in (
+            UsuarioRol.objects.filter(
+                usuario_id=user_id,
+                activo=True,
+                rol__activo=True,
+            )
+            .order_by("rol__nombre_rol")
+            .values_list("rol_id", "rol__nombre_rol")
+        ):
+            if (
+                not include_blocked
+                and _normalize_token(role_name) in DIRECTOR_REDIRECT_BLOCKED_ROLE_TOKENS
+            ):
+                continue
+            role_ids.add(role_id)
+            role_names.append(role_name)
+        return role_ids, role_names
+
+    @staticmethod
+    def _role_names_by_user(user_ids, role_ids=None, *, include_blocked=False):
+        if not user_ids:
+            return {}
+
+        queryset = UsuarioRol.objects.filter(
+            usuario_id__in=user_ids,
+            activo=True,
+            rol__activo=True,
+        ).order_by("rol__nombre_rol")
+        if role_ids is not None:
+            queryset = queryset.filter(rol_id__in=role_ids)
+
+        role_names = {}
+        for user_id, role_name in queryset.values_list("usuario_id", "rol__nombre_rol"):
+            if (
+                not include_blocked
+                and _normalize_token(role_name) in DIRECTOR_REDIRECT_BLOCKED_ROLE_TOKENS
+            ):
+                continue
+            role_names.setdefault(user_id, []).append(role_name)
+        return role_names
+
+    @staticmethod
+    def _blocked_only_user_ids(role_names_by_user):
+        blocked_user_ids = set()
+        for user_id, role_names in role_names_by_user.items():
+            normalized_roles = {
+                _normalize_token(role_name)
+                for role_name in role_names
+                if _normalize_token(role_name)
+            }
+            if normalized_roles and normalized_roles.issubset(DIRECTOR_REDIRECT_BLOCKED_ROLE_TOKENS):
+                blocked_user_ids.add(user_id)
+        return blocked_user_ids
+
+    def _director_subordinate_options(self, *, actor):
+        if actor is None:
+            return []
+
+        actor_id = getattr(actor, "pk", None)
+        if not actor_id:
+            return []
+
+        scope_flags = self._actor_scope_flags()
+        candidate_users = Usuario.objects.filter(activo=True).exclude(pk=actor_id).order_by(
+            "primer_apellido",
+            "primer_nombre",
+            "correo",
+        )
+        candidate_user_ids = set(candidate_users.values_list("pk", flat=True))
+        if not candidate_user_ids:
+            return []
+
+        if not scope_flags.get("is_admin"):
+            actor_role_ids, _actor_role_names = self._active_operational_roles_for_user(actor_id)
+            if not actor_role_ids:
+                return []
+            candidate_user_ids = set(
+                UsuarioRol.objects.filter(
+                    usuario_id__in=candidate_user_ids,
+                    rol_id__in=actor_role_ids,
+                    activo=True,
+                    rol__activo=True,
+                ).values_list("usuario_id", flat=True)
+            )
+            if not candidate_user_ids:
+                return []
+
+        role_names_by_user = self._role_names_by_user(candidate_user_ids, include_blocked=True)
+        blocked_user_ids = self._blocked_only_user_ids(role_names_by_user)
+        candidate_user_ids = candidate_user_ids - blocked_user_ids
+        if not candidate_user_ids:
+            return []
+
+        assignments = (
+            UsuarioAreaCargo.objects.select_related("usuario", "area", "cargo")
+            .filter(
+                activo=True,
+                area__activo=True,
+                cargo__activo=True,
+                usuario__activo=True,
+                usuario_id__in=candidate_user_ids,
+            )
+            .order_by(
+                "usuario__primer_apellido",
+                "usuario__primer_nombre",
+                "area__nombre_area",
+                "cargo__nivel_jerarquico",
+                "cargo__nombre_cargo",
+            )
+        )
+        assignment_by_user = {}
+        for assignment in assignments:
+            assignment_by_user.setdefault(assignment.usuario_id, assignment)
+
+        options = []
+        for usuario in candidate_users.filter(pk__in=candidate_user_ids):
+            assignment = assignment_by_user.get(usuario.pk)
+            role_suffix = ", ".join(
+                role_name
+                for role_name in role_names_by_user.get(usuario.pk, [])
+                if _normalize_token(role_name) not in DIRECTOR_REDIRECT_BLOCKED_ROLE_TOKENS
+            )
+            label = usuario.nombre_completo or usuario.correo
+            if assignment is not None:
+                label = f"{label} ({assignment.area.nombre_area} / {assignment.cargo.nombre_cargo})"
+            else:
+                label = f"{label} (Usuario registrado)"
+            if role_suffix:
+                label = f"{label} | Rol: {role_suffix}"
+            options.append(
+                {
+                    "value": str(usuario.pk),
+                    "label": label,
+                }
+            )
+        return options
+
+    @staticmethod
+    def _can_redirect_task(*, tarea, actor_id, actor_area_id, can_redirect_subordinates, is_admin=False):
+        if not can_redirect_subordinates or not actor_id or tarea.fecha_cierre:
+            return False
+        if is_admin:
+            return True
+        if not actor_area_id:
+            return False
+        if tarea.usuario_responsable_id != actor_id and tarea.asignado_por_id != actor_id:
+            return False
+        task_assignments = getattr(tarea.usuario_responsable, "task_area_assignments", [])
+        if not task_assignments:
+            return False
+        return any(assignment.area_id == actor_area_id for assignment in task_assignments)
+
+    @staticmethod
+    def _can_signoff_task(*, tarea, actor_id, can_redirect_subordinates, is_admin=False):
+        if not can_redirect_subordinates or not actor_id:
+            return False
+        if not tarea.fecha_cierre:
+            return False
+        if tarea_tiene_visto_bueno_director(tarea):
+            return False
+        if is_admin:
+            return True
+        if tarea.usuario_responsable_id == actor_id:
+            return False
+        return tarea.asignado_por_id == actor_id
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         scope_flags = self._actor_scope_flags()
@@ -306,8 +522,19 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         area = self.request.GET.get("area", "")
         responsable = self.request.GET.get("responsable", "")
         actor = self._actor()
+        actor_assignment = self._actor_assignment()
+        actor_area_id = getattr(actor_assignment, "area_id", None)
+        actor_id = getattr(actor, "pk", None)
         can_assign_tasks = scope_flags["can_assign_tasks"]
+        can_redirect_subordinates = scope_flags.get("can_redirect_subordinates", False)
+        is_admin = scope_flags.get("is_admin", False)
         effective_responsable = responsable if can_assign_tasks else getattr(actor, "pk", -1)
+        if can_assign_tasks:
+            assigned_by_filter = None
+        elif can_redirect_subordinates:
+            assigned_by_filter = actor_id
+        else:
+            assigned_by_filter = None
         if can_assign_tasks:
             context["form"] = kwargs.get("form") or TareaEvidenciaForm()
             context["bulk_form"] = kwargs.get("bulk_form") or TareaEvidenciaBulkForm()
@@ -332,9 +559,25 @@ class TareaEvidenciaListView(EvaluacionBaseView):
             ciclo_id=ciclo,
             responsable_id=effective_responsable,
             area_id=area,
+            assigned_by_id=assigned_by_filter,
         )[:100]
         context["scope_flags"] = scope_flags
-        context["current_actor_id"] = getattr(actor, "pk", None)
+        context["current_actor_id"] = actor_id
+        context["subordinate_options"] = self._director_subordinate_options(actor=actor)
+        for tarea in context["tareas"]:
+            tarea.director_can_redirect = self._can_redirect_task(
+                tarea=tarea,
+                actor_id=actor_id,
+                actor_area_id=actor_area_id,
+                can_redirect_subordinates=can_redirect_subordinates,
+                is_admin=is_admin,
+            )
+            tarea.director_can_signoff = self._can_signoff_task(
+                tarea=tarea,
+                actor_id=actor_id,
+                can_redirect_subordinates=can_redirect_subordinates,
+                is_admin=is_admin,
+            )
         context["area_options"] = AreaInstitucional.objects.filter(activo=True).order_by("nombre_area")
         context["tarea_metrics"] = get_tarea_evidencia_metrics(
             responsable_id=None if can_assign_tasks else getattr(actor, "pk", -1)
@@ -419,7 +662,7 @@ class TareaEvidenciaListView(EvaluacionBaseView):
 
         tarea = get_tarea_evidencia_detail(form.cleaned_data["tarea_id"])
         if tarea is None:
-            messages.error(request, "La tarea seleccionada no existe.")
+            messages.error(request, TASK_NOT_FOUND_MESSAGE)
             return redirect("evaluacion-tareas")
 
         actor = self._actor()
@@ -453,7 +696,7 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         if not scope_flags.get("can_assign_tasks"):
             messages.error(
                 request,
-                "Solo Calidad puede realizar asignaciones parciales de indicadores y elementos.",
+                "Solo Administrador o Calidad puede realizar asignaciones parciales de indicadores y elementos.",
             )
             return redirect("evaluacion-tareas")
 
@@ -497,12 +740,190 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         )
         return redirect("evaluacion-tareas")
 
+    def _handle_director_redirect(self, request, *, redirect_url_name="evaluacion-tareas"):
+        actor = self._actor()
+        actor_id = getattr(actor, "pk", None)
+        scope_flags = self._actor_scope_flags()
+        actor_assignment = self._actor_assignment()
+        actor_area_id = getattr(actor_assignment, "area_id", None)
+        can_redirect_subordinates = scope_flags.get("can_redirect_subordinates", False)
+        is_admin = scope_flags.get("is_admin", False)
+
+        tarea = get_tarea_evidencia_detail(request.POST.get("tarea_id"))
+        if tarea is None:
+            messages.error(request, TASK_NOT_FOUND_MESSAGE)
+            return redirect(redirect_url_name)
+
+        if not self._can_redirect_task(
+            tarea=tarea,
+            actor_id=actor_id,
+            actor_area_id=actor_area_id,
+            can_redirect_subordinates=can_redirect_subordinates,
+            is_admin=is_admin,
+        ):
+            messages.error(
+                request,
+                (
+                    "Solo se pueden desglosar tareas abiertas hacia usuarios activos."
+                    if is_admin
+                    else "Solo puedes desglosar tareas propias hacia usuarios de tu rol asignado."
+                ),
+            )
+            return redirect(redirect_url_name)
+
+        subordinate_options = {item["value"] for item in self._director_subordinate_options(actor=actor)}
+        subordinate_id = str(request.POST.get("subordinado_id") or "").strip()
+        if subordinate_id not in subordinate_options:
+            messages.error(
+                request,
+                (
+                    "Selecciona un usuario activo disponible en el sistema."
+                    if is_admin
+                    else "Selecciona un usuario valido de tu rol asignado."
+                ),
+            )
+            return redirect(redirect_url_name)
+
+        subordinado = Usuario.objects.filter(pk=subordinate_id, activo=True).first()
+        if subordinado is None:
+            messages.error(request, "No fue posible identificar al usuario seleccionado.")
+            return redirect(redirect_url_name)
+
+        try:
+            redireccionar_tarea_subordinado(
+                tarea=tarea,
+                nuevo_responsable=subordinado,
+                actor=actor,
+                comentario=request.POST.get("comentario_redireccion"),
+                request=request,
+            )
+        except (TareaEvidenciaWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+            _report_operation_error(
+                request=request,
+                exc=exc,
+                user_message="No fue posible desglosar la carga de trabajo.",
+            )
+        else:
+            messages.success(request, "Carga desglosada y reasignada correctamente.")
+
+        return redirect(redirect_url_name)
+
+    def _handle_director_signoff(self, request, *, redirect_url_name="evaluacion-tareas"):
+        actor = self._actor()
+        actor_id = getattr(actor, "pk", None)
+        scope_flags = self._actor_scope_flags()
+        can_redirect_subordinates = scope_flags.get("can_redirect_subordinates", False)
+        is_admin = scope_flags.get("is_admin", False)
+
+        tarea = get_tarea_evidencia_detail(request.POST.get("tarea_id"))
+        if tarea is None:
+            messages.error(request, TASK_NOT_FOUND_MESSAGE)
+            return redirect(redirect_url_name)
+
+        if not self._can_signoff_task(
+            tarea=tarea,
+            actor_id=actor_id,
+            can_redirect_subordinates=can_redirect_subordinates,
+            is_admin=is_admin,
+        ):
+            messages.error(
+                request,
+                (
+                    "El administrador puede registrar el visto bueno de cualquier tarea cerrada."
+                    if is_admin
+                    else "Solo el director que desgloso la tarea puede registrar el visto bueno."
+                ),
+            )
+            return redirect(redirect_url_name)
+
+        try:
+            aprobar_tarea_visto_bueno_director(
+                tarea=tarea,
+                actor=actor,
+                comentario=(
+                    request.POST.get("comentario_revision")
+                    or request.POST.get("comentario_visto_bueno")
+                ),
+                request=request,
+            )
+        except (TareaEvidenciaWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+            _report_operation_error(
+                request=request,
+                exc=exc,
+                user_message="No fue posible registrar el visto bueno del director.",
+            )
+        else:
+            messages.success(
+                request,
+                "Documento aprobado. Se envio la alerta y el correo de aprobacion correspondiente.",
+            )
+
+        return redirect(redirect_url_name)
+
+    def _handle_director_reject(self, request, *, redirect_url_name="evaluacion-tareas"):
+        actor = self._actor()
+        actor_id = getattr(actor, "pk", None)
+        scope_flags = self._actor_scope_flags()
+        can_redirect_subordinates = scope_flags.get("can_redirect_subordinates", False)
+        is_admin = scope_flags.get("is_admin", False)
+
+        tarea = get_tarea_evidencia_detail(request.POST.get("tarea_id"))
+        if tarea is None:
+            messages.error(request, TASK_NOT_FOUND_MESSAGE)
+            return redirect(redirect_url_name)
+
+        if not self._can_signoff_task(
+            tarea=tarea,
+            actor_id=actor_id,
+            can_redirect_subordinates=can_redirect_subordinates,
+            is_admin=is_admin,
+        ):
+            messages.error(
+                request,
+                (
+                    "El administrador puede solicitar correcciones sobre cualquier tarea cerrada."
+                    if is_admin
+                    else "Solo el director que desgloso la tarea puede solicitar correcciones."
+                ),
+            )
+            return redirect(redirect_url_name)
+
+        try:
+            rechazar_tarea_revision_director(
+                tarea=tarea,
+                actor=actor,
+                comentario=(
+                    request.POST.get("comentario_revision")
+                    or request.POST.get("comentario_visto_bueno")
+                ),
+                request=request,
+            )
+        except (TareaEvidenciaWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+            _report_operation_error(
+                request=request,
+                exc=exc,
+                user_message="No fue posible solicitar correcciones sobre la evidencia.",
+            )
+        else:
+            messages.warning(
+                request,
+                "Correcciones solicitadas. Se envio la alerta por correo y la tarea quedo habilitada para nueva carga.",
+            )
+
+        return redirect(redirect_url_name)
+
     def post(self, request, *args, **kwargs):
         action = (request.POST.get("action") or "").strip().lower()
         if action == "close":
             return self._handle_close(request)
         if action == "bulk_assign":
             return self._handle_bulk_assign(request)
+        if action == "director_redirect":
+            return self._handle_director_redirect(request)
+        if action == "director_signoff":
+            return self._handle_director_signoff(request)
+        if action == "director_reject":
+            return self._handle_director_reject(request)
 
         scope_flags = self._actor_scope_flags()
         if not scope_flags.get("can_assign_tasks"):
@@ -548,6 +969,294 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         return self.render_to_response(self.get_context_data(form=form))
 
 
+class TareaReasignacionView(TareaEvidenciaListView):
+    template_name = "evaluacion/tarea_reasignacion.html"
+    page_title = "Reasignacion de tareas"
+    page_description = "Permite desglosar tareas segun el alcance del rol asignado."
+
+    @staticmethod
+    def _uploaded_element_ids_for_cycle(*, ciclo, tareas):
+        element_ids = {
+            tarea.elemento_fundamental_id
+            for tarea in tareas
+            if getattr(tarea, "elemento_fundamental_id", None)
+        }
+        if ciclo is None or not element_ids:
+            return set()
+
+        registros = (
+            RegistroEvidencia.objects.select_related("estado")
+            .filter(ciclo=ciclo, elemento_fundamental_id__in=element_ids)
+            .order_by("elemento_fundamental_id", "-fecha_registro", "-id_registro")
+        )
+        latest_status_by_element = {}
+        for registro in registros:
+            latest_status_by_element.setdefault(
+                registro.elemento_fundamental_id,
+                _normalize_token(getattr(getattr(registro, "estado", None), "descripcion", "")),
+            )
+        return {
+            element_id
+            for element_id, status in latest_status_by_element.items()
+            if status in UPLOADED_EVIDENCE_STATES
+        }
+
+    @staticmethod
+    def _latest_records_by_task(tareas):
+        task_keys = {
+            (
+                getattr(tarea, "ciclo_id", None),
+                getattr(tarea, "indicador_id", None),
+                getattr(tarea, "elemento_fundamental_id", None),
+            )
+            for tarea in tareas
+        }
+        task_keys.discard((None, None, None))
+        if not task_keys:
+            return {}
+
+        ciclo_ids = {key[0] for key in task_keys}
+        indicador_ids = {key[1] for key in task_keys}
+        elemento_ids = {key[2] for key in task_keys}
+        registros = (
+            RegistroEvidencia.objects.select_related(
+                "documento",
+                "estado",
+                "registrado_por",
+            )
+            .filter(
+                ciclo_id__in=ciclo_ids,
+                indicador_id__in=indicador_ids,
+                elemento_fundamental_id__in=elemento_ids,
+            )
+            .order_by(
+                "ciclo_id",
+                "indicador_id",
+                "elemento_fundamental_id",
+                "-fecha_registro",
+                "-id_registro",
+            )
+        )
+        latest_by_key = {}
+        for registro in registros:
+            key = (
+                registro.ciclo_id,
+                registro.indicador_id,
+                registro.elemento_fundamental_id,
+            )
+            if key in task_keys:
+                latest_by_key.setdefault(key, registro)
+        return latest_by_key
+
+    @staticmethod
+    def _build_reassignment_structure(tareas):
+        criteria_map = OrderedDict()
+        for tarea in tareas:
+            indicador = tarea.indicador
+            subcriterio = indicador.subcriterio
+            criterio = subcriterio.criterio
+
+            criterion_node = criteria_map.setdefault(
+                criterio.pk,
+                {
+                    "criterio": criterio,
+                    "total": 0,
+                    "reasignables": 0,
+                    "revision": 0,
+                    "_subcriterios": OrderedDict(),
+                },
+            )
+            subcriterion_node = criterion_node["_subcriterios"].setdefault(
+                subcriterio.pk,
+                {
+                    "subcriterio": subcriterio,
+                    "total": 0,
+                    "reasignables": 0,
+                    "revision": 0,
+                    "_indicadores": OrderedDict(),
+                },
+            )
+            indicator_node = subcriterion_node["_indicadores"].setdefault(
+                indicador.pk,
+                {
+                    "indicador": indicador,
+                    "total": 0,
+                    "reasignables": 0,
+                    "revision": 0,
+                    "tareas": [],
+                },
+            )
+
+            indicator_node["tareas"].append(tarea)
+            for node in (criterion_node, subcriterion_node, indicator_node):
+                node["total"] += 1
+                if getattr(tarea, "director_can_redirect", False):
+                    node["reasignables"] += 1
+                if getattr(tarea, "director_can_signoff", False):
+                    node["revision"] += 1
+
+        criteria_groups = []
+        for criterion_node in criteria_map.values():
+            subcriteria = []
+            for subcriterion_node in criterion_node["_subcriterios"].values():
+                subcriterion_node["indicadores"] = list(subcriterion_node["_indicadores"].values())
+                del subcriterion_node["_indicadores"]
+                subcriteria.append(subcriterion_node)
+            criterion_node["subcriterios"] = subcriteria
+            del criterion_node["_subcriterios"]
+            criteria_groups.append(criterion_node)
+        return criteria_groups
+
+    def get_context_data(self, **kwargs):
+        context = EvaluacionBaseView.get_context_data(self, **kwargs)
+        scope_flags = self._actor_scope_flags()
+        actor = self._actor()
+        actor_assignment = self._actor_assignment()
+        actor_id = getattr(actor, "pk", None)
+        actor_area_id = getattr(actor_assignment, "area_id", None)
+        can_redirect_subordinates = scope_flags.get("can_redirect_subordinates", False)
+        is_admin = scope_flags.get("is_admin", False)
+        q = self.request.GET.get("q", "")
+        selected_cycle = get_current_enabled_cycle()
+
+        if can_redirect_subordinates and selected_cycle:
+            try:
+                materializar_tareas_principales_desde_acceso(
+                    ciclo=selected_cycle,
+                    actor=actor,
+                    include_all=is_admin,
+                    request=self.request,
+                )
+            except (TareaEvidenciaWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=self.request,
+                    exc=exc,
+                    user_message="No fue posible preparar las tareas del ciclo aprobado.",
+                )
+            task_filters = {
+                "q": q,
+                "ciclo_id": selected_cycle.pk,
+                "order_by_hierarchy": True,
+            }
+            if not is_admin:
+                task_filters.update(
+                    {
+                        "responsable_id": actor_id,
+                        "assigned_by_id": actor_id,
+                    }
+                )
+            tareas = list(
+                get_tareas_evidencia_queryset(**task_filters)[:100]
+            )
+            uploaded_element_ids = self._uploaded_element_ids_for_cycle(
+                ciclo=selected_cycle,
+                tareas=tareas,
+            )
+            if uploaded_element_ids:
+                tareas = [
+                    tarea
+                    for tarea in tareas
+                    if tarea.elemento_fundamental_id not in uploaded_element_ids
+                ]
+            subordinate_options = self._director_subordinate_options(actor=actor)
+        else:
+            tareas = []
+            subordinate_options = []
+
+        latest_records_by_task = self._latest_records_by_task(tareas)
+        pending_reassignment_count = 0
+        pending_signoff_count = 0
+        for tarea in tareas:
+            task_key = (
+                getattr(tarea, "ciclo_id", None),
+                getattr(tarea, "indicador_id", None),
+                getattr(tarea, "elemento_fundamental_id", None),
+            )
+            review_record = latest_records_by_task.get(task_key)
+            tarea.review_record = review_record
+            tarea.review_document = getattr(review_record, "documento", None) if review_record else None
+            tarea.review_state_label = (
+                getattr(getattr(review_record, "estado", None), "descripcion", "")
+                if review_record
+                else ""
+            )
+            tarea.director_can_redirect = self._can_redirect_task(
+                tarea=tarea,
+                actor_id=actor_id,
+                actor_area_id=actor_area_id,
+                can_redirect_subordinates=can_redirect_subordinates,
+                is_admin=is_admin,
+            )
+            tarea.director_pending_signoff = self._can_signoff_task(
+                tarea=tarea,
+                actor_id=actor_id,
+                can_redirect_subordinates=can_redirect_subordinates,
+                is_admin=is_admin,
+            )
+            tarea.director_can_signoff = bool(
+                tarea.director_pending_signoff
+                and getattr(tarea.review_document, "pk", None)
+            )
+            tarea.reassignment_options = [
+                option
+                for option in subordinate_options
+                if option["value"] != str(tarea.usuario_responsable_id)
+            ]
+            if tarea.director_can_redirect:
+                pending_reassignment_count += 1
+            if tarea.director_can_signoff:
+                pending_signoff_count += 1
+        reassignment_structure = self._build_reassignment_structure(tareas)
+
+        context.update(
+            {
+                "module_tabs": [
+                    tab
+                    for tab in context.get("module_tabs", [])
+                    if tab["url_name"] == "evaluacion-tareas-reasignacion"
+                ],
+                "scope_flags": scope_flags,
+                "current_actor_id": actor_id,
+                "actor_assignment": actor_assignment,
+                "selected_cycle": selected_cycle,
+                "tareas": tareas,
+                "reassignment_structure": reassignment_structure,
+                "subordinate_options": subordinate_options,
+                "selected_filters": {
+                    "q": q,
+                },
+                "reassignment_metrics": {
+                    "total": len(tareas),
+                    "reasignables": pending_reassignment_count,
+                    "revision": pending_signoff_count,
+                    "usuarios": len(subordinate_options),
+                },
+            }
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        action = (request.POST.get("action") or "").strip().lower()
+        if action == "director_redirect":
+            return self._handle_director_redirect(
+                request,
+                redirect_url_name="evaluacion-tareas-reasignacion",
+            )
+        if action == "director_signoff":
+            return self._handle_director_signoff(
+                request,
+                redirect_url_name="evaluacion-tareas-reasignacion",
+            )
+        if action == "director_reject":
+            return self._handle_director_reject(
+                request,
+                redirect_url_name="evaluacion-tareas-reasignacion",
+            )
+
+        messages.error(request, "Selecciona una accion valida para la reasignacion.")
+        return redirect("evaluacion-tareas-reasignacion")
+
+
 class EvidenciaDetailView(EvaluacionBaseView):
     template_name = "evaluacion/evidencia_detail.html"
     page_title = "Detalle de evidencia"
@@ -556,12 +1265,24 @@ class EvidenciaDetailView(EvaluacionBaseView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         scope_flags = self._actor_scope_flags()
+        actor_id = getattr(self._actor(), "pk", None)
         registro = kwargs.get("registro") or get_registro_detail(self.request.GET.get("registro"))
+        approval_status = obtener_aprobacion_principal_registro(registro) if registro else None
+        approval_task = approval_status.get("task") if approval_status else None
         context["registro"] = registro
         context["release_controls"] = {
             "can_manage": scope_flags["can_manage_release"],
-            "can_reassign": scope_flags["is_tech_director"],
             "is_released": self._registro_released(registro) if registro else False,
+            "approval": approval_status,
+            "can_release": bool(
+                scope_flags["can_manage_release"]
+                and registro
+                and approval_status["approved"]
+                and (
+                    scope_flags.get("is_admin")
+                    or getattr(approval_task, "asignado_por_id", None) == actor_id
+                )
+            ),
         }
         context["evaluaciones"] = (
             get_evaluaciones_queryset(registro_id=registro.pk)[:30] if registro else []
@@ -652,7 +1373,8 @@ class EvidenciaDetailView(EvaluacionBaseView):
             result = habilitar_salida_evaluador(
                 registro=registro,
                 actor=self._actor(),
-                allow_reassign=scope_flags["is_tech_director"],
+                allow_reassign=scope_flags["can_manage_release"],
+                require_actor_approver=not scope_flags.get("is_admin"),
                 request=request,
             )
         except (EvaluacionWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
@@ -665,7 +1387,7 @@ class EvidenciaDetailView(EvaluacionBaseView):
             if result["status"] == "released":
                 messages.success(request, "Salida al evaluador habilitada correctamente.")
             elif result["status"] == "reassigned":
-                messages.success(request, "Salida al evaluador reasignada por Director de Tecnologia.")
+                messages.success(request, "Salida al evaluador reasignada por la cabeza principal.")
             else:
                 messages.info(request, "La evidencia ya se encontraba habilitada para evaluacion.")
         return self._detail_redirect(registro)
@@ -733,8 +1455,13 @@ class EvaluacionFormView(EvaluacionBaseView):
             )
         context["registro"] = registro
         context["scope_flags"] = scope_flags
-        context["form"] = kwargs.get("form") or EvaluacionGestionForm(
-            registro_initial=registro
+        form = kwargs.get("form") or EvaluacionGestionForm(registro_initial=registro)
+        context["form"] = form
+        context["evaluation_mode"] = getattr(form, "evaluation_mode", "quantitative")
+        context["indicator_type"] = getattr(
+            getattr(getattr(registro, "indicador", None), "tipo_indicador", None),
+            "descripcion",
+            "",
         )
         context["evaluaciones_recientes"] = (
             get_evaluaciones_queryset(registro_id=registro.pk)[:10] if registro else get_evaluaciones_queryset()[:10]

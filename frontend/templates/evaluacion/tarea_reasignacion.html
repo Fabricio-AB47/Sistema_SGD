@@ -1,0 +1,230 @@
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+<section class="reassignment-overview">
+  <article class="reassignment-metric">
+    <span class="reassignment-metric__label">Tareas visibles</span>
+    <strong class="reassignment-metric__value">{{ reassignment_metrics.total }}</strong>
+  </article>
+  <article class="reassignment-metric">
+    <span class="reassignment-metric__label">Por desglosar</span>
+    <strong class="reassignment-metric__value">{{ reassignment_metrics.reasignables }}</strong>
+  </article>
+  <article class="reassignment-metric reassignment-metric--review">
+    <span class="reassignment-metric__label">Revision pendiente</span>
+    <strong class="reassignment-metric__value">{{ reassignment_metrics.revision }}</strong>
+  </article>
+  <article class="reassignment-metric">
+    <span class="reassignment-metric__label">Usuarios disponibles</span>
+    <strong class="reassignment-metric__value">{{ reassignment_metrics.usuarios }}</strong>
+  </article>
+</section>
+
+<section class="reassignment-layout">
+  <aside class="card reassignment-sidebar">
+    <div class="reassignment-sidebar__header">
+      <span class="reassignment-sidebar__eyebrow">Control operativo</span>
+      <h3>Reasignacion</h3>
+      <p class="text-muted">Criterios, subcriterios, indicadores y elementos fundamentales.</p>
+    </div>
+
+    {% if not scope_flags.can_redirect_subordinates %}
+      <div class="reassignment-empty-state">
+        <strong>Acceso no habilitado</strong>
+        <p class="text-muted">Tu rol actual no tiene habilitada la reasignacion de tareas.</p>
+      </div>
+    {% else %}
+      <form method="get" class="reassignment-filter-form">
+        <label>
+          <span>Busqueda</span>
+          <input type="text" name="q" value="{{ selected_filters.q }}" placeholder="Indicador, elemento o responsable">
+        </label>
+        <div class="reassignment-filter-form__actions">
+          <button class="btn btn-secondary" type="submit">Buscar</button>
+          <a class="btn btn-ghost" href="{% url 'evaluacion-tareas-reasignacion' %}">Limpiar</a>
+        </div>
+      </form>
+    {% endif %}
+  </aside>
+
+  {% if scope_flags.can_redirect_subordinates %}
+    <section class="card reassignment-workspace">
+      <div class="reassignment-workspace__header">
+        <div>
+          <h3>Matriz de reasignacion</h3>
+          <p class="text-muted">Estructura operativa asignada a tu jerarquia principal.</p>
+        </div>
+        <span class="reassignment-count">{{ tareas|length }} resultado(s)</span>
+      </div>
+
+      <div class="reassignment-hierarchy" data-reassignment-hierarchy>
+        {% for criterion in reassignment_structure %}
+          <section class="reassignment-criterion" data-reassignment-group>
+            <button class="reassignment-group-toggle" type="button" data-reassignment-toggle aria-expanded="true">
+              <span>
+                <strong>{{ criterion.criterio.codigo_criterio }} - {{ criterion.criterio.nombre_criterio }}</strong>
+                <small>{{ criterion.total }} elemento(s) | {{ criterion.reasignables }} por desglosar | {{ criterion.revision }} en revision</small>
+              </span>
+              <span class="reassignment-toggle-icon" aria-hidden="true">-</span>
+            </button>
+
+            <div class="reassignment-group-content" data-reassignment-content>
+              {% for subcriterion in criterion.subcriterios %}
+                <section class="reassignment-subcriterion" data-reassignment-group>
+                  <button class="reassignment-group-toggle reassignment-group-toggle--sub" type="button" data-reassignment-toggle aria-expanded="true">
+                    <span>
+                      <strong>{{ subcriterion.subcriterio.codigo_subcriterio }} - {{ subcriterion.subcriterio.nombre_subcriterio }}</strong>
+                      <small>{{ subcriterion.total }} elemento(s) | {{ subcriterion.reasignables }} por desglosar | {{ subcriterion.revision }} en revision</small>
+                    </span>
+                    <span class="reassignment-toggle-icon" aria-hidden="true">-</span>
+                  </button>
+
+                  <div class="reassignment-group-content" data-reassignment-content>
+                    {% for indicator in subcriterion.indicadores %}
+                      <section class="reassignment-indicator" data-reassignment-group>
+                        <button class="reassignment-group-toggle reassignment-group-toggle--indicator" type="button" data-reassignment-toggle aria-expanded="true">
+                          <span>
+                            <strong>{{ indicator.indicador.codigo_indicador }} - {{ indicator.indicador.nombre_indicador }}</strong>
+                            <small>{{ indicator.total }} elemento(s) | {{ indicator.reasignables }} por desglosar | {{ indicator.revision }} en revision</small>
+                          </span>
+                          <span class="reassignment-toggle-icon" aria-hidden="true">-</span>
+                        </button>
+
+                        <div class="reassignment-element-list" data-reassignment-content>
+                          {% for tarea in indicator.tareas %}
+                            <article class="reassignment-task">
+                              <div class="reassignment-task__main">
+                                <div class="reassignment-task__title-row">
+                                  <span class="reassignment-task__code">{{ tarea.elemento_fundamental.codigo_elemento }}</span>
+                                  {% if tarea.fecha_cierre %}
+                                    <span class="acreditacion-status acreditacion-status--success">{{ tarea.estado.descripcion }}</span>
+                                  {% else %}
+                                    <span class="acreditacion-status acreditacion-status--warning">{{ tarea.estado.descripcion }}</span>
+                                  {% endif %}
+                                </div>
+                                <h4>{{ tarea.elemento_fundamental.nombre_elemento }}</h4>
+
+                                <div class="reassignment-task__meta">
+                                  <span>
+                                    <strong>Ciclo</strong>
+                                    {{ tarea.ciclo.nombre }}
+                                  </span>
+                                  <span>
+                                    <strong>Responsable</strong>
+                                    {{ tarea.usuario_responsable.nombre_completo|default:tarea.usuario_responsable.correo }}
+                                  </span>
+                                  <span>
+                                    <strong>Asignada</strong>
+                                    {{ tarea.fecha_asignacion|date:"d/m/Y"|default:"-" }}
+                                  </span>
+                                  <span>
+                                    <strong>Limite</strong>
+                                    {{ tarea.fecha_limite|date:"d/m/Y"|default:"-" }}
+                                  </span>
+                                  {% if tarea.fecha_cierre %}
+                                    <span>
+                                      <strong>Cierre</strong>
+                                      {{ tarea.fecha_cierre|date:"d/m/Y H:i" }}
+                                    </span>
+                                  {% endif %}
+                                </div>
+                              </div>
+
+                              <div class="reassignment-task__action">
+                                {% if tarea.asignado_por_id == current_actor_id and tarea.usuario_responsable_id != current_actor_id %}
+                                  <span class="reassignment-chip">Desglosada por ti</span>
+                                  <div class="reassignment-assignee">
+                                    <span>Reasignada a</span>
+                                    <strong>{{ tarea.usuario_responsable.nombre_completo|default:tarea.usuario_responsable.correo }}</strong>
+                                  </div>
+                                {% else %}
+                                  <span class="reassignment-chip reassignment-chip--primary">Asignada a tu cargo</span>
+                                {% endif %}
+
+                                {% if tarea.review_record %}
+                                  <div class="reassignment-document-card">
+                                    <span class="reassignment-document-card__label">Documento subido</span>
+                                    {% if tarea.review_document %}
+                                      <strong>{{ tarea.review_document.nombre_archivo }}</strong>
+                                      <div class="reassignment-document-card__meta">
+                                        <span>{{ tarea.review_state_label|default:"En revision" }}</span>
+                                        <span>{{ tarea.review_record.fecha_registro|date:"d/m/Y H:i" }}</span>
+                                        {% if tarea.review_record.registrado_por %}
+                                          <span>{{ tarea.review_record.registrado_por.nombre_completo|default:tarea.review_record.registrado_por.correo }}</span>
+                                        {% endif %}
+                                      </div>
+                                      <div class="reassignment-document-card__actions">
+                                        <a class="btn btn-ghost" href="{% url 'documentos-protegidos-abrir' tarea.review_document.pk %}" target="_blank" rel="noopener">Observar documento</a>
+                                      </div>
+                                    {% else %}
+                                      <p class="reassignment-task__muted">Existe un registro de revision, pero no tiene documento asociado.</p>
+                                    {% endif %}
+                                  </div>
+                                {% endif %}
+
+                                {% if tarea.director_can_signoff %}
+                                  <form method="post" class="reassignment-action-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="tarea_id" value="{{ tarea.pk }}">
+                                    <label>
+                                      <span>Comentario de revision</span>
+                                      <textarea name="comentario_revision" rows="3" placeholder="Opcional para aprobar, obligatorio para correcciones"></textarea>
+                                    </label>
+                                    <div class="reassignment-action-form__buttons">
+                                      <button class="btn btn-secondary" type="submit" name="action" value="director_signoff">Dar check de subida</button>
+                                      <button class="btn btn-danger" type="submit" name="action" value="director_reject">Solicitar correcciones</button>
+                                    </div>
+                                  </form>
+                                {% elif tarea.director_pending_signoff %}
+                                  <p class="reassignment-task__muted">Para dar el check primero debe existir un documento cargado en revision.</p>
+                                {% elif tarea.director_can_redirect %}
+                                  {% if tarea.reassignment_options %}
+                                    <form method="post" class="reassignment-action-form">
+                                      {% csrf_token %}
+                                      <input type="hidden" name="action" value="director_redirect">
+                                      <input type="hidden" name="tarea_id" value="{{ tarea.pk }}">
+                                      <label>
+                                        <span>Nuevo responsable</span>
+                                        <select name="subordinado_id" required>
+                                          <option value="">Selecciona usuario</option>
+                                          {% for option in tarea.reassignment_options %}
+                                            <option value="{{ option.value }}">{{ option.label }}</option>
+                                          {% endfor %}
+                                        </select>
+                                      </label>
+                                      <label>
+                                        <span>Comentario</span>
+                                        <textarea name="comentario_redireccion" rows="3" placeholder="Opcional"></textarea>
+                                      </label>
+                                      <button class="btn btn-secondary" type="submit">Guardar reasignacion</button>
+                                    </form>
+                                  {% else %}
+                                    <p class="reassignment-task__muted">No hay otro usuario disponible para tu rol asignado.</p>
+                                  {% endif %}
+                                {% elif tarea.fecha_cierre %}
+                                  <p class="reassignment-task__muted">Revision registrada o sin accion pendiente.</p>
+                                {% else %}
+                                  <p class="reassignment-task__muted">Sin accion disponible.</p>
+                                {% endif %}
+                              </div>
+                            </article>
+                          {% endfor %}
+                        </div>
+                      </section>
+                    {% endfor %}
+                  </div>
+                </section>
+              {% endfor %}
+            </div>
+          </section>
+        {% empty %}
+          <div class="reassignment-empty-state">
+            <strong>No hay tareas disponibles</strong>
+            <p class="text-muted">No existen tareas para reasignacion con los filtros seleccionados.</p>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+</section>
+{% endblock %}

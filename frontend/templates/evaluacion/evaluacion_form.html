@@ -22,22 +22,51 @@
     <form method="post" class="acreditacion-form">
       {% csrf_token %}
       {{ form.non_field_errors }}
+      {% if registro %}
+        <div class="evaluacion-selected-record">
+          <div class="evaluacion-selected-record__group evaluacion-selected-record__group--criterion">
+            <span>Criterio</span>
+            <strong>{{ registro.indicador.subcriterio.criterio.codigo_criterio }} - {{ registro.indicador.subcriterio.criterio.nombre_criterio }}</strong>
+          </div>
+          <div class="evaluacion-selected-record__group evaluacion-selected-record__group--subcriterion">
+            <span>Subcriterio</span>
+            <strong>{{ registro.indicador.subcriterio.codigo_subcriterio }} - {{ registro.indicador.subcriterio.nombre_subcriterio }}</strong>
+          </div>
+          <div class="evaluacion-selected-record__group evaluacion-selected-record__group--indicator">
+            <span>Indicador {{ indicator_type|default:"-" }}</span>
+            <strong>{{ registro.indicador.codigo_indicador }} - {{ registro.indicador.nombre_indicador }}</strong>
+          </div>
+          <div class="evaluacion-selected-record__document">
+            <span>{{ registro.elemento_fundamental.codigo_elemento }} - {{ registro.elemento_fundamental.nombre_elemento }}</span>
+            <strong>{{ registro.documento.nombre_archivo }}</strong>
+            <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' registro.documento.pk %}" target="_blank" rel="noopener">Observar documento</a>
+          </div>
+        </div>
+      {% endif %}
       <div class="ciclos-form-grid">
         <div class="acreditacion-form__field acreditacion-form__field--full">
           <label for="{{ form.registro.id_for_label }}">{{ form.registro.label }}</label>
           {{ form.registro }}
           {{ form.registro.errors }}
         </div>
-        <div class="acreditacion-form__field">
-          <label for="{{ form.estado.id_for_label }}">{{ form.estado.label }}</label>
-          {{ form.estado }}
-          {{ form.estado.errors }}
-        </div>
-        <div class="acreditacion-form__field">
-          <label for="{{ form.calificacion.id_for_label }}">{{ form.calificacion.label }}</label>
-          {{ form.calificacion }}
-          {{ form.calificacion.errors }}
-        </div>
+        {% if evaluation_mode == "qualitative" %}
+          <div class="acreditacion-form__field acreditacion-form__field--full evaluacion-qualitative-result">
+            <label>{{ form.resultado_cualitativo.label }}</label>
+            {{ form.resultado_cualitativo }}
+            {{ form.resultado_cualitativo.errors }}
+          </div>
+        {% else %}
+          <div class="acreditacion-form__field">
+            <label for="{{ form.estado.id_for_label }}">{{ form.estado.label }}</label>
+            {{ form.estado }}
+            {{ form.estado.errors }}
+          </div>
+          <div class="acreditacion-form__field">
+            <label for="{{ form.calificacion.id_for_label }}">{{ form.calificacion.label }}</label>
+            {{ form.calificacion }}
+            {{ form.calificacion.errors }}
+          </div>
+        {% endif %}
         <div class="acreditacion-form__field acreditacion-form__field--full">
           <label for="{{ form.comentario.id_for_label }}">{{ form.comentario.label }}</label>
           {{ form.comentario }}
@@ -57,7 +86,11 @@
         <strong>Antes de guardar</strong>
       </div>
       <p class="acreditacion-form-guide__text">
-        Revisa si el criterio del indicador se mide con nota numerica o con apreciacion descriptiva. Eso evita inconsistencias entre la decision y la evidencia.
+        {% if evaluation_mode == "qualitative" %}
+          Este indicador es cualitativo: registra si cumple o no cumple y documenta la retroalimentacion.
+        {% else %}
+          Este indicador es cuantitativo: registra la calificacion numerica, el estado final y la retroalimentacion.
+        {% endif %}
       </p>
     </article>
 
@@ -67,10 +100,15 @@
       <ul class="admin-sections__list">
         <li><strong>Ciclo:</strong> {{ registro.ciclo.nombre }}</li>
         <li><strong>Indicador:</strong> {{ registro.indicador.codigo_indicador }} - {{ registro.indicador.nombre_indicador }}</li>
+        <li><strong>Tipo:</strong> {{ indicator_type|default:"-" }}</li>
         <li><strong>Elemento:</strong> {{ registro.elemento_fundamental.codigo_elemento }} - {{ registro.elemento_fundamental.nombre_elemento }}</li>
         <li><strong>Documento:</strong> {{ registro.documento.nombre_archivo }}</li>
         <li><strong>Estado actual:</strong> {{ registro.estado.descripcion }}</li>
       </ul>
+      <div class="acreditacion-form__actions">
+        <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' registro.documento.pk %}" target="_blank" rel="noopener">Observar documento</a>
+        <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ registro.pk }}">Detalle</a>
+      </div>
     {% else %}
       <p class="text-muted">Selecciona un registro desde la lista de evidencias o la bandeja para evaluarlo.</p>
     {% endif %}
@@ -92,12 +130,12 @@
     </div>
     <div class="acreditacion-info-dialog__body">
       <p>
-        Si la revision es <strong>cuantitativa</strong>, registra un valor numerico en <strong>Calificacion</strong> para respaldar la decision.
-        Si la revision es <strong>cualitativa</strong>, describe el criterio en <strong>Comentario</strong> y usa el <strong>Estado</strong> para reflejar el resultado final.
+        Si la revision es <strong>cuantitativa</strong>, registra un valor numerico en <strong>Calificacion</strong>, el estado final y la retroalimentacion.
+        Si la revision es <strong>cualitativa</strong>, selecciona <strong>Cumple</strong> o <strong>No cumple</strong> y sustenta la decision en la retroalimentacion.
       </p>
       <ul class="acreditacion-form-guide__list">
         <li><strong>Cuantitativa:</strong> calificacion numerica, con observaciones breves si aplica.</li>
-        <li><strong>Cualitativa:</strong> analisis descriptivo, con la calificacion solo como referencia opcional.</li>
+        <li><strong>Cualitativa:</strong> cumple o no cumple, con retroalimentacion obligatoria.</li>
       </ul>
     </div>
   </div>

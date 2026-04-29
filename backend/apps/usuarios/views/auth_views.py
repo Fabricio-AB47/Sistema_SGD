@@ -9,7 +9,7 @@ from django.utils.cache import add_never_cache_headers
 from django.utils.html import format_html
 from django.views.generic import FormView
 
-from apps.core.services.redirect_security import get_safe_redirect_target
+from apps.core.services.redirect_security import get_auth_flow_redirect_blocklist, get_safe_redirect_target
 from apps.seguridad.services import create_login_otp
 from apps.usuarios.forms import LoginForm
 from apps.usuarios.services import auth_service, session_service
@@ -21,13 +21,27 @@ class LoginView(FormView):
     form_class = LoginForm
     success_url = getattr(settings, "LOGIN_REDIRECT_URL", "/dashboard/") or "/dashboard/"
 
+    def dispatch(self, request, *args, **kwargs):
+        if request.session.get("sig_user_id"):
+            redirect_target = get_safe_redirect_target(
+                request,
+                fallback=self.get_success_url(),
+                disallowed_paths=get_auth_flow_redirect_blocklist(),
+            )
+            return redirect(redirect_target)
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["next"] = self.request.GET.get("next") or self.request.POST.get("next") or ""
         return context
 
     def form_valid(self, form):
-        redirect_target = get_safe_redirect_target(self.request, fallback=self.get_success_url())
+        redirect_target = get_safe_redirect_target(
+            self.request,
+            fallback=self.get_success_url(),
+            disallowed_paths=get_auth_flow_redirect_blocklist(),
+        )
         result = auth_service.authenticate_user(
             correo=form.cleaned_data["correo"],
             password=form.cleaned_data["password"],

@@ -1,10 +1,25 @@
 from apps.acreditacion.models import ElementoFundamental
+from application.services import build_document_drive_path
 from apps.documentos.selectors import (
     attach_cycle_authorization_status,
     get_approved_cycles_queryset,
     get_recent_cycle_upload_statuses,
 )
 from apps.evidencias.models import RegistroEvidencia
+
+
+UPLOADED_EVIDENCE_STATES = {
+    "APROBADA",
+    "CARGADA",
+    "EN_REVISION_EVALUADOR",
+    "ENVIADA_EVALUADOR",
+    "REGISTRADA",
+    "VALIDADA",
+}
+
+
+def _normalize_state(value):
+    return " ".join((value or "").strip().upper().split())
 
 
 def _coerce_pk(value):
@@ -31,6 +46,11 @@ def _resolve_selected_cycle(*, ciclo_id=None, enabled_cycles=None):
             if ciclo.pk == selected_pk:
                 return ciclo
     return enabled_cycles[0] if enabled_cycles else None
+
+
+def get_current_enabled_cycle():
+    _approved_cycles, enabled_cycles = _get_enabled_cycles()
+    return _resolve_selected_cycle(enabled_cycles=enabled_cycles)
 
 
 def get_matrix_registration_rows(*, ciclo=None):
@@ -74,6 +94,13 @@ def get_matrix_registration_rows(*, ciclo=None):
     rows = []
     for elemento in elementos:
         latest_record = latest_by_element.get(elemento.pk)
+        latest_state = _normalize_state(
+            getattr(getattr(latest_record, "estado", None), "descripcion", None)
+        )
+        has_uploaded_evidence = bool(
+            latest_record is not None and latest_state in UPLOADED_EVIDENCE_STATES
+        )
+        drive_folder = build_document_drive_path(elemento.indicador, elemento, ciclo)
         rows.append(
             {
                 "criterio": elemento.indicador.subcriterio.criterio,
@@ -81,7 +108,11 @@ def get_matrix_registration_rows(*, ciclo=None):
                 "indicador": elemento.indicador,
                 "elemento": elemento,
                 "latest_record": latest_record,
-                "has_evidence": latest_record is not None,
+                "latest_document": latest_record.documento if latest_record else None,
+                "drive_folder": drive_folder.as_posix(),
+                "has_evidence": has_uploaded_evidence,
+                "has_pending_review": bool(latest_record is not None and not has_uploaded_evidence),
+                "evidence_status": latest_state,
                 "record_count": counts_by_element.get(elemento.pk, 0),
             }
         )
@@ -109,7 +140,9 @@ def get_matrix_registration_dashboard(*, ciclo_id=None):
     selected_cycle = _resolve_selected_cycle(ciclo_id=ciclo_id, enabled_cycles=enabled_cycles)
     rows = get_matrix_registration_rows(ciclo=selected_cycle)
     uploaded_rows = sum(1 for row in rows if row["has_evidence"])
+    pending_review_rows = sum(1 for row in rows if row["has_pending_review"])
     pending_rows = max(len(rows) - uploaded_rows, 0)
+    missing_rows = [row for row in rows if not row["has_evidence"]]
 
     return {
         "approved_cycles": approved_cycles,
@@ -120,9 +153,11 @@ def get_matrix_registration_dashboard(*, ciclo_id=None):
             "total": len(rows),
             "uploaded": uploaded_rows,
             "pending": pending_rows,
+            "pending_review": pending_review_rows,
             "records": sum(row["record_count"] for row in rows),
             "completion_percent": int((uploaded_rows / len(rows)) * 100) if rows else 0,
         },
+        "missing_matrix_rows": missing_rows,
         "recent_registered_evidences": get_recent_registered_evidences(ciclo=selected_cycle),
         "cycle_statuses": get_recent_cycle_upload_statuses(),
     }

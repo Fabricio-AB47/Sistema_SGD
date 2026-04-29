@@ -1,0 +1,33 @@
+{% extends "seguridad/emails/base.html" %}
+
+{% block hero_text %}Se solicitaron correcciones sobre una evidencia cargada{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 16px;">Hola <strong>{{ responsable_name }}</strong>,</p>
+<p style="margin:0 0 18px;">
+  <strong>{{ actor_name }}</strong> solicito correcciones para el elemento
+  <strong>{{ elemento_codigo }} - {{ elemento_nombre }}</strong>.
+</p>
+
+<div style="margin:0 0 18px;padding:16px;border-radius:{{ theme.radius }};background:{{ theme.canvas }};">
+  <p style="margin:0 0 8px;"><strong>Ciclo:</strong> {{ ciclo_nombre }}</p>
+  <p style="margin:0 0 8px;"><strong>Indicador:</strong> {{ indicador_codigo }} - {{ indicador_nombre }}</p>
+  <p style="margin:0 0 8px;"><strong>Documento observado:</strong> {{ documento_nombre }}</p>
+  <p style="margin:0;"><strong>Fecha:</strong> {{ fecha_evento|date:"d/m/Y H:i" }}</p>
+</div>
+
+<div style="margin:0 0 18px;padding:14px 16px;border-left:4px solid {{ theme.primary }};background:{{ theme.meta_background }};">
+  <strong>Correcciones solicitadas:</strong><br>
+  {{ comentario }}
+</div>
+
+<p style="margin:0 0 14px;">
+  Debes cargar un nuevo documento corregido para que la cabeza principal pueda revisarlo nuevamente.
+</p>
+
+<p style="margin:0;">
+  <a href="{{ upload_url }}" style="display:inline-block;padding:12px 18px;border-radius:{{ theme.radius }};background:{{ theme.primary }};color:#ffffff;text-decoration:none;font-weight:700;">
+    Cargar documento corregido
+  </a>
+</p>
+{% endblock %}

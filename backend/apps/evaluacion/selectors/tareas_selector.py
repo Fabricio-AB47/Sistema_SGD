@@ -16,11 +16,20 @@ def _task_responsable_assignments_prefetch():
     )
 
 
-def get_tareas_evidencia_queryset(*, q: str = "", estado_id=None, ciclo_id=None, responsable_id=None, area_id=None):
+def get_tareas_evidencia_queryset(
+    *,
+    q: str = "",
+    estado_id=None,
+    ciclo_id=None,
+    responsable_id=None,
+    area_id=None,
+    assigned_by_id=None,
+    order_by_hierarchy=False,
+):
     queryset = (
         TareaEvidencia.objects.select_related(
             "ciclo",
-            "indicador",
+            "indicador__subcriterio__criterio",
             "elemento_fundamental",
             "usuario_responsable",
             "estado",
@@ -28,13 +37,27 @@ def get_tareas_evidencia_queryset(*, q: str = "", estado_id=None, ciclo_id=None,
         )
         .prefetch_related(_task_responsable_assignments_prefetch())
         .filter(activo=True)
-        .order_by("-fecha_asignacion", "-id_tarea_evidencia")
     )
+    if order_by_hierarchy:
+        queryset = queryset.order_by(
+            "indicador__subcriterio__criterio__codigo_criterio",
+            "indicador__subcriterio__codigo_subcriterio",
+            "indicador__codigo_indicador",
+            "elemento_fundamental__codigo_elemento",
+            "-fecha_asignacion",
+            "-id_tarea_evidencia",
+        )
+    else:
+        queryset = queryset.order_by("-fecha_asignacion", "-id_tarea_evidencia")
 
     q = (q or "").strip()
     if q:
         queryset = queryset.filter(
             Q(ciclo__nombre__icontains=q)
+            | Q(indicador__subcriterio__criterio__codigo_criterio__icontains=q)
+            | Q(indicador__subcriterio__criterio__nombre_criterio__icontains=q)
+            | Q(indicador__subcriterio__codigo_subcriterio__icontains=q)
+            | Q(indicador__subcriterio__nombre_subcriterio__icontains=q)
             | Q(indicador__codigo_indicador__icontains=q)
             | Q(indicador__nombre_indicador__icontains=q)
             | Q(elemento_fundamental__codigo_elemento__icontains=q)
@@ -47,8 +70,14 @@ def get_tareas_evidencia_queryset(*, q: str = "", estado_id=None, ciclo_id=None,
         queryset = queryset.filter(estado_id=estado_id)
     if ciclo_id:
         queryset = queryset.filter(ciclo_id=ciclo_id)
-    if responsable_id:
+    if responsable_id and assigned_by_id:
+        queryset = queryset.filter(
+            Q(usuario_responsable_id=responsable_id) | Q(asignado_por_id=assigned_by_id)
+        )
+    elif responsable_id:
         queryset = queryset.filter(usuario_responsable_id=responsable_id)
+    elif assigned_by_id:
+        queryset = queryset.filter(asignado_por_id=assigned_by_id)
     if area_id:
         queryset = queryset.filter(
             usuario_responsable__areas_cargos__area_id=area_id,

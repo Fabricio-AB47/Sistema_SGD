@@ -7,7 +7,7 @@ from django.views.generic import ListView
 from urllib.parse import urlencode
 
 from apps.auditoria.services import registrar_evento
-from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.mixins import SigAdminRoleRequiredMixin
 from apps.core.services.redirect_security import build_login_redirect_url
 from apps.integraciones.models import ApiCredencial, ApiToken
 from apps.integraciones.services import api_service, token_service
@@ -28,7 +28,7 @@ def _build_token_list_url(*, credencial_id: int | None = None) -> str:
     return f"{base_url}?{urlencode({'credencial': credencial_id})}"
 
 
-class TokenListView(SigLoginRequiredMixin, ListView):
+class TokenListView(SigAdminRoleRequiredMixin, ListView):
     model = ApiToken
     template_name = "integraciones/token_list.html"
     context_object_name = "tokens"
@@ -59,6 +59,12 @@ class TokenListView(SigLoginRequiredMixin, ListView):
 def generar_token_view(request, credencial_id):
     if not request.session.get("sig_user_id"):
         return redirect(build_login_redirect_url(request, settings.LOGIN_URL or "/login/"))
+
+    session_roles = tuple(request.session.get("sig_roles", []) or [])
+    has_admin_role = any(str(role).strip().lower() == "administrador" for role in session_roles)
+    if not has_admin_role:
+        messages.error(request, "Solo los usuarios con rol ADMINISTRADOR pueden acceder a esta opcion.")
+        return redirect("core-dashboard")
 
     credencial = get_object_or_404(
         ApiCredencial.objects.select_related("api_servicio"),

@@ -34,7 +34,36 @@ function initSidebarGroups() {
   });
 }
 
+function initNotificationsMenu() {
+  const menu = document.querySelector("[data-notifications-menu]");
+  if (!menu) return;
+
+  const toggle = menu.querySelector("[data-notifications-toggle]");
+  const panel = menu.querySelector("[data-notifications-panel]");
+  if (!toggle || !panel) return;
+
+  const close = () => {
+    panel.hidden = true;
+    toggle.setAttribute("aria-expanded", "false");
+  };
+
+  toggle.addEventListener("click", () => {
+    const isOpen = !panel.hidden;
+    panel.hidden = isOpen;
+    toggle.setAttribute("aria-expanded", String(!isOpen));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!menu.contains(event.target)) close();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") close();
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initSidebarGroups();
+  initNotificationsMenu();
   console.info("Frontend SIG listo (SCSS + JS compilados con Gulp).");
 });

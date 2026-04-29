@@ -64,6 +64,7 @@
           <th>Registro</th>
           <th>Ciclo</th>
           <th>Indicador</th>
+          <th>Tipo</th>
           <th>Elemento</th>
           <th>Estado</th>
           <th>% Cumplimiento</th>
@@ -78,6 +79,7 @@
             <td>#{{ row.registro.pk }}</td>
             <td>{{ row.registro.ciclo.nombre }}</td>
             <td>{{ row.registro.indicador.codigo_indicador }}</td>
+            <td>{{ row.registro.indicador.tipo_indicador.descripcion }}</td>
             <td>{{ row.registro.elemento_fundamental.codigo_elemento }}</td>
             <td>
               {% if row.inbox_state == 'APROBADO' %}
@@ -100,7 +102,12 @@
             <td>
               <span class="acreditacion-status {{ row.semaforo_class }}">{{ row.semaforo }}</span>
             </td>
-            <td>{{ row.registro.documento.nombre_archivo }}</td>
+            <td>
+              <div class="evaluacion-document-cell">
+                <span>{{ row.registro.documento.nombre_archivo }}</span>
+                <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' row.registro.documento.pk %}" target="_blank" rel="noopener">Observar</a>
+              </div>
+            </td>
             <td>
               <div class="page-header__actions">
                 <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ row.registro.pk }}">Detalle</a>
@@ -110,7 +117,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="9" class="text-center text-muted">No existen evidencias para el filtro seleccionado.</td>
+            <td colspan="10" class="text-center text-muted">No existen evidencias para el filtro seleccionado.</td>
           </tr>
         {% endfor %}
       </tbody>

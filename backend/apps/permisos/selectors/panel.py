@@ -10,6 +10,7 @@ from apps.acreditacion.models import (
     RolIndicadorElemento,
 )
 from apps.permisos.models import Permiso, Rol, RolPermiso, UsuarioRol
+from apps.usuarios.models import UsuarioAreaCargo
 
 
 def get_permission_metrics():
@@ -322,5 +323,174 @@ def get_role_structure_access_context(*, role_id=None, ciclo_id=None):
             "indicators_selected": selected_indicator_total,
             "elements_total": total_elements,
             "elements_selected": assigned_element_total,
+        },
+    }
+
+
+def _director_assignment_queryset():
+    return (
+        UsuarioAreaCargo.objects.select_related("usuario", "area", "cargo")
+        .filter(
+            activo=True,
+            usuario__activo=True,
+            area__activo=True,
+            cargo__activo=True,
+            cargo__nombre_cargo__icontains="DIRECTOR",
+        )
+        .order_by(
+            "usuario_id",
+            "area__nombre_area",
+            "cargo__nivel_jerarquico",
+            "cargo__nombre_cargo",
+        )
+    )
+
+
+def _get_director_choices():
+    assignments = list(_director_assignment_queryset())
+    if not assignments:
+        return []
+
+    labels_map = OrderedDict()
+    for assignment in assignments:
+        summary = labels_map.setdefault(
+            assignment.usuario_id,
+            {
+                "usuario": assignment.usuario,
+                "segments": [],
+            },
+        )
+        summary["segments"].append(
+            f"{assignment.area.codigo_area} / {assignment.cargo.nombre_cargo}"
+        )
+
+    choices = []
+    for user_id, summary in labels_map.items():
+        usuario = summary["usuario"]
+        segments = summary["segments"]
+        preview = ", ".join(segments[:2])
+        if len(segments) > 2:
+            preview = f"{preview} (+{len(segments) - 2})"
+
+        base_label = usuario.nombre_completo or usuario.correo
+        label = f"{base_label} · {preview}" if preview else base_label
+        choices.append((str(user_id), label))
+
+    return choices
+
+
+def get_director_structure_access_context(*, ciclo_id=None, selected_director_ids=None):
+    ciclos = CicloEvaluacion.objects.select_related("estado").order_by("-fecha_inicio", "-id_ciclo")
+    selected_cycle = ciclos.filter(pk=ciclo_id).first() if ciclo_id else ciclos.first()
+
+    director_choices = _get_director_choices()
+    valid_director_ids = {int(value) for value, _ in director_choices}
+    selected_director_ids = {
+        int(value)
+        for value in (selected_director_ids or [])
+        if str(value).isdigit()
+    }
+    selected_director_ids &= valid_director_ids
+
+    indicators = list(
+        Indicador.objects.filter(activo=True)
+        .select_related("subcriterio__criterio")
+        .prefetch_related(
+            Prefetch(
+                "elementos",
+                queryset=ElementoFundamental.objects.filter(activo=True).order_by(
+                    "orden_visual",
+                    "codigo_elemento",
+                ),
+                to_attr="checklist_elements",
+            )
+        )
+        .order_by(
+            "subcriterio__criterio__codigo_criterio",
+            "subcriterio__codigo_subcriterio",
+            "codigo_indicador",
+        )
+    )
+
+    indicator_groups = []
+    total_elements = 0
+
+    for indicator in indicators:
+        elements = list(getattr(indicator, "checklist_elements", []))
+        total_elements += len(elements)
+        indicator_groups.append(
+            {
+                "indicator": indicator,
+                "elements": elements,
+                "selected": False,
+                "access_total": False,
+                "selected_element_ids": set(),
+                "assignment": None,
+            }
+        )
+
+    criteria_map = OrderedDict()
+    for group in indicator_groups:
+        indicator = group["indicator"]
+        subcriterio = indicator.subcriterio
+        criterio = subcriterio.criterio
+
+        criterion_node = criteria_map.setdefault(
+            criterio.pk,
+            {
+                "criterio": criterio,
+                "indicators_total": 0,
+                "indicators_selected": 0,
+                "elements_total": 0,
+                "elements_selected": 0,
+                "_subcriterios": OrderedDict(),
+            },
+        )
+        subcriterion_node = criterion_node["_subcriterios"].setdefault(
+            subcriterio.pk,
+            {
+                "subcriterio": subcriterio,
+                "indicators_total": 0,
+                "indicators_selected": 0,
+                "elements_total": 0,
+                "elements_selected": 0,
+                "indicator_groups": [],
+            },
+        )
+
+        group_elements_total = len(group["elements"])
+        criterion_node["indicators_total"] += 1
+        criterion_node["elements_total"] += group_elements_total
+
+        subcriterion_node["indicators_total"] += 1
+        subcriterion_node["elements_total"] += group_elements_total
+        subcriterion_node["indicator_groups"].append(group)
+
+    criteria_groups = []
+    for criterion_node in criteria_map.values():
+        subcriterios = []
+        for subcriterion_node in criterion_node["_subcriterios"].values():
+            subcriterion_node["checked"] = False
+            subcriterios.append(subcriterion_node)
+
+        criterion_node["subcriterios"] = subcriterios
+        criterion_node["checked"] = False
+        del criterion_node["_subcriterios"]
+        criteria_groups.append(criterion_node)
+
+    return {
+        "cycles": ciclos,
+        "selected_cycle": selected_cycle,
+        "director_choices": director_choices,
+        "selected_director_ids": sorted(selected_director_ids),
+        "selected_director_ids_str": [str(value) for value in sorted(selected_director_ids)],
+        "indicator_groups": indicator_groups,
+        "criteria_groups": criteria_groups,
+        "structure_all_selected": False,
+        "structure_summary": {
+            "indicators_total": len(indicator_groups),
+            "indicators_selected": 0,
+            "elements_total": total_elements,
+            "elements_selected": 0,
         },
     }

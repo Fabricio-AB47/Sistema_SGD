@@ -1,4 +1,5 @@
 from urllib.parse import urlencode
+import unicodedata
 
 from django.contrib import messages
 from django.shortcuts import redirect
@@ -7,7 +8,9 @@ from django.views.generic import RedirectView, TemplateView
 
 from apps.core.mixins import SigLoginRequiredMixin
 from apps.permisos.forms import (
+    DirectorEstructuraAccesoForm,
     PermisoGestionForm,
+    ResponsableCargaGestionForm,
     RolGestionForm,
     RolEstructuraAccesoForm,
     RolPermisoForm,
@@ -15,6 +18,7 @@ from apps.permisos.forms import (
 )
 from apps.permisos.models import UsuarioRol
 from apps.permisos.selectors import (
+    get_director_structure_access_context,
     get_permission_metrics,
     get_role_detail,
     get_role_permissions,
@@ -28,6 +32,7 @@ from apps.permisos.services import (
     crear_permiso,
     revocar_usuario_rol,
     sincronizar_acceso_estructura,
+    sincronizar_acceso_estructura_directores,
     sincronizar_permisos_rol,
 )
 from apps.usuarios.models import Usuario
@@ -43,7 +48,20 @@ PERMISSION_TABS = [
         "url_name": "permisos-acceso-evaluacion",
         "active_names": ["permisos-acceso-evaluacion"],
     },
+    {
+        "label": "Acceso directores",
+        "url_name": "permisos-acceso-evaluacion-directores",
+        "active_names": ["permisos-acceso-evaluacion-directores"],
+    },
 ]
+
+QUALITY_ROLE_TOKENS = {
+    "CALIDAD ACADEMICA",
+    "DIRECTOR DE CALIDAD",
+    "DIRECCION DE CALIDAD",
+    "CALIDAD",
+}
+ADMIN_ROLE_TOKEN = "ADMINISTRADOR"
 
 
 def _current_usuario(request):
@@ -51,6 +69,31 @@ def _current_usuario(request):
     if not user_id:
         return None
     return Usuario.objects.filter(pk=user_id).first()
+
+
+def _normalize_role_token(value):
+    normalized = unicodedata.normalize("NFKD", (value or "").strip())
+    ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
+    return " ".join(ascii_only.upper().split())
+
+
+def _role_scope_flags(request):
+    role_tokens = tuple(
+        _normalize_role_token(role)
+        for role in (request.session.get("sig_roles", []) or [])
+    )
+    is_admin = any(token == ADMIN_ROLE_TOKEN for token in role_tokens)
+    is_quality = any(token in QUALITY_ROLE_TOKENS for token in role_tokens)
+    is_evaluator = any("EVALUADOR" in token for token in role_tokens)
+    is_external = any(("EXTERNO" in token) or ("CONSULTA" in token) for token in role_tokens)
+
+    return {
+        "is_admin": is_admin,
+        "is_quality": is_quality,
+        "is_evaluator": is_evaluator,
+        "is_external": is_external,
+        "can_manage": (is_admin or is_quality) and not (is_evaluator or is_external),
+    }
 
 
 def _url(name, **params):
@@ -66,6 +109,16 @@ class PermisosBaseView(SigLoginRequiredMixin, TemplateView):
     page_title = ""
     page_description = ""
     template_name = ""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.session.get("sig_user_id"):
+            return super().dispatch(request, *args, **kwargs)
+
+        scope_flags = _role_scope_flags(request)
+        if not scope_flags["can_manage"]:
+            messages.error(request, "No tienes acceso a la administracion de permisos.")
+            return redirect("core-dashboard")
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -307,6 +360,166 @@ class RoleStructureAccessView(PermisosBaseView):
                 form=form,
                 role_id=request.POST.get("rol"),
                 ciclo_id=request.POST.get("ciclo"),
+            )
+        )
+
+
+class DirectorStructureAccessView(PermisosBaseView):
+    template_name = "permisos/acceso_evaluacion_directores.html"
+    page_title = "Acceso directores"
+    page_description = (
+        "Asigna criterios, subcriterios, indicadores y elementos fundamentales "
+        "a directores de forma parcial o masiva."
+    )
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.session.get("sig_user_id"):
+            return super().dispatch(request, *args, **kwargs)
+
+        scope_flags = _role_scope_flags(request)
+        if not scope_flags["can_manage"]:
+            messages.error(
+                request,
+                "Este proceso solo puede ser gestionado por Administrador o Responsable de Calidad. "
+                "Roles Evaluador y Externo estan excluidos.",
+            )
+            return redirect("core-dashboard")
+        return super().dispatch(request, *args, **kwargs)
+
+    def _selected_director_ids_from_request(self):
+        return self.request.GET.getlist("directores") or self.request.POST.getlist("directores")
+
+    def _context_payload(self, **overrides):
+        ciclo_id = overrides.get("ciclo_id")
+        director_ids = overrides.get("director_ids")
+        if ciclo_id is None:
+            ciclo_id = self.request.GET.get("ciclo") or self.request.POST.get("ciclo")
+        if director_ids is None:
+            director_ids = self._selected_director_ids_from_request()
+        return get_director_structure_access_context(
+            ciclo_id=ciclo_id,
+            selected_director_ids=director_ids,
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        payload = self._context_payload(
+            ciclo_id=kwargs.get("ciclo_id"),
+            director_ids=kwargs.get("director_ids"),
+        )
+        context.update(payload)
+
+        indicator_groups = payload["indicator_groups"]
+        initial_indicators = [
+            str(group["indicator"].pk) for group in indicator_groups if group["selected"]
+        ]
+        initial_total_ids = [
+            str(group["indicator"].pk) for group in indicator_groups if group["access_total"]
+        ]
+        initial_element_ids = [
+            str(element_id)
+            for group in indicator_groups
+            for element_id in group["selected_element_ids"]
+        ]
+
+        context["form"] = kwargs.get("form") or DirectorEstructuraAccesoForm(
+            initial={
+                "ciclo": payload["selected_cycle"],
+                "directores": [str(value) for value in payload["selected_director_ids"]],
+                "indicadores": initial_indicators,
+                "accesos_totales": initial_total_ids,
+                "elementos": initial_element_ids,
+            },
+            indicator_groups=indicator_groups,
+            director_choices=payload["director_choices"],
+        )
+
+        responsable_form = kwargs.get("responsable_form") or ResponsableCargaGestionForm()
+        eligible_roles = ResponsableCargaGestionForm.base_fields["rol"].queryset
+        context["responsable_form"] = responsable_form
+        context["responsable_assignments"] = (
+            get_user_role_assignments().filter(rol__in=eligible_roles).order_by("-fecha_asignacion")[:50]
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        actor = _current_usuario(request)
+        action = request.POST.get("action")
+
+        if action == "add_responsables":
+            responsable_form = ResponsableCargaGestionForm(request.POST)
+            if responsable_form.is_valid():
+                selected_role = responsable_form.cleaned_data["rol"]
+                selected_users = responsable_form.cleaned_data["usuarios"]
+                selected_active = responsable_form.cleaned_data["activo"]
+
+                for usuario in selected_users:
+                    asignar_usuario_rol(
+                        usuario=usuario,
+                        rol=selected_role,
+                        activo=selected_active,
+                        actor=actor,
+                        request=request,
+                    )
+
+                messages.success(
+                    request,
+                    (
+                        "Responsables registrados correctamente. "
+                        f"Usuarios procesados: {len(selected_users)}."
+                    ),
+                )
+                return redirect(
+                    _url(
+                        "permisos-acceso-evaluacion-directores",
+                        ciclo=request.POST.get("ciclo"),
+                    )
+                )
+
+            return self.render_to_response(
+                self.get_context_data(
+                    responsable_form=responsable_form,
+                    ciclo_id=request.POST.get("ciclo"),
+                    director_ids=request.POST.getlist("directores"),
+                )
+            )
+
+        payload = self._context_payload()
+        form = DirectorEstructuraAccesoForm(
+            request.POST,
+            indicator_groups=payload["indicator_groups"],
+            director_choices=payload["director_choices"],
+        )
+        if action in (None, "sync_structure") and form.is_valid():
+            result = sincronizar_acceso_estructura_directores(
+                ciclo=form.cleaned_data["ciclo"],
+                indicator_ids=form.cleaned_data["indicadores"],
+                total_indicator_ids=form.cleaned_data["accesos_totales"],
+                element_ids=form.cleaned_data["elementos"],
+                director_ids=form.cleaned_data["directores"],
+                assign_all_directors=form.cleaned_data["asignar_a_todos"],
+                actor=actor,
+                request=request,
+            )
+            messages.success(
+                request,
+                (
+                    "Asignacion de acceso para directores completada. "
+                    f"Directores objetivo: {result['directors_targeted']}. "
+                    f"Roles sincronizados: {result['roles_synced']}."
+                ),
+            )
+            return redirect(
+                _url(
+                    "permisos-acceso-evaluacion-directores",
+                    ciclo=form.cleaned_data["ciclo"].pk,
+                )
+            )
+        return self.render_to_response(
+            self.get_context_data(
+                form=form,
+                ciclo_id=request.POST.get("ciclo"),
+                director_ids=request.POST.getlist("directores"),
             )
         )
 

@@ -14,11 +14,16 @@ $text: #1f2933;                          // Texto primario
 $text_muted: #4b5563;                    // Texto secundario
 $bg_dark: color.mix($gris, $blanco, 80%);        // Fondo gris muy claro
 $bg_dark_alt: color.mix($gris, $gris_oscuro, 40%); // Variación gris medio
-$panel_shadow: 0 25px 60px rgba(0, 0, 0, 0.35); // Sombra para cards grandes
-$card_shadow: 0 12px 28px rgba(0, 0, 0, 0.16);  // Sombra media
+$panel_shadow: 0 25px 60px rgba(0, 0, 0, 0.35); // Sombra para paneles superpuestos.
+$card_shadow: 0 12px 28px rgba(15, 23, 42, 0.06);  // Sombra uniforme de tarjetas.
 $pill_shadow: 0 10px 20px rgba(0, 0, 0, 0.12);  // Sombra para inputs/botones
-$radius: 12px;                           // Radio general
+$radius: 8px;                            // Radio general uniforme para tarjetas.
 $radius_pill: 999px;                     // Radio para inputs/botones tipo píldora
 $border_soft: 1px solid rgba(0, 0, 0, 0.06);    // Borde sutil
+$card_radius: $radius;                   // Radio compartido para superficies tipo tarjeta.
+$card_padding: 1.25rem;                  // Padding base para tarjetas internas.
+$card_min_height: 7rem;                  // Altura mínima visual para KPIs/tarjetas repetidas.
+$card_border: 1px solid #e2e8f0;         // Borde estándar para tarjetas.
+$card_surface: #ffffff;                  // Fondo estándar para tarjetas.
 $gradient_primary: linear-gradient(135deg, $rojo 0%, color.adjust($rojo, $lightness: 8%) 55%, $celeste 100%); // Degradado institucional
 $gradient_hero: linear-gradient(135deg, color.mix($gris, $blanco, 85%) 0%, color.mix($gris, $blanco, 65%) 45%, color.mix($gris_oscuro, $gris, 45%) 100%); // Degradado hero en grises

@@ -167,7 +167,7 @@ def build_elemento_path(indicador, elemento) -> Path:
 
 
 def build_document_drive_path(indicador, elemento, ciclo) -> PurePosixPath:
-    return build_elemento_drive_path(indicador, elemento) / "CICLO" / _ciclo_segment(ciclo)
+    return build_elemento_drive_path(indicador, elemento) / _ciclo_segment(ciclo)
 
 
 def build_document_path(indicador, elemento, ciclo) -> Path:

@@ -1,0 +1,34 @@
+{% extends "seguridad/emails/base.html" %}
+
+{% block hero_text %}Se registro una carga documental en la matriz de evidencia{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 16px;">Hola,</p>
+<p style="margin:0 0 18px;">
+  <strong>{{ actor_name }}</strong> cargo informacion documental para el elemento
+  <strong>{{ elemento_codigo }} - {{ elemento_nombre }}</strong>.
+</p>
+
+<div style="margin:0 0 18px;padding:16px;border-radius:{{ theme.radius }};background:{{ theme.canvas }};">
+  <p style="margin:0 0 8px;"><strong>Ciclo:</strong> {{ ciclo_nombre }}</p>
+  <p style="margin:0 0 8px;"><strong>Indicador:</strong> {{ indicador_codigo }} - {{ indicador_nombre }}</p>
+  <p style="margin:0 0 8px;"><strong>Documento:</strong> {{ documento_nombre }}</p>
+  <p style="margin:0;"><strong>Fecha:</strong> {{ fecha_evento|date:"d/m/Y H:i" }}</p>
+</div>
+
+{% if requires_director_check %}
+<p style="margin:0 0 18px;">
+  La evidencia quedo en revision interna. La cabeza principal debe observar el documento y dar el check de subida.
+</p>
+{% else %}
+<p style="margin:0 0 18px;">
+  La evidencia quedo registrada como cargada para el ciclo correspondiente.
+</p>
+{% endif %}
+
+<p style="margin:0;">
+  <a href="{{ evidence_url }}" style="display:inline-block;padding:12px 18px;border-radius:{{ theme.radius }};background:{{ theme.primary }};color:#ffffff;text-decoration:none;font-weight:700;">
+    Ver evidencia
+  </a>
+</p>
+{% endblock %}

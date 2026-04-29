@@ -3,7 +3,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.views.generic import TemplateView
 
-from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.mixins import SigAdminRoleRequiredMixin
 from apps.seguridad.forms import SessionFilterForm
 from apps.seguridad.selectors import (
     get_recent_login_attempts,
@@ -18,7 +18,7 @@ from apps.seguridad.services.session_service import (
 from apps.usuarios.models import Usuario
 
 
-class SessionManagementView(SigLoginRequiredMixin, TemplateView):
+class SessionManagementView(SigAdminRoleRequiredMixin, TemplateView):
     template_name = "seguridad/sesiones.html"
 
     def _current_usuario(self):
