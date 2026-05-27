@@ -1,0 +1,129 @@
+{% extends "informes/_page_base.html" %}
+
+{% block informes_content %}
+<div class="admin-highlights">
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Registros</span>
+    <strong class="admin-highlights__value">{{ report_summary.total }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Evaluadas</span>
+    <strong class="admin-highlights__value">{{ report_summary.evaluadas }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Pendientes</span>
+    <strong class="admin-highlights__value">{{ report_summary.pendientes }}</strong>
+  </article>
+  <article class="admin-highlights__card">
+    <span class="admin-highlights__label">Cumplimiento</span>
+    <strong class="admin-highlights__value">{{ report_summary.cumplimiento_label }}%</strong>
+  </article>
+</div>
+
+<article class="card">
+  <form method="get" class="ciclos-form-grid">
+    <div class="acreditacion-form__field">
+      <label for="{{ form.ciclo.id_for_label }}">{{ form.ciclo.label }}</label>
+      {{ form.ciclo }}
+      {{ form.ciclo.errors }}
+    </div>
+    <div class="acreditacion-form__field">
+      <label for="{{ form.indicador.id_for_label }}">{{ form.indicador.label }}</label>
+      {{ form.indicador }}
+      {{ form.indicador.errors }}
+    </div>
+    <div class="acreditacion-form__actions">
+      <button class="btn btn-primary" type="submit">Filtrar</button>
+      <a class="btn btn-ghost" href="{% url current_url_name %}">Limpiar</a>
+    </div>
+  </form>
+</article>
+
+<article class="card">
+  <h2>{{ report_title }}</h2>
+  <div class="table-responsive">
+    <table class="acreditacion-table">
+      <thead>
+        {% if report_kind == "indicador" %}
+          <tr>
+            <th>Criterio</th>
+            <th>Subcriterio</th>
+            <th>Indicador</th>
+            <th>Total</th>
+            <th>Evaluadas</th>
+            <th>Aprobadas</th>
+            <th>Rechazadas</th>
+            <th>Pendientes</th>
+            <th>Cumplimiento</th>
+          </tr>
+        {% elif report_kind == "estado" %}
+          <tr>
+            <th>Estado</th>
+            <th>Total</th>
+            <th>Participacion</th>
+            <th>Evaluadas</th>
+            <th>Aprobadas</th>
+            <th>Rechazadas</th>
+            <th>Pendientes</th>
+            <th>Cumplimiento</th>
+          </tr>
+        {% else %}
+          <tr>
+            <th>Periodo</th>
+            <th>Fechas</th>
+            <th>Total</th>
+            <th>Evaluadas</th>
+            <th>Aprobadas</th>
+            <th>Rechazadas</th>
+            <th>Pendientes</th>
+            <th>Cumplimiento</th>
+          </tr>
+        {% endif %}
+      </thead>
+      <tbody>
+        {% for row in report_rows %}
+          {% if report_kind == "indicador" %}
+            <tr>
+              <td>{{ row.criterio.codigo_criterio }} - {{ row.criterio.nombre_criterio }}</td>
+              <td>{{ row.subcriterio.codigo_subcriterio }} - {{ row.subcriterio.nombre_subcriterio }}</td>
+              <td>{{ row.indicador.codigo_indicador }} - {{ row.indicador.nombre_indicador }}</td>
+              <td>{{ row.total }}</td>
+              <td>{{ row.evaluadas }}</td>
+              <td>{{ row.aprobadas }}</td>
+              <td>{{ row.rechazadas }}</td>
+              <td>{{ row.pendientes }}</td>
+              <td><strong>{{ row.cumplimiento_label }}%</strong></td>
+            </tr>
+          {% elif report_kind == "estado" %}
+            <tr>
+              <td>{{ row.label }}</td>
+              <td>{{ row.total }}</td>
+              <td>{{ row.porcentaje_total_label }}%</td>
+              <td>{{ row.evaluadas }}</td>
+              <td>{{ row.aprobadas }}</td>
+              <td>{{ row.rechazadas }}</td>
+              <td>{{ row.pendientes }}</td>
+              <td><strong>{{ row.cumplimiento_label }}%</strong></td>
+            </tr>
+          {% else %}
+            <tr>
+              <td>{{ row.ciclo.nombre }}</td>
+              <td>{{ row.ciclo.fecha_inicio|date:"d/m/Y" }} - {{ row.ciclo.fecha_fin|date:"d/m/Y" }}</td>
+              <td>{{ row.total }}</td>
+              <td>{{ row.evaluadas }}</td>
+              <td>{{ row.aprobadas }}</td>
+              <td>{{ row.rechazadas }}</td>
+              <td>{{ row.pendientes }}</td>
+              <td><strong>{{ row.cumplimiento_label }}%</strong></td>
+            </tr>
+          {% endif %}
+        {% empty %}
+          <tr>
+            <td colspan="9" class="text-center text-muted">No existen datos para los filtros seleccionados.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</article>
+{% endblock %}

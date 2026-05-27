@@ -1,7 +1,9 @@
+import mimetypes
 from io import BytesIO
 
 from django.utils import timezone
 
+from application.services import get_existing_local_mirror_file
 from apps.auditoria.services.auditoria_service import registrar_evento
 from apps.documentos.models import DocumentoAccesoLog
 from apps.integraciones.services import graph_service
@@ -32,17 +34,26 @@ INLINE_PREVIEW_EXTENSIONS = {
 
 def resolve_protected_document_stream(documento):
     graph_item_id = getattr(documento, "graph_item_id", None)
-    if not graph_item_id:
+    local_file_path = get_existing_local_mirror_file(getattr(documento, "ruta_local", None))
+    if not graph_item_id and local_file_path is None:
         raise ProtectedDocumentAccessError(
             "El documento no tiene un item de Microsoft Graph asociado."
         )
 
-    try:
-        content, headers = graph_service.download_file_by_item_id(graph_item_id)
-    except graph_service.GraphServiceError as exc:
-        raise ProtectedDocumentAccessError(str(exc)) from exc
+    if graph_item_id:
+        try:
+            content, headers = graph_service.download_file_by_item_id(graph_item_id)
+            return BytesIO(content), headers
+        except graph_service.GraphServiceError as exc:
+            if local_file_path is None:
+                raise ProtectedDocumentAccessError(str(exc)) from exc
 
-    return BytesIO(content), headers
+    content_type = (
+        getattr(documento, "mime_type", None)
+        or mimetypes.guess_type(getattr(documento, "nombre_archivo", "") or "")[0]
+        or "application/octet-stream"
+    )
+    return local_file_path.open("rb"), {"Content-Type": content_type}
 
 
 def supports_inline_preview(documento) -> bool:

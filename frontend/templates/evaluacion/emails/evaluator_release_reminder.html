@@ -1,0 +1,29 @@
+{% extends "seguridad/emails/base.html" %}
+
+{% block hero_text %}Recordatorio de evidencia pendiente de evaluacion{% endblock %}
+
+{% block content %}
+<p style="margin:0 0 16px;">Hola <strong>{{ usuario_destino }}</strong>,</p>
+<p style="margin:0 0 18px;">
+  Este es el recordatorio <strong>{{ recordatorio_numero }} de {{ recordatorios_totales }}</strong>.
+  La evidencia enviada para evaluacion sigue pendiente.
+</p>
+
+<div style="margin:0 0 18px;padding:16px;border-radius:{{ theme.radius }};background:{{ theme.canvas }};">
+  <p style="margin:0 0 8px;"><strong>Ciclo:</strong> {{ ciclo_nombre }}</p>
+  <p style="margin:0 0 8px;"><strong>Indicador:</strong> {{ indicador_codigo }} - {{ indicador_nombre }}</p>
+  <p style="margin:0 0 8px;"><strong>Elemento:</strong> {{ elemento_codigo }} - {{ elemento_nombre }}</p>
+  <p style="margin:0 0 8px;"><strong>Documento:</strong> {{ documento_nombre }}</p>
+  <p style="margin:0;"><strong>Fecha del recordatorio:</strong> {{ fecha_recordatorio|date:"d/m/Y H:i" }}</p>
+</div>
+
+<p style="margin:0 0 14px;">
+  Si la evidencia ya fue atendida, este seguimiento se cerrara automaticamente en la proxima ejecucion.
+</p>
+
+<p style="margin:0;">
+  <a href="{{ evidence_url }}" style="display:inline-block;padding:12px 18px;border-radius:{{ theme.radius }};background:{{ theme.primary }};color:#ffffff;text-decoration:none;font-weight:700;">
+    Abrir evaluacion
+  </a>
+</p>
+{% endblock %}

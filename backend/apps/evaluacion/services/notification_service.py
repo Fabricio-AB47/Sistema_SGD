@@ -11,7 +11,10 @@ from django.utils import timezone
 
 from apps.core.services.email_theme_service import get_email_theme_tokens
 from apps.core.services.notification_service import queue_notificaciones
+from apps.core.services.navigation_service import ROLE_EVALUATOR
+from apps.evaluacion.services.alertas_service import programar_alertas_envio_evaluador
 from apps.seguridad.services.notification_service import send_transactional_email
+from apps.usuarios.models import UsuarioRol
 
 
 logger = logging.getLogger(__name__)
@@ -257,6 +260,55 @@ def queue_director_signoff_email(*, tarea, registro, actor=None, comentario=None
         subject=subject,
         template_name="evidence_check_approved",
         recipients=recipients,
+        context=context,
+    )
+
+
+def queue_evaluator_release_notification(*, registro, actor=None, request=None):
+    evaluadores = [
+        asignacion.usuario
+        for asignacion in UsuarioRol.objects.select_related("usuario", "rol").filter(
+            activo=True,
+            usuario__activo=True,
+            rol__activo=True,
+            rol__nombre_rol__iexact=ROLE_EVALUATOR,
+        )
+    ]
+    recipients = _recipient_emails(*evaluadores)
+    context = _base_context(
+        tarea=None,
+        registro=registro,
+        documento=getattr(registro, "documento", None),
+        actor=actor,
+        request=request,
+    )
+    path = f"{reverse('evaluacion-bandeja')}?{urlencode({'registro': registro.pk, 'modal': 'evaluar'})}"
+    context["evidence_url"] = _build_absolute_url(request, path)
+    subject = f"{_site_name()} - Evidencia enviada a evaluacion {context['elemento_codigo']}"
+    queue_notificaciones(
+        user_ids=_recipient_user_ids(*evaluadores),
+        titulo=f"Evidencia enviada a evaluacion: {context['elemento_codigo']}",
+        mensaje=(
+            f"{context['actor_name']} envio {context['documento_nombre']} "
+            f"al evaluador en {context['ciclo_nombre']}."
+        ),
+        tipo="INFO",
+        modulo="EVALUACION",
+        actor_id=getattr(actor, "pk", None),
+        referencia_tipo="registro_evidencia",
+        referencia_id=getattr(registro, "pk", None),
+        url=_build_absolute_url(request, path),
+    )
+    _queue_email(
+        subject=subject,
+        template_name="evaluator_release",
+        recipients=recipients,
+        context=context,
+    )
+    programar_alertas_envio_evaluador(
+        registro=registro,
+        evaluadores=evaluadores,
+        subject=subject,
         context=context,
     )
 

@@ -10,10 +10,50 @@ from django.utils.html import format_html
 from django.views.generic import FormView
 
 from apps.core.services.redirect_security import get_auth_flow_redirect_blocklist, get_safe_redirect_target
-from apps.seguridad.services import create_login_otp
+from apps.seguridad.services import create_login_otp, invalidate_login_otp
 from apps.usuarios.forms import LoginForm
 from apps.usuarios.services import auth_service, session_service
 from apps.usuarios.services.user_context_service import hydrate_request_session_context
+
+
+PENDING_OTP_SESSION_KEYS = (
+    "pending_otp_user",
+    "pending_otp_roles",
+    "pending_otp_permissions",
+    "pending_requires_password_change",
+    "pending_otp_remember",
+    "pending_otp_redirect",
+    "pending_otp_debug_code",
+    "pending_otp_id",
+    "pending_otp_issued_at",
+)
+
+
+def _pending_otp_id(request):
+    try:
+        otp_id = int(request.session.get("pending_otp_id") or 0)
+    except (TypeError, ValueError):
+        return None
+    return otp_id or None
+
+
+def _clear_pending_otp_session(request):
+    for key in PENDING_OTP_SESSION_KEYS:
+        request.session.pop(key, None)
+
+
+def _cancel_previous_pending_otp(request):
+    pending_user_id = request.session.get("pending_otp_user")
+    pending_otp_id = _pending_otp_id(request)
+    if not pending_user_id and not pending_otp_id:
+        return
+    invalidate_login_otp(
+        usuario_id=pending_user_id,
+        otp_id=pending_otp_id,
+        request=request,
+        reason="nuevo_intento_login",
+    )
+    _clear_pending_otp_session(request)
 
 
 class LoginView(FormView):
@@ -37,6 +77,7 @@ class LoginView(FormView):
         return context
 
     def form_valid(self, form):
+        _cancel_previous_pending_otp(self.request)
         redirect_target = get_safe_redirect_target(
             self.request,
             fallback=self.get_success_url(),
@@ -80,6 +121,8 @@ class LoginView(FormView):
                 request=self.request,
             )
             self.request.session["pending_otp_user"] = result.usuario.id_user
+            self.request.session["pending_otp_id"] = otp_result["otp"].pk
+            self.request.session["pending_otp_issued_at"] = timezone.now().isoformat()
             # Keep OTP pending session minimal because signed-cookie sessions have size limits.
             # Roles/permissions are resolved again after OTP validation.
             self.request.session["pending_requires_password_change"] = result.requires_password_change

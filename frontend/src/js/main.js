@@ -12,10 +12,23 @@ on("click", "[data-toggle-sidebar]", () => {
 
 function initSidebarGroups() {
   const groups = Array.from(document.querySelectorAll("[data-sidebar-group]"));
+  let firstOpenGroup = null;
 
   groups.forEach((group) => {
     const toggle = group.querySelector("[data-sidebar-toggle]");
     if (!toggle) return;
+
+    if (group.classList.contains("sidebar__group--open")) {
+      if (firstOpenGroup) {
+        group.classList.remove("sidebar__group--open");
+        toggle.setAttribute("aria-expanded", "false");
+      } else {
+        firstOpenGroup = group;
+        toggle.setAttribute("aria-expanded", "true");
+      }
+    } else {
+      toggle.setAttribute("aria-expanded", "false");
+    }
 
     toggle.addEventListener("click", () => {
       const isOpen = group.classList.contains("sidebar__group--open");

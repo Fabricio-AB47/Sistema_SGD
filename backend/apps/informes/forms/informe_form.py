@@ -1,6 +1,6 @@
 from django import forms
 
-from apps.acreditacion.models import CicloEvaluacion
+from apps.acreditacion.models import CicloEvaluacion, Indicador
 from apps.core.models import EstadoInforme
 from apps.informes.models import InformeAutoevaluacion
 
@@ -61,3 +61,41 @@ class InformeAprobacionForm(forms.Form):
 
     def clean_observacion_aprobacion(self):
         return _normalize_optional_text(self.cleaned_data.get("observacion_aprobacion"))
+
+
+class ReporteOperativoFilterForm(forms.Form):
+    ciclo = forms.ModelChoiceField(
+        queryset=CicloEvaluacion.objects.none(),
+        required=False,
+        label="Periodo",
+    )
+    indicador = forms.ModelChoiceField(
+        queryset=Indicador.objects.none(),
+        required=False,
+        label="Indicador",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["ciclo"].queryset = CicloEvaluacion.objects.select_related("estado").order_by(
+            "-fecha_inicio",
+            "-id_ciclo",
+        )
+        self.fields["indicador"].queryset = Indicador.objects.select_related(
+            "subcriterio__criterio",
+            "tipo_indicador",
+        ).order_by(
+            "subcriterio__criterio__orden_visual",
+            "subcriterio__criterio__codigo_criterio",
+            "subcriterio__orden_visual",
+            "subcriterio__codigo_subcriterio",
+            "orden_visual",
+            "codigo_indicador",
+        )
+        self.fields["indicador"].label_from_instance = (
+            lambda indicador: (
+                f"{indicador.subcriterio.criterio.codigo_criterio} / "
+                f"{indicador.subcriterio.codigo_subcriterio} / "
+                f"{indicador.codigo_indicador} - {indicador.nombre_indicador}"
+            )
+        )

@@ -6,6 +6,7 @@ from django.utils import timezone
 from apps.auditoria.services.auditoria_service import registrar_evento
 from apps.core.models import EstadoEvidencia
 from apps.evaluacion.models import Evaluacion, ObservacionEvaluacion, TareaEvidencia
+from apps.evaluacion.services.notification_service import queue_evaluator_release_notification
 from apps.evaluacion.services.tareas_service import tarea_tiene_visto_bueno_director
 from apps.usuarios.models import UsuarioAreaCargo, UsuarioRol
 
@@ -427,6 +428,7 @@ def habilitar_salida_evaluador(
         criticidad="MEDIA",
         request=request,
     )
+    queue_evaluator_release_notification(registro=registro, actor=actor, request=request)
 
     return {
         "status": "reassigned" if was_reassigned else "released",

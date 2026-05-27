@@ -38,14 +38,14 @@
         {{ cargo_form.nivel_jerarquico }}
         {{ cargo_form.nivel_jerarquico.errors }}
       </div>
-      <div class="form-check">
+      <label class="form-check">
         {{ cargo_form.aprueba_interno }} <span>Aprueba interno</span>
-        {{ cargo_form.aprueba_interno.errors }}
-      </div>
-      <div class="form-check">
+      </label>
+      {{ cargo_form.aprueba_interno.errors }}
+      <label class="form-check">
         {{ cargo_form.activo }} <span>Activo</span>
-        {{ cargo_form.activo.errors }}
-      </div>
+      </label>
+      {{ cargo_form.activo.errors }}
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">Guardar cargo</button>

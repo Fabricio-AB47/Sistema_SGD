@@ -228,10 +228,10 @@
       {{ responsable_form.usuarios.errors }}
     </div>
 
-    <div class="form-check">
+    <label class="form-check">
       {{ responsable_form.activo }}
       <span>{{ responsable_form.activo.label }}</span>
-    </div>
+    </label>
 
     {% if responsable_form.non_field_errors %}
       <div class="text-muted">{{ responsable_form.non_field_errors }}</div>

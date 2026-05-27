@@ -6,6 +6,11 @@ from .storage_path_service import (  # noqa: F401
     build_elemento_drive_path,
     build_indicador_drive_path,
     build_subcriterio_drive_path,
+    ensure_local_mirror_folder,
+    get_existing_local_mirror_file,
     get_ciclo_auth_drive_root,
     get_drive_root_path,
+    get_local_storage_root,
+    resolve_local_mirror_path,
+    write_local_mirror_file,
 )

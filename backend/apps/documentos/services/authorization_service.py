@@ -9,7 +9,11 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.text import get_valid_filename
 
-from application.services import build_ciclo_auth_drive_path_for_values
+from application.services import (
+    build_ciclo_auth_drive_path_for_values,
+    ensure_local_mirror_folder,
+    write_local_mirror_file,
+)
 from apps.core.services.dependency_health import (
     DependencyValidationError,
     ensure_database_connection,
@@ -169,6 +173,7 @@ def prepare_cycle_authorization_storage(
         raise AuthorizationServiceError(
             f"No fue posible validar la carpeta Graph del ciclo en {drive_path.as_posix()}."
         )
+    local_path = ensure_local_mirror_folder(drive_path)
 
     registrar_evento(
         accion="PREPARAR_CARPETA_AUTORIZACION_CICLO",
@@ -180,6 +185,7 @@ def prepare_cycle_authorization_storage(
             "ciclo": nombre_ciclo,
             "anio": anio,
             "ruta_drive": drive_path.as_posix(),
+            "ruta_espejo_local": str(local_path) if local_path else None,
             "graph_web_url": (graph_item or {}).get("webUrl"),
         },
         criticidad="MEDIA",
@@ -188,6 +194,7 @@ def prepare_cycle_authorization_storage(
     return {
         "drive_path": drive_path,
         "graph_item": validated_folder or graph_item,
+        "local_path": local_path,
     }
 
 
@@ -244,6 +251,7 @@ def upload_cycle_authorization_document(
         access_token=graph_access_token,
         refresh=True,
     )
+    local_mirror_path = write_local_mirror_file(storage_path, file_content)
 
     payload = _build_document_payload(
         nombre_ciclo=nombre_ciclo,
@@ -334,6 +342,7 @@ def upload_cycle_authorization_document(
             "documento_id": documento.pk,
             "version_id": version.pk,
             "ruta_drive": storage_path.as_posix(),
+            "ruta_espejo_local": str(local_mirror_path) if local_mirror_path else None,
             "graph_item_id": (graph_item or {}).get("id"),
         },
         criticidad="ALTA",
@@ -343,6 +352,7 @@ def upload_cycle_authorization_document(
         "documento": documento,
         "version": version,
         "drive_path": storage_path,
+        "local_mirror_path": local_mirror_path,
         "graph_item": graph_item,
         "created": created,
     }

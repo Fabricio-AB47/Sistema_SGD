@@ -41,10 +41,10 @@
       <span>Fecha de expiracion</span>
       {{ form.fecha_expiracion }}{{ form.fecha_expiracion.errors }}
     </div>
-    <div class="form-check">
+    <label class="form-check">
       {{ form.activo }} <span>Activo</span>
-      {{ form.activo.errors }}
-    </div>
+    </label>
+    {{ form.activo.errors }}
 
     <div class="form-actions">
       <button class="btn btn-primary" type="submit">Guardar credencial</button>

@@ -22,14 +22,14 @@
       <span>Descripción</span>
       {{ form.descripcion }}{{ form.descripcion.errors }}
     </div>
-    <div class="form-check">
+    <label class="form-check">
       {{ form.acceso_global }} <span>Acceso global</span>
-      {{ form.acceso_global.errors }}
-    </div>
-    <div class="form-check">
+    </label>
+    {{ form.acceso_global.errors }}
+    <label class="form-check">
       {{ form.activo }} <span>Activo</span>
-      {{ form.activo.errors }}
-    </div>
+    </label>
+    {{ form.activo.errors }}
     <div class="form-actions">
       <button class="btn btn-primary" type="submit">Guardar</button>
       <a class="btn btn-secondary" href="{% url 'roles-lista' %}">Cancelar</a>

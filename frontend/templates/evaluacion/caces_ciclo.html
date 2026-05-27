@@ -1,0 +1,142 @@
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+{% if selected_cycle and matrix %}
+  <section class="acreditacion-toolbar card">
+    <form method="get" class="acreditacion-inline-form">
+      <label class="acreditacion-form__field">
+        <span>Ciclo</span>
+        <select name="ciclo" onchange="this.form.submit()">
+          {% for ciclo in ciclos %}
+            <option value="{{ ciclo.pk }}"{% if selected_cycle.pk == ciclo.pk %} selected{% endif %}>{{ ciclo.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </form>
+    <div class="acreditacion-panel__actions">
+      <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?panel=caces&ciclo={{ selected_cycle.pk }}">Bandeja</a>
+      <a class="btn btn-secondary" href="{% url 'evaluacion-caces' %}?ciclo={{ selected_cycle.pk }}">Tablero</a>
+      <a class="btn btn-secondary" href="{% url 'evaluacion-caces-reporte' %}?ciclo={{ selected_cycle.pk }}">Reporte final</a>
+    </div>
+  </section>
+
+  <section class="acreditacion-kpis">
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Resultado final</span>
+      <strong class="acreditacion-kpis__value">{{ matrix.result.resultado_porcentaje|default:"0.00" }}%</strong>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Evaluados</span>
+      <strong class="acreditacion-kpis__value">{{ matrix.summary.evaluated_total }} / {{ matrix.summary.indicators_total }}</strong>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Cobertura</span>
+      <strong class="acreditacion-kpis__value">{{ matrix.summary.evidence_coverage }}%</strong>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Sin mapeo</span>
+      <strong class="acreditacion-kpis__value">{{ matrix.summary.unmapped_total }}</strong>
+    </article>
+  </section>
+
+  {% for section in matrix.type_sections %}
+    <article class="card acreditacion-panel acreditacion-panel--wide">
+      <div class="acreditacion-panel__header">
+        <div>
+          <h3>{{ section.title }}</h3>
+          <p class="text-muted">{{ selected_cycle.nombre }} - {{ section.label }} por ponderacion CACES</p>
+        </div>
+        <span class="acreditacion-status acreditacion-status--info">{{ section.tipo_evaluacion }}</span>
+      </div>
+
+      <dl class="acreditacion-detail-list">
+        <div><dt>Indicadores</dt><dd>{{ section.summary.total }}</dd></div>
+        <div><dt>Evaluados</dt><dd>{{ section.summary.evaluated }}</dd></div>
+        <div><dt>Pendientes</dt><dd>{{ section.summary.pending }}</dd></div>
+        <div><dt>Ponderacion total</dt><dd>{{ section.summary.weight_total }}</dd></div>
+        <div><dt>Aporte acumulado</dt><dd>{{ section.summary.aporte_total }}</dd></div>
+        <div><dt>Cumplimiento</dt><dd>{{ section.summary.compliance_percentage }}%</dd></div>
+      </dl>
+
+      <div class="table-responsive">
+        <table class="acreditacion-table caces-matrix-table">
+          <thead>
+            <tr>
+              <th>Indicador</th>
+              <th>Evidencias</th>
+              <th>Utilidad</th>
+              <th>Ponderacion</th>
+              <th>Aporte</th>
+              <th>Estado</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for criterion in section.groups %}
+              <tr class="caces-table-group caces-table-group--criterion">
+                <td colspan="7">
+                  <span>Criterio</span>
+                  <strong>{{ criterion.criterio.codigo_criterio }} - {{ criterion.criterio.nombre_criterio }}</strong>
+                </td>
+              </tr>
+              {% for subcriterion in criterion.subcriteria %}
+                <tr class="caces-table-group caces-table-group--subcriterion">
+                  <td colspan="7">
+                    <span>Subcriterio</span>
+                    <strong>{{ subcriterion.subcriterio.codigo_subcriterio }} - {{ subcriterion.subcriterio.nombre_subcriterio }}</strong>
+                  </td>
+                </tr>
+                {% for node in subcriterion.indicators %}
+                  <tr>
+                    <td>
+                      <strong>{{ node.indicador.codigo_indicador }} - {{ node.indicador.nombre_indicador }}</strong>
+                      {% if node.modelo %}
+                        <div class="text-muted">{{ node.modelo.codigo_modelo }} | {{ node.modelo.nombre_indicador }}</div>
+                      {% else %}
+                        <div><span class="acreditacion-status acreditacion-status--warning">Sin mapeo CACES</span></div>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {{ node.coverage.elementos_con_evidencia }} / {{ node.coverage.total_elementos }}
+                      <div class="text-muted">{{ node.coverage.porcentaje_cobertura }}%</div>
+                    </td>
+                    <td>{{ node.result.utilidad|default:"--" }}</td>
+                    <td>
+                      {% if node.result %}
+                        {{ node.result.ponderacion }}
+                      {% else %}
+                        {{ node.ponderacion_referencial }}
+                        <div class="text-muted">referencial</div>
+                      {% endif %}
+                    </td>
+                    <td>{{ node.result.aporte|default:"--" }}</td>
+                    <td>
+                      {% if node.result %}
+                        <span class="acreditacion-status acreditacion-status--success">Evaluado</span>
+                      {% else %}
+                        <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a class="btn btn-secondary" href="{% url 'evaluacion-caces-indicador' %}?ciclo={{ selected_cycle.pk }}&indicador={{ node.indicador.pk }}">Detalle</a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% endfor %}
+            {% empty %}
+              <tr>
+                <td colspan="7" class="text-center text-muted">No existen indicadores para este tipo de evaluacion.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  {% endfor %}
+{% else %}
+  <article class="card acreditacion-panel">
+    <h3>Sin ciclo</h3>
+    <p class="text-muted">No existe un ciclo disponible para evaluar.</p>
+  </article>
+{% endif %}
+{% endblock %}

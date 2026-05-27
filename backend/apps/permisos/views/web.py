@@ -80,19 +80,23 @@ def _normalize_role_token(value):
 def _role_scope_flags(request):
     role_tokens = tuple(
         _normalize_role_token(role)
-        for role in (request.session.get("sig_roles", []) or [])
+        for role in [
+            *(request.session.get("sig_roles", []) or []),
+            *(request.session.get("sig_operational_roles", []) or []),
+        ]
     )
     is_admin = any(token == ADMIN_ROLE_TOKEN for token in role_tokens)
     is_quality = any(token in QUALITY_ROLE_TOKENS for token in role_tokens)
     is_evaluator = any("EVALUADOR" in token for token in role_tokens)
     is_external = any(("EXTERNO" in token) or ("CONSULTA" in token) for token in role_tokens)
+    can_manage = is_admin or (is_quality and not (is_evaluator or is_external))
 
     return {
         "is_admin": is_admin,
         "is_quality": is_quality,
         "is_evaluator": is_evaluator,
         "is_external": is_external,
-        "can_manage": (is_admin or is_quality) and not (is_evaluator or is_external),
+        "can_manage": can_manage,
     }
 
 

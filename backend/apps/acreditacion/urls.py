@@ -2,6 +2,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from apps.acreditacion.views.web import (
+    CacesCatalogSyncView,
     CicloCreateView,
     CicloDetailView,
     CicloEstadoUpdateView,
@@ -22,6 +23,7 @@ urlpatterns = [
     path("indicadores/", IndicadorListView.as_view(), name="acreditacion-indicadores-lista"),
     path("indicadores/detalle/", IndicadorDetailView.as_view(), name="acreditacion-indicadores-detalle"),
     path("elementos/", ElementoListView.as_view(), name="acreditacion-elementos-lista"),
+    path("modelo-caces/sincronizar/", CacesCatalogSyncView.as_view(), name="acreditacion-caces-importar"),
     path("matriz-registro/", MatrizRegistroView.as_view(), name="acreditacion-matriz-registro"),
     path(
         "matriz-registro/subir/",

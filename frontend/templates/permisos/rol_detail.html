@@ -41,14 +41,14 @@
           {{ form.descripcion }}
           {{ form.descripcion.errors }}
         </div>
-        <div class="form-check">
+        <label class="form-check">
           {{ form.acceso_global }}
           <span>{{ form.acceso_global.label }}</span>
-        </div>
-        <div class="form-check">
+        </label>
+        <label class="form-check">
           {{ form.activo }}
           <span>{{ form.activo.label }}</span>
-        </div>
+        </label>
         <div class="form-actions">
           <button class="btn btn-primary" type="submit">Actualizar rol</button>
           <a class="btn btn-secondary" href="{% url 'permisos-roles-permisos' %}?rol={{ selected_role.pk }}">Editar permisos</a>

@@ -8,15 +8,15 @@
       <p class="text-muted">Trazabilidad completa del documento, el ciclo y las evaluaciones asociadas.</p>
     </div>
     <div class="page-header__actions">
-      <a class="btn btn-secondary" href="{% url 'evaluacion-evaluar' %}?registro={{ registro.pk }}">Evaluar</a>
+      {% if scope_flags.can_enter_evaluation %}
+        <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?registro={{ registro.pk }}&modal=evaluar">Evaluar</a>
+      {% endif %}
       <a class="btn btn-ghost" href="{% url 'documentos-protegidos-abrir' registro.documento.pk %}" target="_blank" rel="noopener">Observar documento</a>
     </div>
   </div>
 
   {% if release_controls.can_manage %}
-    <form method="post" class="acreditacion-form acreditacion-form--compact">
-      {% csrf_token %}
-      <input type="hidden" name="registro" value="{{ registro.pk }}">
+    <section class="acreditacion-form acreditacion-form--compact">
       <div class="detail-grid">
         <div>
           <strong>Aprobacion principal</strong>
@@ -33,25 +33,16 @@
           <p>{{ release_controls.approval.message }}</p>
         </div>
       </div>
-      <label class="acreditacion-form__checkbox">
-        <input
-          type="checkbox"
-          name="habilitar_salida"
-          value="1"
-          {% if release_controls.is_released %}checked{% endif %}
-          {% if not release_controls.can_release %}disabled{% endif %}
-        >
-        <span>Habilitar salida para el evaluador</span>
-      </label>
-      <div class="acreditacion-form__actions">
-        <button class="btn btn-primary" type="submit" {% if not release_controls.can_release %}disabled{% endif %}>
-          Guardar salida
-        </button>
-      </div>
       <small class="text-muted">
-        Solo la cabeza de rango 1 que registro el check de revision puede habilitar la visibilidad para evaluacion.
+        {% if release_controls.is_released %}
+          La evidencia ya fue enviada al evaluador.
+        {% elif release_controls.approval.approved %}
+          La salida al evaluador se habilita automaticamente al registrar el visto bueno del director.
+        {% else %}
+          Cuando el director registre el visto bueno, la evidencia se enviara automaticamente al evaluador.
+        {% endif %}
       </small>
-    </form>
+    </section>
   {% endif %}
 
   <div class="detail-grid">
@@ -110,7 +101,7 @@
           <th>Estado</th>
           <th>Evaluador</th>
           <th>Resultado / calificacion</th>
-          <th>Retroalimentacion</th>
+          <th>Observaciones de evaluacion</th>
           <th>Fecha</th>
           <th>Observaciones</th>
         </tr>

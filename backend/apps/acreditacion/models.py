@@ -1,7 +1,6 @@
 from django.db import models
 
 from apps.core.models import (
-    ClasificacionElementoFundamental as CoreClasificacionElementoFundamental,
     EstadoCiclo,
     TipoIndicador,
 )
@@ -87,14 +86,6 @@ class Indicador(models.Model):
         return f"{self.codigo_indicador} - {self.nombre_indicador}"
 
 
-class ClasificacionElementoFundamental(CoreClasificacionElementoFundamental):
-    class Meta:
-        proxy = True
-        app_label = "acreditacion"
-        verbose_name = "Clasificacion elemento fundamental"
-        verbose_name_plural = "Clasificaciones elemento fundamental"
-
-
 class ElementoFundamental(models.Model):
     TIPO_ELEMENTO_CHOICES = (
         ("ESENCIAL", "Esencial"),
@@ -107,14 +98,6 @@ class ElementoFundamental(models.Model):
         on_delete=models.PROTECT,
         related_name="elementos",
         db_column="id_indicador",
-    )
-    clasificacion = models.ForeignKey(
-        ClasificacionElementoFundamental,
-        on_delete=models.PROTECT,
-        related_name="elementos",
-        db_column="id_clasificacion",
-        null=True,
-        blank=True,
     )
     codigo_elemento = models.CharField(max_length=20, unique=True)
     nombre_elemento = models.CharField(max_length=200)

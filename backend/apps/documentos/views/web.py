@@ -13,7 +13,15 @@ from django.views.generic import RedirectView, TemplateView
 from django.views.decorators.clickjacking import xframe_options_sameorigin
 
 from apps.acreditacion.models import ElementoFundamental
-from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.mixins import SigLoginRequiredMixin, SigRoleOrPermissionRequiredMixin
+from apps.core.services.navigation_service import (
+    PERM_CONSULTA_VER,
+    ROLE_ADMIN,
+    ROLE_CONSULTA,
+    ROLE_EVALUATOR,
+    ROLE_QUALITY,
+    ROLE_RECTOR,
+)
 from apps.core.views.admin_page import AdminPageView
 from apps.documentos.forms import DocxLaboratoryForm, StructuredDocumentUploadForm
 from apps.documentos.selectors import (
@@ -78,7 +86,10 @@ def _report_document_error(*, request, exc: Exception, form=None, user_message: 
         form.add_error(None, user_message)
 
 
-class DocumentosBaseView(SigLoginRequiredMixin, TemplateView):
+class DocumentosBaseView(SigRoleOrPermissionRequiredMixin, TemplateView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_EVALUATOR, ROLE_CONSULTA)
+    allowed_permissions = ("documentos.ver", PERM_CONSULTA_VER)
+    access_denied_message = "No tienes acceso a gestion documental."
     template_name = ""
     page_title = ""
     page_description = ""
@@ -190,6 +201,9 @@ class AuthorizationCycleView(SigLoginRequiredMixin, RedirectView):
 
 
 class DocumentUploadView(DocumentosBaseView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY)
+    allowed_permissions = ("documentos.subir", "documentos.versionar")
+    access_denied_message = "No tienes acceso para subir documentos."
     template_name = "documentos/documento_upload.html"
     page_title = "Subir documento"
     page_description = (
@@ -249,6 +263,9 @@ class DocumentUploadView(DocumentosBaseView):
 
 
 class DocxLaboratoryView(DocumentosBaseView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY)
+    allowed_permissions = ("documentos.subir", "documentos.versionar")
+    access_denied_message = "No tienes acceso al laboratorio documental."
     template_name = "documentos/docx_lab.html"
     page_title = MODULE_TAB_LAB_TITLE
     page_description = "Carga un DOCX de prueba, extrae comentarios y genera una reconstruccion editable para validar el flujo."

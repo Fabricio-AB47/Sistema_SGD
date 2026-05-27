@@ -132,6 +132,78 @@
           </div>
         </section>
 
+        <section class="ciclos-form-section ciclos-form-section--selection">
+          <div class="ciclos-form-section__head">
+            <h4>Indicadores a evaluar</h4>
+            <p class="text-muted">Define el alcance del ciclo por criterio, subcriterio e indicador.</p>
+          </div>
+          <div class="cycle-selection-toolbar">
+            <label class="cycle-selection-toolbar__toggle">
+              <input
+                type="checkbox"
+                name="seleccionar_todos_indicadores"
+                value="1"
+                data-cycle-select-all-toggle
+                {% if select_all_indicators %}checked{% endif %}
+              >
+              <span>Seleccionar todo</span>
+            </label>
+            <div class="cycle-selection-toolbar__actions">
+              <button class="btn btn-secondary" type="button" data-cycle-select-all>Todo</button>
+              <button class="btn btn-ghost" type="button" data-cycle-clear>Limpiar</button>
+            </div>
+            <span class="acreditacion-pill" data-cycle-selected-counter>
+              {{ indicator_selection_tree.selected_total }} de {{ indicator_selection_tree.total_indicators }}
+            </span>
+          </div>
+          {{ form.indicadores_evaluar.errors }}
+          {{ form.seleccionar_todos_indicadores.errors }}
+          <div class="cycle-indicator-tree">
+            {% for criterion in indicator_selection_tree.groups %}
+              <article class="cycle-indicator-tree__criterion">
+                <div class="cycle-indicator-tree__criterion-head">
+                  <div>
+                    <strong>{{ criterion.criterio.codigo_criterio }} - {{ criterion.criterio.nombre_criterio }}</strong>
+                    <span>{{ criterion.selected_total }} de {{ criterion.indicators_total }} indicador{{ criterion.indicators_total|pluralize:"es" }}</span>
+                  </div>
+                </div>
+                <div class="cycle-indicator-tree__subcriteria">
+                  {% for subcriterion in criterion.subcriteria %}
+                    <div class="cycle-indicator-tree__subcriterion">
+                      <div class="cycle-indicator-tree__subcriterion-head">
+                        <strong>{{ subcriterion.subcriterio.codigo_subcriterio }} - {{ subcriterion.subcriterio.nombre_subcriterio }}</strong>
+                        <span>{{ subcriterion.selected_total }} / {{ subcriterion.indicators_total }}</span>
+                      </div>
+                      <div class="cycle-indicator-tree__indicators">
+                        {% for item in subcriterion.indicators %}
+                          <label class="cycle-indicator-option">
+                            <input
+                              type="checkbox"
+                              name="indicadores_evaluar"
+                              value="{{ item.indicador.pk }}"
+                              data-cycle-indicator-checkbox
+                              {% if item.selected %}checked{% endif %}
+                            >
+                            <span>
+                              <strong>{{ item.indicador.codigo_indicador }}</strong>
+                              {{ item.indicador.nombre_indicador }}
+                            </span>
+                          </label>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </article>
+            {% empty %}
+              <div class="ciclos-empty-state">
+                <strong>No hay indicadores activos.</strong>
+                <p class="text-muted">Carga la matriz CACES o crea indicadores antes de registrar el ciclo.</p>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+
         <div class="acreditacion-form__actions">
           <button class="btn btn-primary" type="submit">Guardar ciclo y documento</button>
         </div>
@@ -208,6 +280,7 @@
             <th>Inicio</th>
             <th>Fin</th>
             <th>Estado</th>
+            <th>Indicadores</th>
             <th>Documento asociado</th>
             <th>Carga documental</th>
             <th>Descripcion</th>
@@ -232,6 +305,9 @@
                   {{ ciclo.estado.descripcion }}
                 </span>
               {% endwith %}
+            </td>
+            <td>
+              <span class="acreditacion-pill">{{ ciclo.indicator_scope_label }}</span>
             </td>
             <td>
               <div class="ciclos-table__document">
@@ -274,7 +350,7 @@
           </tr>
       {% empty %}
           <tr>
-            <td colspan="9">
+            <td colspan="10">
               <div class="ciclos-empty-state">
                 <strong>No existen ciclos registrados.</strong>
                 <p class="text-muted">Comienza creando el primer ciclo y cargando su documento de autorizacion desde el formulario superior.</p>
@@ -287,4 +363,63 @@
     </div>
   </article>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+  (function () {
+    var toggles = document.querySelectorAll("[data-cycle-select-all-toggle]");
+    var checkboxes = Array.prototype.slice.call(document.querySelectorAll("[data-cycle-indicator-checkbox]"));
+    var counter = document.querySelector("[data-cycle-selected-counter]");
+    var selectAllButton = document.querySelector("[data-cycle-select-all]");
+    var clearButton = document.querySelector("[data-cycle-clear]");
+
+    if (!checkboxes.length) {
+      return;
+    }
+
+    function syncCounter() {
+      var selected = checkboxes.filter(function (checkbox) {
+        return checkbox.checked;
+      }).length;
+      if (counter) {
+        counter.textContent = selected + " de " + checkboxes.length;
+      }
+      toggles.forEach(function (toggle) {
+        toggle.checked = selected === checkboxes.length;
+      });
+    }
+
+    function setAll(checked) {
+      checkboxes.forEach(function (checkbox) {
+        checkbox.checked = checked;
+      });
+      toggles.forEach(function (toggle) {
+        toggle.checked = checked;
+      });
+      syncCounter();
+    }
+
+    toggles.forEach(function (toggle) {
+      toggle.addEventListener("change", function () {
+        setAll(toggle.checked);
+      });
+    });
+    checkboxes.forEach(function (checkbox) {
+      checkbox.addEventListener("change", syncCounter);
+    });
+    if (selectAllButton) {
+      selectAllButton.addEventListener("click", function () {
+        setAll(true);
+      });
+    }
+    if (clearButton) {
+      clearButton.addEventListener("click", function () {
+        setAll(false);
+      });
+    }
+    syncCounter();
+  })();
+</script>
 {% endblock %}

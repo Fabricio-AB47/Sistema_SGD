@@ -1,0 +1,190 @@
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+{% if selected_cycle and report %}
+  <section class="acreditacion-toolbar card">
+    <form method="get" class="acreditacion-inline-form">
+      <label class="acreditacion-form__field">
+        <span>Ciclo</span>
+        <select name="ciclo" onchange="this.form.submit()">
+          {% for ciclo in ciclos %}
+            <option value="{{ ciclo.pk }}"{% if selected_cycle.pk == ciclo.pk %} selected{% endif %}>{{ ciclo.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </form>
+    <div class="acreditacion-panel__actions">
+      <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?panel=caces&ciclo={{ selected_cycle.pk }}">Bandeja</a>
+      <a class="btn btn-secondary" href="{% url 'evaluacion-caces' %}?ciclo={{ selected_cycle.pk }}">Tablero</a>
+      <a class="btn btn-secondary" href="{% url 'evaluacion-caces-ciclo' %}?ciclo={{ selected_cycle.pk }}">Matriz</a>
+    </div>
+  </section>
+
+  <section class="acreditacion-kpis">
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Cumplimiento final CACES</span>
+      <strong class="acreditacion-kpis__value">{{ report.type_summary.overall.compliance_percentage|default:"0.00" }}%</strong>
+      <span class="acreditacion-kpis__meta">Resultado decimal {{ report.result.resultado_decimal|default:"0" }}</span>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Evaluación total</span>
+      <strong class="acreditacion-kpis__value">{{ report.summary.evaluation_progress }}%</strong>
+      <span class="acreditacion-kpis__meta">{{ report.summary.evaluated_total }} / {{ report.summary.indicators_total }} indicadores</span>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Cumplimiento cualitativo</span>
+      <strong class="acreditacion-kpis__value">{{ report.type_summary.qualitative.compliance_percentage }}%</strong>
+      <span class="acreditacion-kpis__meta">Evaluación {{ report.type_summary.qualitative.evaluation_progress }}% - {{ report.type_summary.qualitative.evaluated }} / {{ report.type_summary.qualitative.total }}</span>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Cumplimiento cuantitativo</span>
+      <strong class="acreditacion-kpis__value">{{ report.type_summary.quantitative.compliance_percentage }}%</strong>
+      <span class="acreditacion-kpis__meta">Evaluación {{ report.type_summary.quantitative.evaluation_progress }}% - {{ report.type_summary.quantitative.evaluated }} / {{ report.type_summary.quantitative.total }}</span>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Cobertura documental</span>
+      <strong class="acreditacion-kpis__value">{{ report.summary.evidence_coverage }}%</strong>
+      <span class="acreditacion-kpis__meta">{{ report.summary.evidence_total }} / {{ report.summary.elements_total }} elementos con evidencia</span>
+    </article>
+  </section>
+
+  <section class="caces-type-summary">
+    <article class="card caces-type-summary__card">
+      <div>
+        <span class="caces-type-summary__eyebrow">Indicadores cualitativos</span>
+        <h3>{{ report.type_summary.qualitative.compliance_percentage }}% de cumplimiento</h3>
+      </div>
+      <dl>
+        <div>
+          <dt>Evaluados</dt>
+          <dd>{{ report.type_summary.qualitative.evaluated }} / {{ report.type_summary.qualitative.total }}</dd>
+        </div>
+        <div>
+          <dt>Avance evaluación</dt>
+          <dd>{{ report.type_summary.qualitative.evaluation_progress }}%</dd>
+        </div>
+        <div>
+          <dt>Aporte</dt>
+          <dd>{{ report.type_summary.qualitative.aporte_total }}</dd>
+        </div>
+      </dl>
+    </article>
+    <article class="card caces-type-summary__card">
+      <div>
+        <span class="caces-type-summary__eyebrow">Indicadores cuantitativos</span>
+        <h3>{{ report.type_summary.quantitative.compliance_percentage }}% de cumplimiento</h3>
+      </div>
+      <dl>
+        <div>
+          <dt>Evaluados</dt>
+          <dd>{{ report.type_summary.quantitative.evaluated }} / {{ report.type_summary.quantitative.total }}</dd>
+        </div>
+        <div>
+          <dt>Avance evaluación</dt>
+          <dd>{{ report.type_summary.quantitative.evaluation_progress }}%</dd>
+        </div>
+        <div>
+          <dt>Aporte</dt>
+          <dd>{{ report.type_summary.quantitative.aporte_total }}</dd>
+        </div>
+      </dl>
+    </article>
+  </section>
+
+  {% for section in report.type_sections %}
+    <article class="card acreditacion-panel acreditacion-panel--wide">
+      <div class="acreditacion-panel__header">
+        <div>
+          <h3>Consolidado {{ section.label|lower }}</h3>
+          <p class="text-muted">
+            {{ selected_cycle.nombre }} - ponderacion {{ section.summary.weight_total }} - cumplimiento {{ section.summary.compliance_percentage }}%
+          </p>
+        </div>
+        <span class="acreditacion-status acreditacion-status--info">{{ section.tipo_evaluacion }}</span>
+      </div>
+      <div class="table-responsive">
+        <table class="acreditacion-table">
+          <thead>
+            <tr>
+              <th>Indicador</th>
+              <th>Evaluación</th>
+              <th>Cumplimiento</th>
+              <th>Utilidad</th>
+              <th>Ponderación</th>
+              <th>Aporte</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for criterion in section.groups %}
+              <tr class="caces-table-group caces-table-group--criterion">
+                <td colspan="7">
+                  <span>Criterio</span>
+                  <strong>{{ criterion.criterio.codigo_criterio }} - {{ criterion.criterio.nombre_criterio }}</strong>
+                </td>
+              </tr>
+              {% for subcriterion in criterion.subcriteria %}
+                {% for node in subcriterion.indicators %}
+                  <tr>
+                    <td>
+                      <strong>{{ node.indicador.codigo_indicador }}</strong>
+                      <div class="text-muted">{{ node.indicador.nombre_indicador }}</div>
+                    </td>
+                    <td>
+                      {% if node.result %}
+                        {% if node.is_qualitative %}
+                          {{ node.result.categoria|default:"Sin categoría" }}
+                        {% elif node.is_quantitative %}
+                          <strong>{{ node.result.valor_calculado|default:"--" }}</strong>
+                          <div class="text-muted">Estándar {{ node.result.estandar|default:"--" }}</div>
+                        {% else %}
+                          --
+                        {% endif %}
+                      {% else %}
+                        --
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if node.result %}
+                        <strong>{{ node.result.cumplimiento_porcentaje }}%</strong>
+                      {% else %}
+                        --
+                      {% endif %}
+                    </td>
+                    <td>{{ node.result.utilidad|default:"--" }}</td>
+                    <td>
+                      {% if node.result %}
+                        {{ node.result.ponderacion }}
+                      {% else %}
+                        {{ node.ponderacion_referencial }}
+                        <div class="text-muted">referencial</div>
+                      {% endif %}
+                    </td>
+                    <td>{{ node.result.aporte|default:"--" }}</td>
+                    <td>
+                      {% if node.result %}
+                        <span class="acreditacion-status acreditacion-status--success">Evaluado</span>
+                      {% else %}
+                        <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% endfor %}
+            {% empty %}
+              <tr>
+                <td colspan="7" class="text-center text-muted">No existen indicadores para este tipo de evaluacion.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  {% endfor %}
+{% else %}
+  <article class="card acreditacion-panel">
+    <h3>Sin reporte</h3>
+    <p class="text-muted">No existe un ciclo disponible para consolidar.</p>
+  </article>
+{% endif %}
+{% endblock %}

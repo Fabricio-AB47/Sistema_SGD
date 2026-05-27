@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from django.db.models import Count, Prefetch
 from django.core.cache import cache
 
@@ -6,6 +8,7 @@ from apps.acreditacion.models import (
     Criterio,
     ElementoFundamental,
     Indicador,
+    RolIndicador,
     Subcriterio,
 )
 from apps.core.models import EstadoCiclo
@@ -86,7 +89,7 @@ def get_indicator_detail(indicador_id=None):
     queryset = Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador").prefetch_related(
         Prefetch(
             "elementos",
-            queryset=ElementoFundamental.objects.select_related("clasificacion").order_by(
+            queryset=ElementoFundamental.objects.order_by(
                 "orden_visual",
                 "codigo_elemento",
             ),
@@ -108,7 +111,6 @@ def get_elementos_queryset():
     return (
         ElementoFundamental.objects.select_related(
             "indicador__subcriterio__criterio",
-            "clasificacion",
         )
         .order_by(
             "indicador__subcriterio__criterio__codigo_criterio",
@@ -120,14 +122,191 @@ def get_elementos_queryset():
     )
 
 
+def get_cycle_indicator_scope_ids(ciclo_id):
+    ciclo_pk = _coerce_pk(ciclo_id)
+    if not ciclo_pk:
+        return set()
+    return set(
+        RolIndicador.objects.filter(ciclo_id=ciclo_pk, activo=True)
+        .values_list("indicador_id", flat=True)
+        .distinct()
+    )
+
+
+def attach_cycle_indicator_scope(ciclos):
+    ciclos = list(ciclos)
+    cycle_ids = [ciclo.pk for ciclo in ciclos]
+    total_active = Indicador.objects.filter(activo=True).count()
+    scope_counts = {
+        item["ciclo_id"]: item["total"]
+        for item in RolIndicador.objects.filter(ciclo_id__in=cycle_ids, activo=True)
+        .values("ciclo_id")
+        .annotate(total=Count("indicador_id", distinct=True))
+    }
+    for ciclo in ciclos:
+        selected_count = scope_counts.get(ciclo.pk)
+        ciclo.selected_indicators_count = selected_count
+        ciclo.indicator_scope_label = (
+            "Todos"
+            if selected_count is None
+            else f"{selected_count} de {total_active}"
+        )
+    return ciclos
+
+
+def get_indicator_selection_tree(*, selected_indicator_ids=None):
+    selected_ids = {
+        int(item)
+        for item in (selected_indicator_ids or [])
+        if str(item).strip().isdigit()
+    }
+    indicadores = (
+        Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador")
+        .filter(
+            activo=True,
+            subcriterio__activo=True,
+            subcriterio__criterio__activo=True,
+        )
+        .order_by(
+            "subcriterio__criterio__orden_visual",
+            "subcriterio__criterio__codigo_criterio",
+            "subcriterio__orden_visual",
+            "subcriterio__codigo_subcriterio",
+            "orden_visual",
+            "codigo_indicador",
+        )
+    )
+    criteria = OrderedDict()
+    total_indicators = 0
+    total_selected = 0
+    for indicador in indicadores:
+        criterio = indicador.subcriterio.criterio
+        subcriterio = indicador.subcriterio
+        is_selected = indicador.pk in selected_ids
+        total_indicators += 1
+        total_selected += 1 if is_selected else 0
+        criterion_node = criteria.setdefault(
+            criterio.pk,
+            {
+                "criterio": criterio,
+                "subcriteria": OrderedDict(),
+                "indicators_total": 0,
+                "selected_total": 0,
+            },
+        )
+        subcriterion_node = criterion_node["subcriteria"].setdefault(
+            subcriterio.pk,
+            {
+                "subcriterio": subcriterio,
+                "indicators": [],
+                "indicators_total": 0,
+                "selected_total": 0,
+            },
+        )
+        indicator_node = {
+            "indicador": indicador,
+            "selected": is_selected,
+        }
+        subcriterion_node["indicators"].append(indicator_node)
+        subcriterion_node["indicators_total"] += 1
+        subcriterion_node["selected_total"] += 1 if is_selected else 0
+        criterion_node["indicators_total"] += 1
+        criterion_node["selected_total"] += 1 if is_selected else 0
+
+    groups = []
+    for criterion_node in criteria.values():
+        criterion_node["subcriteria"] = list(criterion_node["subcriteria"].values())
+        groups.append(criterion_node)
+    return {
+        "groups": groups,
+        "total_indicators": total_indicators,
+        "selected_total": total_selected,
+    }
+
+
+def get_caces_model_catalog_preview():
+    from apps.evaluacion.models import ModeloIndicadorCaces
+
+    modelos = list(
+        ModeloIndicadorCaces.objects.filter(activo=True).order_by("numero_modelo")
+    )
+    existing_codes = {
+        code.upper()
+        for code in Indicador.objects.filter(
+            codigo_indicador__in=[modelo.codigo_modelo for modelo in modelos]
+        ).values_list("codigo_indicador", flat=True)
+    }
+    criteria = OrderedDict()
+    for modelo in modelos:
+        criterio_nombre = (modelo.criterio or "Sin criterio").strip()
+        subcriterio_nombre = (modelo.subcriterio or "General").strip()
+        criterion_node = criteria.setdefault(
+            criterio_nombre,
+            {
+                "nombre": criterio_nombre,
+                "subcriteria": OrderedDict(),
+                "indicators_total": 0,
+            },
+        )
+        subcriterion_node = criterion_node["subcriteria"].setdefault(
+            subcriterio_nombre,
+            {
+                "nombre": subcriterio_nombre,
+                "indicators": [],
+                "indicators_total": 0,
+            },
+        )
+        exists = (modelo.codigo_modelo or "").upper() in existing_codes
+        indicator_node = {
+            "codigo": modelo.codigo_modelo,
+            "nombre": modelo.nombre_indicador,
+            "tipo": modelo.tipo_evaluacion,
+            "ponderacion": modelo.ponderacion_a,
+            "exists": exists,
+        }
+        subcriterion_node["indicators"].append(indicator_node)
+        subcriterion_node["indicators_total"] += 1
+        criterion_node["indicators_total"] += 1
+
+    groups = []
+    for criterion_node in criteria.values():
+        criterion_node["subcriteria"] = list(criterion_node["subcriteria"].values())
+        groups.append(criterion_node)
+
+    return {
+        "groups": groups,
+        "summary": {
+            "modelos": len(modelos),
+            "criterios": len(groups),
+            "subcriterios": sum(len(group["subcriteria"]) for group in groups),
+            "indicadores_existentes": sum(
+                1
+                for group in groups
+                for subcriterion in group["subcriteria"]
+                for indicator in subcriterion["indicators"]
+                if indicator["exists"]
+            ),
+            "indicadores_faltantes": sum(
+                1
+                for group in groups
+                for subcriterion in group["subcriteria"]
+                for indicator in subcriterion["indicators"]
+                if not indicator["exists"]
+            ),
+        },
+    }
+
+
 def get_matrix_rows(*, ciclo_id=None):
     rows = []
+    selected_cycle_pk = _coerce_pk(ciclo_id)
+    scope_ids = get_cycle_indicator_scope_ids(selected_cycle_pk)
     indicadores = (
         Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador")
         .prefetch_related(
             Prefetch(
                 "elementos",
-                queryset=ElementoFundamental.objects.select_related("clasificacion").order_by(
+                queryset=ElementoFundamental.objects.order_by(
                     "orden_visual",
                     "codigo_elemento",
                 ),
@@ -140,6 +319,8 @@ def get_matrix_rows(*, ciclo_id=None):
             "codigo_indicador",
         )
     )
+    if scope_ids:
+        indicadores = indicadores.filter(pk__in=scope_ids)
 
     for indicador in indicadores:
         relaciones = getattr(indicador, "matrix_elements", [])
@@ -173,7 +354,6 @@ def get_matrix_rows(*, ciclo_id=None):
         .filter(elemento_fundamental_id__in=element_ids)
         .order_by("elemento_fundamental_id", "-fecha_registro", "-id_registro")
     )
-    selected_cycle_pk = _coerce_pk(ciclo_id)
     if selected_cycle_pk:
         registros = registros.filter(ciclo_id=selected_cycle_pk)
 

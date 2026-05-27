@@ -1,4 +1,4 @@
-from apps.acreditacion.models import ElementoFundamental
+from apps.acreditacion.models import ElementoFundamental, RolIndicador
 from application.services import build_document_drive_path
 from apps.documentos.selectors import (
     attach_cycle_authorization_status,
@@ -54,6 +54,13 @@ def get_current_enabled_cycle():
 
 
 def get_matrix_registration_rows(*, ciclo=None):
+    scope_ids = set()
+    if ciclo is not None:
+        scope_ids = set(
+            RolIndicador.objects.filter(ciclo=ciclo, activo=True)
+            .values_list("indicador_id", flat=True)
+            .distinct()
+        )
     elementos = list(
         ElementoFundamental.objects.select_related(
             "indicador__subcriterio__criterio"
@@ -67,6 +74,8 @@ def get_matrix_registration_rows(*, ciclo=None):
             "codigo_elemento",
         )
     )
+    if scope_ids:
+        elementos = [elemento for elemento in elementos if elemento.indicador_id in scope_ids]
     if ciclo is None or not elementos:
         return []
 

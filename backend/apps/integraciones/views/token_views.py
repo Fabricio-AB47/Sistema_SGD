@@ -61,7 +61,9 @@ def generar_token_view(request, credencial_id):
         return redirect(build_login_redirect_url(request, settings.LOGIN_URL or "/login/"))
 
     session_roles = tuple(request.session.get("sig_roles", []) or [])
-    has_admin_role = any(str(role).strip().lower() == "administrador" for role in session_roles)
+    operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
+    effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
+    has_admin_role = any(str(role).strip().lower() == "administrador" for role in effective_roles)
     if not has_admin_role:
         messages.error(request, "Solo los usuarios con rol ADMINISTRADOR pueden acceder a esta opcion.")
         return redirect("core-dashboard")

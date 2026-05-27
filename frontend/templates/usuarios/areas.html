@@ -28,10 +28,10 @@
         {{ area_form.nombre_area }}
         {{ area_form.nombre_area.errors }}
       </div>
-      <div class="form-check">
+      <label class="form-check">
         {{ area_form.activo }} <span>Activo</span>
-        {{ area_form.activo.errors }}
-      </div>
+      </label>
+      {{ area_form.activo.errors }}
 
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">Guardar area</button>

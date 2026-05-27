@@ -1,0 +1,383 @@
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+{% with indicador=detail.indicador %}
+  <section class="acreditacion-toolbar card">
+    <div>
+      <strong>{{ selected_cycle.nombre }}</strong>
+      <div class="text-muted">{{ indicador.codigo_indicador }} - {{ indicador.nombre_indicador }}</div>
+    </div>
+    <div class="acreditacion-panel__actions">
+      <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?panel=caces&ciclo={{ selected_cycle.pk }}&tipo={{ detail.indicator_type }}">Bandeja</a>
+      <a class="btn btn-secondary" href="{% url 'evaluacion-caces-ciclo' %}?ciclo={{ selected_cycle.pk }}">Volver a matriz</a>
+      <a class="btn btn-secondary" href="{% url 'evaluacion-caces-reporte' %}?ciclo={{ selected_cycle.pk }}">Reporte final</a>
+    </div>
+  </section>
+
+  <div class="acreditacion-detail-grid">
+    <article class="card acreditacion-panel">
+      <h3>Indicador</h3>
+      <dl class="acreditacion-detail-list">
+        <div><dt>Codigo</dt><dd>{{ indicador.codigo_indicador }}</dd></div>
+        <div><dt>Tipo de indicador</dt><dd>{{ detail.indicator_type }}</dd></div>
+        <div><dt>Criterio</dt><dd>{{ indicador.subcriterio.criterio.codigo_criterio }} - {{ indicador.subcriterio.criterio.nombre_criterio }}</dd></div>
+        <div><dt>Subcriterio</dt><dd>{{ indicador.subcriterio.codigo_subcriterio }} - {{ indicador.subcriterio.nombre_subcriterio }}</dd></div>
+        <div><dt>Elementos visibles</dt><dd>{{ detail.elements_data|length }}</dd></div>
+      </dl>
+      {% if detail.mapping_warning %}
+        <span class="acreditacion-status acreditacion-status--warning">{{ detail.mapping_warning }}</span>
+      {% endif %}
+    </article>
+
+    <article class="card acreditacion-panel">
+      <h3>Modelo CACES</h3>
+      {% if detail.modelo %}
+        <dl class="acreditacion-detail-list">
+          <div><dt>Modelo</dt><dd>{{ detail.modelo.codigo_modelo }}</dd></div>
+          <div><dt>Indicador oficial</dt><dd>{{ detail.modelo.nombre_indicador }}</dd></div>
+          <div><dt>Tipo CACES</dt><dd>{{ detail.modelo.tipo_evaluacion }}</dd></div>
+          <div><dt>Ponderacion A</dt><dd>{{ detail.modelo.ponderacion_a }}</dd></div>
+        </dl>
+      {% else %}
+        <p class="text-muted">Sin mapeo configurado.</p>
+      {% endif %}
+    </article>
+
+    <article class="card acreditacion-panel">
+      <h3>Resultado</h3>
+      {% if detail.result %}
+        <dl class="acreditacion-detail-list">
+          <div><dt>Utilidad</dt><dd>{{ detail.result.utilidad }}</dd></div>
+          <div><dt>Ponderacion</dt><dd>{{ detail.result.ponderacion }}</dd></div>
+          <div><dt>Aporte</dt><dd>{{ detail.result.aporte }}</dd></div>
+          <div><dt>Resultado</dt><dd>{{ detail.result.resultado_porcentaje }}%</dd></div>
+          {% if detail.result.valor_calculado %}
+            <div><dt>Valor calculado</dt><dd>{{ detail.result.valor_calculado }}</dd></div>
+          {% endif %}
+        </dl>
+      {% else %}
+        <p class="text-muted">Sin resultado registrado.</p>
+      {% endif %}
+    </article>
+  </div>
+
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Elementos y evidencias</h3>
+        <p class="text-muted">Clasificacion de elemento y documentos cargados para el ciclo.</p>
+      </div>
+      <span class="acreditacion-status acreditacion-status--info">{{ detail.coverage.porcentaje_cobertura }}% cobertura</span>
+    </div>
+    <div class="table-responsive">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Elemento fundamental</th>
+            <th>Clasificacion del elemento</th>
+            <th>Documento</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in detail.elements_data %}
+            <tr>
+              <td>
+                <strong>{{ item.elemento.codigo_elemento }} - {{ item.elemento.nombre_elemento }}</strong>
+                <div class="text-muted">{{ item.elemento.medio_verificacion|default:"--" }}</div>
+              </td>
+              <td><span class="acreditacion-status acreditacion-status--info">{{ item.elemento.tipo_elemento }}</span></td>
+              <td>
+                {% if item.latest_registro %}
+                  {{ item.latest_registro.documento.nombre_archivo }}
+                {% else %}
+                  --
+                {% endif %}
+              </td>
+              <td>
+                {% if item.latest_registro %}
+                  <span class="acreditacion-status acreditacion-status--success">{{ item.latest_registro.estado.descripcion }}</span>
+                {% else %}
+                  <span class="acreditacion-status acreditacion-status--warning">Falta cargar</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="text-center text-muted">No existen elementos visibles para este rol.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  {% if detail.is_qualitative %}
+    <article class="card acreditacion-panel acreditacion-panel--wide">
+      <div class="acreditacion-panel__header">
+        <div>
+          <h3>Formulario cualitativo</h3>
+          <p class="text-muted">Categoria CACES y observaciones de evaluacion.</p>
+        </div>
+      </div>
+      <form method="post" class="acreditacion-form caces-evaluation-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="save_qualitative">
+        <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
+        <input type="hidden" name="indicador" value="{{ indicador.pk }}">
+        {{ qualitative_form.non_field_errors }}
+        <div class="caces-category-grid">
+          {% for option in detail.qualitative_options %}
+            <label class="caces-category-option caces-category-option--calculated">
+              <input
+                type="radio"
+                name="{{ qualitative_form.categoria.html_name }}"
+                id="id_{{ qualitative_form.categoria.html_name }}_{{ forloop.counter0 }}"
+                value="{{ option.category.pk }}"
+                data-caces-category-input
+                data-utility="{{ option.utilidad }}"
+                data-ponderacion="{{ detail.ponderacion_referencial }}"
+                data-aporte="{{ option.aporte_estimado }}"
+                {% if qualitative_form.categoria.value|stringformat:"s" == option.category.pk|stringformat:"s" %}checked{% endif %}
+              >
+              <span class="caces-category-option__content">
+                <strong>{{ option.category.nombre }}</strong>
+                <small>{{ option.category.codigo }}</small>
+                <span class="caces-category-option__metric">Utilidad {{ option.utilidad }} - Aporte {{ option.aporte_estimado }}</span>
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+        {{ qualitative_form.categoria.errors }}
+        <div class="caces-calculation-preview" data-caces-qualitative-preview>
+          <div>
+            <span>Utilidad</span>
+            <strong data-caces-preview-utilidad>{{ detail.result.utilidad|default:"--" }}</strong>
+          </div>
+          <div>
+            <span>Ponderacion</span>
+            <strong data-caces-preview-ponderacion>{{ detail.result.ponderacion|default:detail.ponderacion_referencial }}</strong>
+          </div>
+          <div>
+            <span>Aporte calculado</span>
+            <strong data-caces-preview-aporte>{{ detail.result.aporte|default:"--" }}</strong>
+          </div>
+        </div>
+        <label class="acreditacion-form__field acreditacion-form__field--full">
+          <span>{{ qualitative_form.observacion.label }}</span>
+          {{ qualitative_form.observacion }}
+          {{ qualitative_form.observacion.errors }}
+        </label>
+        <div class="acreditacion-form__actions">
+          <button class="btn btn-primary" type="submit">Calcular evaluacion cualitativa</button>
+        </div>
+      </form>
+    </article>
+  {% elif detail.is_quantitative %}
+    <div class="acreditacion-content-grid">
+      <article class="card acreditacion-panel">
+        <div class="acreditacion-panel__header">
+          <div>
+            <h3>Variables cuantitativas</h3>
+            {% if detail.formula %}
+              <p class="text-muted">{{ detail.formula.codigo_formula }} = {{ detail.formula.expresion_formula }}</p>
+            {% endif %}
+          </div>
+        </div>
+        {% if detail.variables_context.warning %}
+          <span class="acreditacion-status acreditacion-status--warning">{{ detail.variables_context.warning }}</span>
+        {% endif %}
+        <form method="post" class="acreditacion-form caces-evaluation-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_variables">
+          <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
+          <input type="hidden" name="indicador" value="{{ indicador.pk }}">
+          {{ variables_form.non_field_errors }}
+          {% if variables_form.variable_rows %}
+            <div class="caces-category-grid caces-category-grid--variables">
+              {% for row in variables_form.variable_rows %}
+                <label class="caces-category-option caces-category-option--calculated caces-variable-option">
+                  {{ row.select }}
+                  <span class="caces-category-option__content">
+                    <strong>{{ row.variable.codigo_variable }}</strong>
+                    <small>{{ row.variable.nombre_variable }}</small>
+                    <span class="caces-category-option__metric">Valor actual {{ row.current_value|default:"--" }}</span>
+                    {% if row.required %}
+                      <span class="acreditacion-status acreditacion-status--warning">Obligatoria</span>
+                    {% endif %}
+                    {% if row.variable.descripcion %}
+                      <span>{{ row.variable.descripcion }}</span>
+                    {% endif %}
+                    <span class="caces-variable-option__field">
+                      {{ row.value }}
+                      {{ row.value.errors }}
+                    </span>
+                  </span>
+                </label>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted">No hay variables configuradas para esta formula.</p>
+          {% endif %}
+          <label class="acreditacion-form__field acreditacion-form__field--full">
+            <span>{{ variables_form.observacion.label }}</span>
+            {{ variables_form.observacion }}
+            {{ variables_form.observacion.errors }}
+          </label>
+          <div class="acreditacion-form__actions">
+            <button class="btn btn-primary" type="submit">Guardar variables seleccionadas</button>
+          </div>
+        </form>
+      </article>
+
+      <article class="card acreditacion-panel">
+        <div class="acreditacion-panel__header">
+          <div>
+            <h3>Formulario cuantitativo</h3>
+            <p class="text-muted">Selecciona ponderacion, registra variables y calcula utilidad, ponderacion y aporte.</p>
+          </div>
+        </div>
+        <form method="post" class="acreditacion-form caces-evaluation-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="calculate_quantitative">
+          <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
+          <input type="hidden" name="indicador" value="{{ indicador.pk }}">
+          {% if detail.ponderacion_options %}
+            <label class="acreditacion-form__field acreditacion-form__field--full caces-weight-select">
+              <span>Ponderacion CACES</span>
+              <select name="codigo_escenario" data-caces-weight-select>
+                {% for option in detail.ponderacion_options %}
+                  <option
+                    value="{{ option.code }}"
+                    data-weight="{{ option.ponderacion }}"
+                    {% if option.selected %}selected{% endif %}
+                  >
+                    {{ option.code }} - {{ option.nombre }} ({{ option.ponderacion }})
+                  </option>
+                {% endfor %}
+              </select>
+            </label>
+          {% endif %}
+          <div class="caces-calculation-preview" data-caces-quantitative-preview>
+            <div>
+              <span>Valor calculado</span>
+              <strong>{{ detail.result.valor_calculado|default:"--" }}</strong>
+            </div>
+            <div>
+              <span>Utilidad</span>
+              <strong>{{ detail.result.utilidad|default:"--" }}</strong>
+            </div>
+            <div>
+              <span>Ponderacion</span>
+              <strong data-caces-quantitative-weight>{{ detail.result.ponderacion|default:detail.ponderacion_referencial }}</strong>
+            </div>
+            <div>
+              <span>Aporte calculado</span>
+              <strong>{{ detail.result.aporte|default:"--" }}</strong>
+            </div>
+          </div>
+          {% if detail.formula %}
+            <dl class="acreditacion-detail-list caces-formula-detail">
+              <div><dt>Formula</dt><dd>{{ detail.formula.codigo_formula }} = {{ detail.formula.expresion_formula }}</dd></div>
+              <div><dt>Estandar</dt><dd>{{ detail.formula.estandar }}</dd></div>
+              <div><dt>Sentido</dt><dd>{{ detail.formula.sentido_calculo }}</dd></div>
+            </dl>
+          {% endif %}
+          <label class="acreditacion-form__field acreditacion-form__field--full">
+            <span>Observaciones de evaluacion</span>
+            <textarea name="observacion_calculo" rows="3"></textarea>
+          </label>
+          <div class="acreditacion-form__actions">
+            <button class="btn btn-primary" type="submit">Calcular resultado</button>
+          </div>
+        </form>
+
+        <form method="post" class="acreditacion-form caces-evaluation-form caces-evaluation-form--manual">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save_manual">
+          <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
+          <input type="hidden" name="indicador" value="{{ indicador.pk }}">
+          <input type="hidden" name="codigo_escenario" value="{{ detail.escenario_ponderacion }}" data-caces-weight-hidden>
+          {{ manual_form.non_field_errors }}
+          <label class="acreditacion-form__field">
+            <span>{{ manual_form.valor_calculado.label }}</span>
+            {{ manual_form.valor_calculado }}
+            {{ manual_form.valor_calculado.errors }}
+          </label>
+          <label class="acreditacion-form__field acreditacion-form__field--full">
+            <span>{{ manual_form.observacion.label }}</span>
+            {{ manual_form.observacion }}
+            {{ manual_form.observacion.errors }}
+          </label>
+          <div class="acreditacion-form__actions">
+            <button class="btn btn-secondary" type="submit">Guardar valor manual</button>
+          </div>
+        </form>
+      </article>
+    </div>
+  {% endif %}
+{% endwith %}
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+  (function () {
+    var inputs = document.querySelectorAll("[data-caces-category-input]");
+    if (!inputs.length) {
+      return;
+    }
+
+    var utilityTarget = document.querySelector("[data-caces-preview-utilidad]");
+    var weightTarget = document.querySelector("[data-caces-preview-ponderacion]");
+    var contributionTarget = document.querySelector("[data-caces-preview-aporte]");
+
+    function renderPreview(input) {
+      if (!input) {
+        return;
+      }
+      if (utilityTarget) {
+        utilityTarget.textContent = input.dataset.utility || "--";
+      }
+      if (weightTarget) {
+        weightTarget.textContent = input.dataset.ponderacion || "--";
+      }
+      if (contributionTarget) {
+        contributionTarget.textContent = input.dataset.aporte || "--";
+      }
+    }
+
+    inputs.forEach(function (input) {
+      input.addEventListener("change", function () {
+        renderPreview(input);
+      });
+    });
+
+    renderPreview(document.querySelector("[data-caces-category-input]:checked"));
+  })();
+
+  (function () {
+    var weightSelect = document.querySelector("[data-caces-weight-select]");
+    if (!weightSelect) {
+      return;
+    }
+
+    var weightTargets = document.querySelectorAll("[data-caces-quantitative-weight]");
+    var hiddenTargets = document.querySelectorAll("[data-caces-weight-hidden]");
+
+    function renderWeight() {
+      var option = weightSelect.options[weightSelect.selectedIndex];
+      var weight = option ? option.dataset.weight : "";
+      weightTargets.forEach(function (target) {
+        target.textContent = weight || "--";
+      });
+      hiddenTargets.forEach(function (target) {
+        target.value = weightSelect.value || "A";
+      });
+    }
+
+    weightSelect.addEventListener("change", renderWeight);
+    renderWeight();
+  })();
+</script>
+{% endblock %}

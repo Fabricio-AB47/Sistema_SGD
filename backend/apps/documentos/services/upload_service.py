@@ -1,5 +1,7 @@
 import hashlib
 import mimetypes
+import re
+import unicodedata
 from pathlib import PurePosixPath
 
 from django.conf import settings
@@ -9,7 +11,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.text import get_valid_filename
 
-from application.services import build_document_drive_path
+from application.services import build_document_drive_path, write_local_mirror_file
 from apps.auditoria.services.auditoria_service import registrar_evento
 from apps.documentos.models import Documento, DocumentoAccesoLog, VersionDocumento
 from apps.documentos.selectors import cycle_allows_document_upload
@@ -23,6 +25,95 @@ class StructuredDocumentUploadError(Exception):
 def _safe_file_name(filename: str) -> str:
     clean_name = get_valid_filename(PurePosixPath(filename or "documento").name)
     return clean_name or "documento"
+
+
+def _file_token(value: str | None, *, fallback: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
+    raw_value = ascii_value.strip().upper().replace(" ", "_")
+    clean_value = re.sub(r"[^A-Z0-9_-]+", "_", raw_value).strip("_")
+    return clean_value or fallback
+
+
+def _indicator_initials(indicador) -> str:
+    initials = _initials_from_text(getattr(indicador, "nombre_indicador", None))
+    if initials:
+        return initials[:12]
+    return _file_token(getattr(indicador, "codigo_indicador", None), fallback="IND")
+
+
+def _initials_from_text(value: str | None, *, ignore_numbers: bool = False) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_name = normalized.encode("ascii", "ignore").decode("ascii").upper()
+    words = re.findall(r"[A-Z0-9]+", ascii_name)
+    stopwords = {
+        "A",
+        "AL",
+        "CICLO",
+        "CON",
+        "DE",
+        "DEL",
+        "E",
+        "EL",
+        "EN",
+        "LA",
+        "LAS",
+        "LOS",
+        "O",
+        "PARA",
+        "POR",
+        "U",
+        "Y",
+    }
+    return "".join(
+        word[0]
+        for word in words
+        if word not in stopwords and not (ignore_numbers and word.isdigit())
+    )
+
+
+def _cycle_initials(ciclo) -> str:
+    initials = _initials_from_text(getattr(ciclo, "nombre", None), ignore_numbers=True)
+    return initials[:8] or "CE"
+
+
+def _element_relation_number(elemento) -> str:
+    codigo = str(getattr(elemento, "codigo_elemento", "") or "").strip()
+    match = re.search(r"(\d+)$", codigo)
+    if match:
+        return match.group(1)
+
+    orden_visual = getattr(elemento, "orden_visual", None)
+    if orden_visual not in (None, ""):
+        try:
+            return f"{int(orden_visual):02d}"
+        except (TypeError, ValueError):
+            pass
+
+    elemento_id = getattr(elemento, "pk", None)
+    return str(elemento_id or "00")
+
+
+def _cycle_year(ciclo) -> str:
+    anio = getattr(ciclo, "anio", None)
+    if anio:
+        return str(anio)
+
+    fecha_inicio = getattr(ciclo, "fecha_inicio", None)
+    if fecha_inicio:
+        return str(fecha_inicio.year)
+
+    return str(timezone.localdate().year)
+
+
+def _structured_evidence_file_name(*, ciclo, indicador, elemento, original_name: str) -> str:
+    indicador_siglas = _indicator_initials(indicador)
+    ciclo_siglas = _cycle_initials(ciclo)
+    elemento_codigo = f"EL{_element_relation_number(elemento)}"
+    extension = PurePosixPath(original_name or "").suffix.lower()
+    return _safe_file_name(
+        f"{indicador_siglas}_{ciclo_siglas}_{elemento_codigo}_{_cycle_year(ciclo)}{extension}"
+    )
 
 
 def _default_description(*, ciclo, indicador, elemento) -> str:
@@ -64,6 +155,7 @@ def _build_payload(
     uploaded_file,
     actor,
     storage_path: PurePosixPath,
+    file_name: str,
     content: bytes,
     graph_item: dict | None,
 ):
@@ -78,9 +170,11 @@ def _build_payload(
     return {
         "descripcion_documento": descripcion_documento
         or _default_description(ciclo=ciclo, indicador=indicador, elemento=elemento),
-        "nombre_archivo": _safe_file_name(uploaded_file.name),
-        "mime_type": uploaded_file.content_type or mimetypes.guess_type(uploaded_file.name)[0],
-        "extension_archivo": PurePosixPath(uploaded_file.name).suffix.lower()[:15] or None,
+        "nombre_archivo": file_name,
+        "mime_type": uploaded_file.content_type
+        or mimetypes.guess_type(file_name)[0]
+        or mimetypes.guess_type(uploaded_file.name)[0],
+        "extension_archivo": PurePosixPath(file_name).suffix.lower()[:15] or None,
         "tamano_archivo": len(content),
         "ruta_local": storage_path.as_posix(),
         "hash_documento": document_hash,
@@ -149,7 +243,12 @@ def upload_structured_document(
         raise StructuredDocumentUploadError(
             f"No fue posible validar la carpeta Graph para {drive_folder.as_posix()}."
         )
-    file_name = _safe_file_name(uploaded_file.name)
+    file_name = _structured_evidence_file_name(
+        ciclo=ciclo,
+        indicador=indicador,
+        elemento=elemento_fundamental,
+        original_name=uploaded_file.name,
+    )
     storage_path = drive_folder / file_name
 
     graph_item = graph_service.upload_file(
@@ -161,6 +260,7 @@ def upload_structured_document(
         payload=graph_payload,
         access_token=graph_access_token,
     )
+    local_mirror_path = write_local_mirror_file(storage_path, content)
 
     payload = _build_payload(
         ciclo=ciclo,
@@ -171,6 +271,7 @@ def upload_structured_document(
         uploaded_file=uploaded_file,
         actor=actor,
         storage_path=storage_path,
+        file_name=file_name,
         content=content,
         graph_item=graph_item,
     )
@@ -255,6 +356,7 @@ def upload_structured_document(
             "indicador_id": indicador.pk,
             "elemento_id": elemento_fundamental.pk,
             "ruta_drive": (drive_folder / file_name).as_posix(),
+            "ruta_espejo_local": str(local_mirror_path) if local_mirror_path else None,
             "graph_item_id": (graph_item or {}).get("id"),
         },
         criticidad="ALTA",
@@ -264,6 +366,7 @@ def upload_structured_document(
         "documento": documento,
         "version": version,
         "drive_path": storage_path,
+        "local_mirror_path": local_mirror_path,
         "graph_item": graph_item,
         "created": created,
     }

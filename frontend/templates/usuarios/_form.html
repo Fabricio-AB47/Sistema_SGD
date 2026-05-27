@@ -78,10 +78,10 @@
       {{ form.cargo.errors }}
     {% endif %}
   </div>
-  <div class="form-check">
+  <label class="form-check">
     {{ form.activo }} <span>Activo</span>
-    {{ form.activo.errors }}
-  </div>
+  </label>
+  {{ form.activo.errors }}
 
   <div class="form-actions">
     <button type="submit" class="btn btn-primary">Guardar</button>

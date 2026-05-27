@@ -10,6 +10,26 @@ QUALITATIVE_RESULT_CHOICES = (
     ("CUMPLE", "Cumple"),
     ("NO_CUMPLE", "No cumple"),
 )
+QUALITATIVE_RESULT_DETAILS = (
+    {
+        "value": "CUMPLE",
+        "label": "Cumple",
+        "codigo": "CUMPLE",
+        "estado": "APROBADA",
+        "cumplimiento": "100%",
+        "utility": "1,00",
+        "description": "La evidencia cumple con el elemento evaluado.",
+    },
+    {
+        "value": "NO_CUMPLE",
+        "label": "No cumple",
+        "codigo": "NO_CUMPLE",
+        "estado": "RECHAZADA",
+        "cumplimiento": "0%",
+        "utility": "0,00",
+        "description": "La evidencia no cumple con el elemento evaluado.",
+    },
+)
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -74,7 +94,7 @@ class EvaluacionGestionForm(forms.Form):
     comentario = forms.CharField(
         max_length=1000,
         required=False,
-        label="Retroalimentacion",
+        label="Observaciones de evaluacion",
         widget=forms.Textarea(attrs={"rows": 4}),
     )
 
@@ -91,6 +111,15 @@ class EvaluacionGestionForm(forms.Form):
         self.evaluation_mode = (
             "qualitative" if is_qualitative_register(self.registro_for_mode) else "quantitative"
         )
+        selected_result = None
+        if self.is_bound:
+            selected_result = self.data.get(self.add_prefix("resultado_cualitativo"))
+        else:
+            selected_result = self.initial.get("resultado_cualitativo")
+        self.qualitative_result_options = [
+            {**option, "selected": option["value"] == selected_result}
+            for option in QUALITATIVE_RESULT_DETAILS
+        ]
 
     def clean_comentario(self):
         return _normalize_optional_text(self.cleaned_data.get("comentario"))
@@ -112,7 +141,7 @@ class EvaluacionGestionForm(forms.Form):
             if not result:
                 self.add_error("resultado_cualitativo", "Selecciona si cumple o no cumple.")
             if not comentario:
-                self.add_error("comentario", "Registra la retroalimentacion de la evaluacion cualitativa.")
+                self.add_error("comentario", "Registra las observaciones de evaluacion cualitativa.")
 
             estado_description = "APROBADA" if result == "CUMPLE" else "RECHAZADA"
             estado = _estado_by_description(estado_description)

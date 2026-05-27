@@ -6,6 +6,8 @@ from apps.core.models import EstadoEvidencia, EstadoTareaEvidencia
 from apps.documentos.services import upload_structured_document
 from apps.evaluacion.models import TareaEvidencia
 from apps.evaluacion.services.notification_service import queue_evidence_uploaded_email
+from apps.evaluacion.services.revision_service import EvaluacionWorkflowError, habilitar_salida_evaluador
+from apps.evaluacion.services.tareas_service import DIRECTOR_SIGNOFF_TOKEN
 from apps.evidencias.models import RegistroEvidencia
 from apps.usuarios.models import UsuarioAreaCargo, UsuarioRol
 
@@ -169,6 +171,64 @@ def _close_task_after_upload(*, tarea, actor, comentario, request=None):
     return True
 
 
+def _signoff_task_after_director_upload(*, tarea, actor, comentario, request=None):
+    if tarea is None:
+        return False
+
+    timestamp = timezone.now()
+    previous_payload = {
+        "estado": getattr(getattr(tarea, "estado", None), "descripcion", None),
+        "fecha_cierre": tarea.fecha_cierre.isoformat() if tarea.fecha_cierre else None,
+        "resultado_tarea": tarea.resultado_tarea,
+        "observacion": tarea.observacion,
+        "asignado_por_id": tarea.asignado_por_id,
+    }
+
+    actor_name = getattr(actor, "nombre_completo", None) or getattr(actor, "correo", "Director")
+    note = (
+        f"[{DIRECTOR_SIGNOFF_TOKEN}] Aprobacion interna por carga directa del director "
+        f"{actor_name} el {timestamp.strftime('%Y-%m-%d %H:%M')}"
+    )
+    extra_note = " ".join((comentario or "").strip().split())
+    if extra_note:
+        note = f"{note}. Comentario: {extra_note}"
+
+    update_fields = ["observacion", "asignado_por"]
+    if not tarea.fecha_cierre:
+        tarea.fecha_cierre = timestamp
+        tarea.resultado_tarea = (extra_note or "Evidencia cargada y aprobada internamente por el director.")[:1000]
+        update_fields.extend(["fecha_cierre", "resultado_tarea"])
+
+    tarea.observacion = "\n".join(part for part in [tarea.observacion, note] if part)
+    tarea.asignado_por = actor
+
+    estado_revision = _resolve_task_state("REVISADA", "APROBADA", "CERRADA")
+    if estado_revision is not None:
+        tarea.estado = estado_revision
+        update_fields.append("estado")
+    tarea.save(update_fields=list(dict.fromkeys(update_fields)))
+
+    registrar_evento(
+        accion="APROBACION_INTERNA_DIRECTOR_CARGA",
+        descripcion=f"Se aprobo internamente la tarea {tarea.pk} por carga directa del director.",
+        usuario=actor,
+        tipo_evento="EVALUACION",
+        tabla_afectada="tarea_evidencia",
+        id_registro=tarea.pk,
+        valores_anteriores=previous_payload,
+        valores_nuevos={
+            "estado": getattr(getattr(tarea, "estado", None), "descripcion", None),
+            "fecha_cierre": tarea.fecha_cierre.isoformat() if tarea.fecha_cierre else None,
+            "resultado_tarea": tarea.resultado_tarea,
+            "observacion": tarea.observacion,
+            "asignado_por_id": tarea.asignado_por_id,
+        },
+        criticidad="MEDIA",
+        request=request,
+    )
+    return True
+
+
 @transaction.atomic
 def register_matrix_evidence(
     *,
@@ -195,10 +255,11 @@ def register_matrix_evidence(
         elemento_fundamental=elemento_fundamental,
         actor=actor,
     )
-    requires_director_check = not _actor_can_mark_evidence_uploaded(
+    can_mark_uploaded = _actor_can_mark_evidence_uploaded(
         actor=actor,
         tarea=related_task,
     )
+    requires_director_check = not can_mark_uploaded
     estado = _get_internal_review_status() if requires_director_check else _get_default_evidence_status()
     if estado is None:
         raise MatrixEvidenceRegistrationError(
@@ -265,6 +326,28 @@ def register_matrix_evidence(
         comentario=comentario or descripcion_documento,
         request=request,
     )
+    auto_approved_by_director = False
+    auto_release_result = None
+    if can_mark_uploaded and related_task is not None:
+        auto_approved_by_director = _signoff_task_after_director_upload(
+            tarea=related_task,
+            actor=actor,
+            comentario=comentario or descripcion_documento,
+            request=request,
+        )
+        if auto_approved_by_director:
+            try:
+                auto_release_result = habilitar_salida_evaluador(
+                    registro=registro,
+                    actor=actor,
+                    allow_reassign=True,
+                    require_actor_approver=not _actor_has_admin_role(actor),
+                    request=request,
+                )
+            except (EvaluacionWorkflowError, ValueError) as exc:
+                raise MatrixEvidenceRegistrationError(
+                    "La evidencia se cargo, pero no pudo enviarse automaticamente al evaluador."
+                ) from exc
 
     registrar_evento(
         accion="REGISTRAR_EVIDENCIA_MATRIZ",
@@ -288,6 +371,9 @@ def register_matrix_evidence(
             "requiere_visto_bueno_director": requires_director_check,
             "tarea_id": getattr(related_task, "pk", None),
             "tarea_cerrada": task_closed,
+            "aprobacion_interna_director": auto_approved_by_director,
+            "salida_evaluador_automatica": bool(auto_release_result),
+            "salida_evaluador_estado": auto_release_result["status"] if auto_release_result else None,
         },
         criticidad="ALTA",
         request=request,
@@ -305,4 +391,7 @@ def register_matrix_evidence(
         "documento": upload_result["documento"],
         "version": upload_result["version"],
         "created": created,
+        "auto_approved_by_director": auto_approved_by_director,
+        "auto_sent_to_evaluator": bool(auto_release_result),
+        "requires_director_check": requires_director_check,
     }

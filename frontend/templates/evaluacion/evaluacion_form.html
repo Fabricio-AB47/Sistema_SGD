@@ -41,6 +41,24 @@
             <strong>{{ registro.documento.nombre_archivo }}</strong>
             <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' registro.documento.pk %}" target="_blank" rel="noopener">Observar documento</a>
           </div>
+          <div class="evaluacion-selected-record__facts">
+            <div>
+              <span>Registro</span>
+              <strong>#{{ registro.pk }}</strong>
+            </div>
+            <div>
+              <span>Ciclo</span>
+              <strong>{{ registro.ciclo.nombre }}</strong>
+            </div>
+            <div>
+              <span>Clasificacion</span>
+              <strong>{{ registro.elemento_fundamental.tipo_elemento }}</strong>
+            </div>
+            <div>
+              <span>Estado evidencia</span>
+              <strong>{{ registro.estado.descripcion }}</strong>
+            </div>
+          </div>
         </div>
       {% endif %}
       <div class="ciclos-form-grid">
@@ -51,8 +69,49 @@
         </div>
         {% if evaluation_mode == "qualitative" %}
           <div class="acreditacion-form__field acreditacion-form__field--full evaluacion-qualitative-result">
-            <label>{{ form.resultado_cualitativo.label }}</label>
-            {{ form.resultado_cualitativo }}
+            <div class="evaluacion-qualitative-panel">
+              <div>
+                <h4>Formulario cualitativo</h4>
+                <p class="text-muted">Califica el cumplimiento de la evidencia seleccionada.</p>
+              </div>
+              <div class="caces-category-grid evaluacion-qualitative-grid">
+                {% for option in form.qualitative_result_options %}
+                  <label class="caces-category-option caces-category-option--calculated">
+                    <input
+                      type="radio"
+                      name="{{ form.resultado_cualitativo.html_name }}"
+                      id="id_{{ form.resultado_cualitativo.html_name }}_{{ forloop.counter0 }}"
+                      value="{{ option.value }}"
+                      data-evaluacion-qualitative-input
+                      data-result="{{ option.label }}"
+                      data-status="{{ option.estado }}"
+                      data-compliance="{{ option.cumplimiento }}"
+                      {% if option.selected %}checked{% endif %}
+                    >
+                    <span class="caces-category-option__content">
+                      <strong>{{ option.label }}</strong>
+                      <small>{{ option.codigo }}</small>
+                      <span class="caces-category-option__metric">Cumplimiento {{ option.cumplimiento }} - Estado {{ option.estado }}</span>
+                      <span>{{ option.description }}</span>
+                    </span>
+                  </label>
+                {% endfor %}
+              </div>
+              <div class="caces-calculation-preview evaluacion-qualitative-preview">
+                <div>
+                  <span>Resultado</span>
+                  <strong data-evaluacion-preview-result>--</strong>
+                </div>
+                <div>
+                  <span>Cumplimiento</span>
+                  <strong data-evaluacion-preview-compliance>--</strong>
+                </div>
+                <div>
+                  <span>Estado final</span>
+                  <strong data-evaluacion-preview-status>--</strong>
+                </div>
+              </div>
+            </div>
             {{ form.resultado_cualitativo.errors }}
           </div>
         {% else %}
@@ -87,9 +146,9 @@
       </div>
       <p class="acreditacion-form-guide__text">
         {% if evaluation_mode == "qualitative" %}
-          Este indicador es cualitativo: registra si cumple o no cumple y documenta la retroalimentacion.
+          Este indicador es cualitativo: registra si cumple o no cumple y documenta las observaciones de evaluacion.
         {% else %}
-          Este indicador es cuantitativo: registra la calificacion numerica, el estado final y la retroalimentacion.
+          Este indicador es cuantitativo: registra la calificacion numerica, el estado final y las observaciones de evaluacion.
         {% endif %}
       </p>
     </article>
@@ -130,12 +189,12 @@
     </div>
     <div class="acreditacion-info-dialog__body">
       <p>
-        Si la revision es <strong>cuantitativa</strong>, registra un valor numerico en <strong>Calificacion</strong>, el estado final y la retroalimentacion.
-        Si la revision es <strong>cualitativa</strong>, selecciona <strong>Cumple</strong> o <strong>No cumple</strong> y sustenta la decision en la retroalimentacion.
+        Si la revision es <strong>cuantitativa</strong>, registra un valor numerico en <strong>Calificacion</strong>, el estado final y las observaciones de evaluacion.
+        Si la revision es <strong>cualitativa</strong>, selecciona <strong>Cumple</strong> o <strong>No cumple</strong> y sustenta la decision en las observaciones de evaluacion.
       </p>
       <ul class="acreditacion-form-guide__list">
         <li><strong>Cuantitativa:</strong> calificacion numerica, con observaciones breves si aplica.</li>
-        <li><strong>Cualitativa:</strong> cumple o no cumple, con retroalimentacion obligatoria.</li>
+        <li><strong>Cualitativa:</strong> cumple o no cumple, con observaciones de evaluacion obligatorias.</li>
       </ul>
     </div>
   </div>
@@ -204,6 +263,40 @@
         closeModal();
       }
     });
+  })();
+
+  (function () {
+    const inputs = document.querySelectorAll('[data-evaluacion-qualitative-input]');
+    if (!inputs.length) {
+      return;
+    }
+
+    const resultTarget = document.querySelector('[data-evaluacion-preview-result]');
+    const complianceTarget = document.querySelector('[data-evaluacion-preview-compliance]');
+    const statusTarget = document.querySelector('[data-evaluacion-preview-status]');
+
+    const renderPreview = function (input) {
+      if (!input) {
+        return;
+      }
+      if (resultTarget) {
+        resultTarget.textContent = input.dataset.result || '--';
+      }
+      if (complianceTarget) {
+        complianceTarget.textContent = input.dataset.compliance || '--';
+      }
+      if (statusTarget) {
+        statusTarget.textContent = input.dataset.status || '--';
+      }
+    };
+
+    inputs.forEach(function (input) {
+      input.addEventListener('change', function () {
+        renderPreview(input);
+      });
+    });
+
+    renderPreview(document.querySelector('[data-evaluacion-qualitative-input]:checked'));
   })();
 </script>
 {% endblock %}

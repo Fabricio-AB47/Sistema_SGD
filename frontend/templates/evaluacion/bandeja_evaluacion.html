@@ -1,28 +1,184 @@
 {% extends "evaluacion/_page_base.html" %}
 
 {% block evaluacion_content %}
-<div class="admin-highlights">
-  <article class="admin-highlights__card">
-    <span class="admin-highlights__label">Total en bandeja</span>
-    <strong class="admin-highlights__value">{{ inbox_counts.TODOS|default:0 }}</strong>
+<nav class="acreditacion-tabs evaluacion-workflow-tabs" aria-label="Flujo de evaluacion">
+  {% for option in evaluation_panel_options %}
+    <a class="acreditacion-tabs__link{% if selected_evaluation_panel == option.key %} is-active{% endif %}" href="{{ option.url }}">{{ option.label }}</a>
+  {% endfor %}
+</nav>
+
+{% if selected_evaluation_panel == "caces" %}
+  {% if selected_caces_cycle and caces_matrix %}
+    <section class="acreditacion-toolbar card">
+      <form method="get" class="acreditacion-inline-form">
+        <input type="hidden" name="panel" value="caces">
+        <label class="acreditacion-form__field">
+          <span>Ciclo</span>
+          <select name="ciclo" onchange="this.form.submit()">
+            {% for ciclo in caces_cycles %}
+              <option value="{{ ciclo.pk }}"{% if selected_caces_cycle.pk == ciclo.pk %} selected{% endif %}>{{ ciclo.nombre }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="acreditacion-form__field">
+          <span>Tipo de evaluacion</span>
+          <select name="tipo" onchange="this.form.submit()">
+            {% for value, label in caces_type_options %}
+              <option value="{{ value }}"{% if selected_caces_type == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </form>
+      <div class="acreditacion-panel__actions">
+        <a class="btn btn-secondary" href="{% url 'evaluacion-caces-ciclo' %}?ciclo={{ selected_caces_cycle.pk }}">Matriz completa</a>
+        <a class="btn btn-secondary" href="{% url 'evaluacion-caces-reporte' %}?ciclo={{ selected_caces_cycle.pk }}">Reporte CACES</a>
+      </div>
+    </section>
+
+    <section class="acreditacion-kpis">
+      <article class="acreditacion-kpis__card">
+        <span class="acreditacion-kpis__label">Resultado CACES</span>
+        <strong class="acreditacion-kpis__value">{{ caces_cycle_result.resultado_porcentaje|default:"0.00" }}%</strong>
+      </article>
+      <article class="acreditacion-kpis__card">
+        <span class="acreditacion-kpis__label">Cualitativos</span>
+        <strong class="acreditacion-kpis__value">{{ caces_matrix.summary.qualitative_evaluated_total }} / {{ caces_matrix.summary.qualitative_total }}</strong>
+        <span class="acreditacion-kpis__meta">Ponderacion {{ caces_matrix.summary.qualitative_weight_total }}</span>
+      </article>
+      <article class="acreditacion-kpis__card">
+        <span class="acreditacion-kpis__label">Cuantitativos</span>
+        <strong class="acreditacion-kpis__value">{{ caces_matrix.summary.quantitative_evaluated_total }} / {{ caces_matrix.summary.quantitative_total }}</strong>
+        <span class="acreditacion-kpis__meta">Ponderacion {{ caces_matrix.summary.quantitative_weight_total }}</span>
+      </article>
+      <article class="acreditacion-kpis__card">
+        <span class="acreditacion-kpis__label">Pendientes</span>
+        <strong class="acreditacion-kpis__value">{{ caces_matrix.summary.pending_total }}</strong>
+        <span class="acreditacion-kpis__meta">{{ caces_matrix.summary.evaluation_progress }}% evaluado</span>
+      </article>
+    </section>
+
+    {% for section in caces_matrix.type_sections %}
+      {% if selected_caces_type == "TODOS" or selected_caces_type == section.tipo_evaluacion %}
+        <article class="card acreditacion-panel acreditacion-panel--wide">
+          <div class="acreditacion-panel__header">
+            <div>
+              <h3>{{ section.title }}</h3>
+              <p class="text-muted">
+                {{ section.summary.evaluated }} de {{ section.summary.total }} evaluado(s) - ponderacion {{ section.summary.weight_total }}
+              </p>
+            </div>
+            <span class="acreditacion-status acreditacion-status--info">{{ section.tipo_evaluacion }}</span>
+          </div>
+          <div class="table-responsive">
+            <table class="acreditacion-table caces-matrix-table">
+              <thead>
+                <tr>
+                  <th>Indicador</th>
+                  <th>Evidencias</th>
+                  <th>Utilidad</th>
+                  <th>Ponderacion</th>
+                  <th>Aporte</th>
+                  <th>Estado</th>
+                  <th>Evaluar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for criterion in section.groups %}
+                  <tr class="caces-table-group caces-table-group--criterion">
+                    <td colspan="7">
+                      <span>Criterio</span>
+                      <strong>{{ criterion.criterio.codigo_criterio }} - {{ criterion.criterio.nombre_criterio }}</strong>
+                    </td>
+                  </tr>
+                  {% for subcriterion in criterion.subcriteria %}
+                    <tr class="caces-table-group caces-table-group--subcriterion">
+                      <td colspan="7">
+                        <span>Subcriterio</span>
+                        <strong>{{ subcriterion.subcriterio.codigo_subcriterio }} - {{ subcriterion.subcriterio.nombre_subcriterio }}</strong>
+                      </td>
+                    </tr>
+                    {% for node in subcriterion.indicators %}
+                      <tr>
+                        <td>
+                          <strong>{{ node.indicador.codigo_indicador }} - {{ node.indicador.nombre_indicador }}</strong>
+                          {% if node.modelo %}
+                            <div class="text-muted">{{ node.modelo.codigo_modelo }} | {{ node.modelo.nombre_indicador }}</div>
+                          {% else %}
+                            <div><span class="acreditacion-status acreditacion-status--warning">Sin mapeo CACES</span></div>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {{ node.coverage.elementos_con_evidencia }} / {{ node.coverage.total_elementos }}
+                          <div class="text-muted">{{ node.coverage.porcentaje_cobertura }}%</div>
+                        </td>
+                        <td>{{ node.result.utilidad|default:"--" }}</td>
+                        <td>
+                          {% if node.result %}
+                            {{ node.result.ponderacion }}
+                          {% else %}
+                            {{ node.ponderacion_referencial }}
+                            <div class="text-muted">referencial</div>
+                          {% endif %}
+                        </td>
+                        <td>{{ node.result.aporte|default:"--" }}</td>
+                        <td>
+                          {% if node.result %}
+                            <span class="acreditacion-status acreditacion-status--success">Evaluado</span>
+                          {% else %}
+                            <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          <a class="btn btn-secondary" href="{% url 'evaluacion-caces-indicador' %}?ciclo={{ selected_caces_cycle.pk }}&indicador={{ node.indicador.pk }}">Evaluar</a>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  {% endfor %}
+                {% empty %}
+                  <tr>
+                    <td colspan="7" class="text-center text-muted">No existen indicadores para este tipo de evaluacion.</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    <article class="card acreditacion-panel">
+      <h3>Sin ciclo CACES</h3>
+      <p class="text-muted">No existe un ciclo aprobado o finalizado disponible para evaluacion CACES.</p>
+    </article>
+  {% endif %}
+{% else %}
+<section class="evaluacion-summary" aria-label="Resumen de bandeja de evaluacion">
+  <article class="evaluacion-summary__card evaluacion-summary__card--primary">
+    <div class="evaluacion-summary__header">
+      <span class="evaluacion-summary__label">Cumplimiento total</span>
+      <strong class="evaluacion-summary__value">{{ inbox_summary.total_compliance_label }}%</strong>
+    </div>
+    <div class="evaluacion-summary__progress" aria-hidden="true">
+      <span style="width: {{ inbox_summary.total_compliance_width }}%;"></span>
+    </div>
+    <p>{{ inbox_summary.evaluated_total }} evaluado(s) de {{ inbox_summary.total }} registro(s)</p>
   </article>
-  <article class="admin-highlights__card">
-    <span class="admin-highlights__label">Enviados</span>
-    <strong class="admin-highlights__value">{{ inbox_counts.ENVIADO|default:0 }}</strong>
+  <article class="evaluacion-summary__card">
+    <span class="evaluacion-summary__label">Estructura</span>
+    <strong class="evaluacion-summary__value">{{ inbox_summary.criteria_total }}</strong>
+    <p>{{ inbox_summary.subcriteria_total }} subcriterio(s) | {{ inbox_summary.indicators_total }} indicador(es) | {{ inbox_summary.elements_total }} elemento(s)</p>
   </article>
-  <article class="admin-highlights__card">
-    <span class="admin-highlights__label">Revisados</span>
-    <strong class="admin-highlights__value">{{ inbox_counts.REVISADO|default:0 }}</strong>
+  <article class="evaluacion-summary__card">
+    <span class="evaluacion-summary__label">Total en bandeja</span>
+    <strong class="evaluacion-summary__value">{{ inbox_counts.TODOS|default:0 }}</strong>
+    <p>{{ inbox_counts.ENVIADO|default:0 }} enviado(s) | {{ inbox_counts.PENDIENTE_ASIGNACION|default:0 }} pendiente(s) de asignacion</p>
   </article>
-  <article class="admin-highlights__card">
-    <span class="admin-highlights__label">Aprobados</span>
-    <strong class="admin-highlights__value">{{ inbox_counts.APROBADO|default:0 }}</strong>
+  <article class="evaluacion-summary__card">
+    <span class="evaluacion-summary__label">Revisados</span>
+    <strong class="evaluacion-summary__value">{{ inbox_counts.REVISADO|default:0 }}</strong>
+    <p>{{ inbox_counts.APROBADO|default:0 }} aprobado(s) | {{ inbox_counts.RECHAZADO|default:0 }} rechazado(s)</p>
   </article>
-  <article class="admin-highlights__card">
-    <span class="admin-highlights__label">Rechazados</span>
-    <strong class="admin-highlights__value">{{ inbox_counts.RECHAZADO|default:0 }}</strong>
-  </article>
-</div>
+</section>
 
 <article class="card">
   {% if scope_flags.is_evaluator %}
@@ -30,7 +186,7 @@
   {% endif %}
   <div class="page-header">
     <div>
-      <h2>Bandeja de revision interna</h2>
+      <h2>Bandeja de evaluacion</h2>
       <p class="text-muted">Filtra por estado operativo y utiliza la semaforizacion para priorizar la evaluacion.</p>
     </div>
     <button
@@ -46,84 +202,310 @@
   </div>
 
   <form method="get" class="page-header__actions evaluacion-inbox__filters">
+    <input type="hidden" name="panel" value="evidencias">
+    {% if evidence_cycles %}
+      <label>
+        <span class="text-muted evaluacion-inbox__filter-label">Ciclo</span>
+        <select name="ciclo">
+          {% for ciclo in evidence_cycles %}
+            <option value="{{ ciclo.pk }}" {% if selected_evidence_cycle and selected_evidence_cycle.pk == ciclo.pk %}selected{% endif %}>{{ ciclo.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endif %}
     <label>
       <span class="text-muted evaluacion-inbox__filter-label">Filtro de estado</span>
       <select name="estado">
         {% for option in inbox_filter_options %}
-          <option value="{{ option }}" {% if selected_estado == option %}selected{% endif %}>{{ option|title }}</option>
+          <option value="{{ option.value }}" {% if selected_estado == option.value %}selected{% endif %}>{{ option.label }}</option>
         {% endfor %}
       </select>
     </label>
     <button class="btn btn-secondary" type="submit">Filtrar</button>
   </form>
 
-  <div class="table-responsive">
-    <table class="acreditacion-table">
-      <thead>
-        <tr>
-          <th>Registro</th>
-          <th>Ciclo</th>
-          <th>Indicador</th>
-          <th>Tipo</th>
-          <th>Elemento</th>
-          <th>Estado</th>
-          <th>% Cumplimiento</th>
-          <th>Semaforo</th>
-          <th>Documento</th>
-          <th>Accion</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in registros_pendientes %}
-          <tr>
-            <td>#{{ row.registro.pk }}</td>
-            <td>{{ row.registro.ciclo.nombre }}</td>
-            <td>{{ row.registro.indicador.codigo_indicador }}</td>
-            <td>{{ row.registro.indicador.tipo_indicador.descripcion }}</td>
-            <td>{{ row.registro.elemento_fundamental.codigo_elemento }}</td>
-            <td>
-              {% if row.inbox_state == 'APROBADO' %}
-                <span class="acreditacion-status acreditacion-status--success">APROBADO</span>
-              {% elif row.inbox_state == 'RECHAZADO' %}
-                <span class="acreditacion-status acreditacion-status--danger">RECHAZADO</span>
-              {% elif row.inbox_state == 'REVISADO' %}
-                <span class="acreditacion-status acreditacion-status--warning">REVISADO</span>
-              {% else %}
-                <span class="acreditacion-status acreditacion-status--info">ENVIADO</span>
-              {% endif %}
-            </td>
-            <td>
-              {% if row.porcentaje is not None %}
-                {{ row.porcentaje|floatformat:2 }}%
-              {% else %}
-                --
-              {% endif %}
-            </td>
-            <td>
-              <span class="acreditacion-status {{ row.semaforo_class }}">{{ row.semaforo }}</span>
-            </td>
-            <td>
-              <div class="evaluacion-document-cell">
-                <span>{{ row.registro.documento.nombre_archivo }}</span>
-                <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' row.registro.documento.pk %}" target="_blank" rel="noopener">Observar</a>
-              </div>
-            </td>
-            <td>
-              <div class="page-header__actions">
-                <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ row.registro.pk }}">Detalle</a>
-                <a class="btn btn-secondary" href="{% url 'evaluacion-evaluar' %}?registro={{ row.registro.pk }}">Evaluar</a>
-              </div>
-            </td>
-          </tr>
-        {% empty %}
-          <tr>
-            <td colspan="10" class="text-center text-muted">No existen evidencias para el filtro seleccionado.</td>
-          </tr>
+  {% if criterion_summaries %}
+    <section class="evaluacion-criteria-summary" aria-label="Avance por criterio">
+      <div class="evaluacion-criteria-summary__header">
+        <h3>Avance por criterio</h3>
+        <span>{{ criterion_summaries|length }} criterio(s)</span>
+      </div>
+      <div class="evaluacion-criteria-summary__grid">
+        {% for item in criterion_summaries %}
+          <article class="evaluacion-criteria-summary__item">
+            <div class="evaluacion-criteria-summary__title">
+              <strong>{{ item.codigo }} - {{ item.nombre }}</strong>
+              <span>{{ item.compliance_label }}%</span>
+            </div>
+            <div class="evaluacion-summary__progress" aria-hidden="true">
+              <span style="width: {{ item.compliance_width }}%;"></span>
+            </div>
+            <p>
+              {{ item.evaluated }} de {{ item.total }} evaluado(s) |
+              {{ item.subcriteria_total }} subcriterio(s) |
+              {{ item.indicators_total }} indicador(es) |
+              {{ item.elements_total }} elemento(s)
+            </p>
+          </article>
         {% endfor %}
-      </tbody>
-    </table>
+      </div>
+    </section>
+  {% endif %}
+
+  <div class="acreditacion-matrix acreditacion-matrix--hierarchy evaluacion-matrix">
+    {% for row in registros_pendientes %}
+      {% ifchanged row.criterio.pk %}
+        <div class="acreditacion-matrix__group acreditacion-matrix__group--criterion">
+          <span>Criterio</span>
+          <strong>{{ row.criterio.codigo_criterio }} - {{ row.criterio.nombre_criterio }}</strong>
+        </div>
+      {% endifchanged %}
+      {% ifchanged row.subcriterio.pk %}
+        <div class="acreditacion-matrix__group acreditacion-matrix__group--subcriterion">
+          <span>Subcriterio</span>
+          <strong>{{ row.subcriterio.codigo_subcriterio }} - {{ row.subcriterio.nombre_subcriterio }}</strong>
+        </div>
+      {% endifchanged %}
+      {% ifchanged row.indicador.pk %}
+        <div class="acreditacion-matrix__group acreditacion-matrix__group--indicator">
+          <span>Indicador</span>
+          <strong class="evaluacion-indicator-title">
+            {{ row.indicador.codigo_indicador }} - {{ row.indicador.nombre_indicador }}
+            <span class="evaluacion-meta-pill">{{ row.indicador.tipo_indicador.descripcion }}</span>
+          </strong>
+        </div>
+        <div class="acreditacion-matrix__header">
+          <span>Elemento fundamental</span>
+          <span>Clasificacion de elemento</span>
+          <span>Estado</span>
+          <span>{% if row.resultado_kind == "qualitative" %}Cumplimiento{% else %}% Cumplimiento{% endif %}</span>
+          <span>Semaforo</span>
+          <span>Documento</span>
+          <span>Accion</span>
+        </div>
+      {% endifchanged %}
+      <div class="acreditacion-matrix__row">
+        <span class="evaluacion-element-cell">
+          {% if row.elemento %}
+            <span class="evaluacion-element-cell__title">
+              {{ row.elemento.codigo_elemento }} - {{ row.elemento.nombre_elemento }}
+            </span>
+            <span class="evaluacion-element-cell__meta">
+              {% if row.registro %}
+                <small>#{{ row.registro.pk }} | {{ row.registro.ciclo.nombre }}</small>
+              {% elif selected_evidence_cycle %}
+                <small>{{ selected_evidence_cycle.nombre }}</small>
+              {% else %}
+                <small>Sin ciclo seleccionado</small>
+              {% endif %}
+            </span>
+          {% else %}
+            <span class="evaluacion-element-cell__title">Pendiente de asignacion</span>
+            <span class="evaluacion-element-cell__meta">
+              <small>Indicador sin elemento fundamental asignado</small>
+            </span>
+          {% endif %}
+        </span>
+        <span class="evaluacion-classification-cell">
+          {% if row.elemento %}
+            <span class="evaluacion-meta-pill">{{ row.elemento.tipo_elemento }}</span>
+          {% else %}
+            <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
+          {% endif %}
+        </span>
+        <span>
+          {% if row.inbox_state == 'PENDIENTE_ASIGNACION' %}
+            <span class="acreditacion-status acreditacion-status--warning">PENDIENTE DE ASIGNACION</span>
+          {% elif row.inbox_state == 'APROBADO' %}
+            <span class="acreditacion-status acreditacion-status--success">APROBADO</span>
+          {% elif row.inbox_state == 'RECHAZADO' %}
+            <span class="acreditacion-status acreditacion-status--danger">RECHAZADO</span>
+          {% elif row.inbox_state == 'REVISADO' %}
+            <span class="acreditacion-status acreditacion-status--warning">REVISADO</span>
+          {% else %}
+            <span class="acreditacion-status acreditacion-status--info">ENVIADO</span>
+          {% endif %}
+        </span>
+        <span>
+          {% if row.resultado == "--" %}
+            --
+          {% else %}
+            <span class="acreditacion-status {{ row.resultado_class }}">{{ row.resultado }}</span>
+          {% endif %}
+        </span>
+        <span><span class="acreditacion-status {{ row.semaforo_class }}">{{ row.semaforo }}</span></span>
+        <span class="evaluacion-document-cell">
+          {% if row.registro %}
+            <span>{{ row.registro.documento.nombre_archivo }}</span>
+            <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' row.registro.documento.pk %}" target="_blank" rel="noopener">Observar</a>
+          {% else %}
+            <span class="acreditacion-status acreditacion-status--warning">Pendiente de asignacion</span>
+          {% endif %}
+        </span>
+        <span class="acreditacion-row-actions">
+          {% if row.registro %}
+            <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ row.registro.pk }}">Detalle</a>
+            <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?panel=evidencias&estado={{ selected_estado }}{% if selected_evidence_cycle %}&ciclo={{ selected_evidence_cycle.pk }}{% endif %}&registro={{ row.registro.pk }}&modal=evaluar">Evaluar</a>
+          {% else %}
+            <span class="acreditacion-status acreditacion-status--warning">Pendiente de asignacion</span>
+          {% endif %}
+        </span>
+      </div>
+    {% empty %}
+      <div class="acreditacion-matrix__row">
+        <span>No existen evidencias para el filtro seleccionado.</span>
+        <span>--</span>
+        <span>--</span>
+        <span>--</span>
+        <span>--</span>
+        <span>--</span>
+        <span>--</span>
+      </div>
+    {% endfor %}
   </div>
 </article>
+
+{% if show_evaluation_modal and selected_evaluation_record %}
+<div class="acreditacion-info-modal acreditacion-upload-modal" id="evaluacion-bandeja-dialog" aria-labelledby="evaluacion-bandeja-dialog-title">
+  <a class="acreditacion-info-modal__overlay" href="{{ close_evaluation_url }}" aria-label="Cerrar evaluacion"></a>
+  <div class="acreditacion-info-dialog acreditacion-upload-dialog evaluacion-modal-dialog" role="dialog" aria-modal="true">
+    <div class="acreditacion-info-dialog__header">
+      <div>
+        <span class="acreditacion-pill">Evaluacion</span>
+        <h3 id="evaluacion-bandeja-dialog-title">Cargar informacion de evaluacion</h3>
+      </div>
+      <a class="acreditacion-info-dialog__close" href="{{ close_evaluation_url }}" aria-label="Cerrar evaluacion">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" /></svg>
+      </a>
+    </div>
+
+    <form method="post" class="acreditacion-form">
+      {% csrf_token %}
+      {{ evaluation_form.non_field_errors }}
+      <input type="hidden" name="estado_filtro" value="{{ selected_estado }}">
+      {% if selected_evidence_cycle %}
+        <input type="hidden" name="ciclo" value="{{ selected_evidence_cycle.pk }}">
+      {% endif %}
+      <input type="hidden" name="registro" value="{{ selected_evaluation_record.pk }}">
+      {{ evaluation_form.registro.errors }}
+
+      <div class="evaluacion-selected-record">
+        <div class="evaluacion-selected-record__group evaluacion-selected-record__group--criterion">
+          <span>Criterio</span>
+          <strong>{{ selected_evaluation_record.indicador.subcriterio.criterio.codigo_criterio }} - {{ selected_evaluation_record.indicador.subcriterio.criterio.nombre_criterio }}</strong>
+        </div>
+        <div class="evaluacion-selected-record__group evaluacion-selected-record__group--subcriterion">
+          <span>Subcriterio</span>
+          <strong>{{ selected_evaluation_record.indicador.subcriterio.codigo_subcriterio }} - {{ selected_evaluation_record.indicador.subcriterio.nombre_subcriterio }}</strong>
+        </div>
+        <div class="evaluacion-selected-record__group evaluacion-selected-record__group--indicator">
+          <span>Indicador {{ indicator_type|default:"-" }}</span>
+          <strong>{{ selected_evaluation_record.indicador.codigo_indicador }} - {{ selected_evaluation_record.indicador.nombre_indicador }}</strong>
+        </div>
+        <div class="evaluacion-selected-record__document">
+          <span>{{ selected_evaluation_record.elemento_fundamental.codigo_elemento }} - {{ selected_evaluation_record.elemento_fundamental.nombre_elemento }}</span>
+          <strong>{{ selected_evaluation_record.documento.nombre_archivo }}</strong>
+          <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' selected_evaluation_record.documento.pk %}" target="_blank" rel="noopener">Observar documento</a>
+        </div>
+        <div class="evaluacion-selected-record__facts">
+          <div>
+            <span>Registro</span>
+            <strong>#{{ selected_evaluation_record.pk }}</strong>
+          </div>
+          <div>
+            <span>Ciclo</span>
+            <strong>{{ selected_evaluation_record.ciclo.nombre }}</strong>
+          </div>
+          <div>
+            <span>Clasificacion</span>
+            <strong>{{ selected_evaluation_record.elemento_fundamental.tipo_elemento }}</strong>
+          </div>
+          <div>
+            <span>Estado evidencia</span>
+            <strong>{{ selected_evaluation_record.estado.descripcion }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="ciclos-form-grid">
+        {% if evaluation_mode == "qualitative" %}
+          <div class="acreditacion-form__field acreditacion-form__field--full evaluacion-qualitative-result">
+            <div class="evaluacion-qualitative-panel">
+              <div>
+                <h4>Formulario cualitativo</h4>
+                <p class="text-muted">Califica el cumplimiento de la evidencia seleccionada.</p>
+              </div>
+              <div class="caces-category-grid evaluacion-qualitative-grid">
+                {% for option in evaluation_form.qualitative_result_options %}
+                  <label class="caces-category-option caces-category-option--calculated">
+                    <input
+                      type="radio"
+                      name="{{ evaluation_form.resultado_cualitativo.html_name }}"
+                      id="id_{{ evaluation_form.resultado_cualitativo.html_name }}_{{ forloop.counter0 }}"
+                      value="{{ option.value }}"
+                      data-evaluacion-qualitative-input
+                      data-result="{{ option.label }}"
+                      data-status="{{ option.estado }}"
+                      data-compliance="{{ option.cumplimiento }}"
+                      {% if option.selected %}checked{% endif %}
+                    >
+                    <span class="caces-category-option__content">
+                      <strong>{{ option.label }}</strong>
+                      <small>{{ option.codigo }}</small>
+                      <span class="caces-category-option__metric">Cumplimiento {{ option.cumplimiento }} - Estado {{ option.estado }}</span>
+                      <span>{{ option.description }}</span>
+                    </span>
+                  </label>
+                {% endfor %}
+              </div>
+              <div class="caces-calculation-preview evaluacion-qualitative-preview">
+                <div>
+                  <span>Resultado</span>
+                  <strong data-evaluacion-preview-result>--</strong>
+                </div>
+                <div>
+                  <span>Cumplimiento</span>
+                  <strong data-evaluacion-preview-compliance>--</strong>
+                </div>
+                <div>
+                  <span>Estado final</span>
+                  <strong data-evaluacion-preview-status>--</strong>
+                </div>
+              </div>
+            </div>
+            {{ evaluation_form.resultado_cualitativo.errors }}
+          </div>
+        {% else %}
+          <div class="acreditacion-form__field acreditacion-form__field--full">
+            <h4>Formulario cuantitativo</h4>
+            <p class="text-muted">Registra la calificacion numerica de la evidencia seleccionada.</p>
+          </div>
+          <div class="acreditacion-form__field">
+            <label for="{{ evaluation_form.estado.id_for_label }}">{{ evaluation_form.estado.label }}</label>
+            {{ evaluation_form.estado }}
+            {{ evaluation_form.estado.errors }}
+          </div>
+          <div class="acreditacion-form__field">
+            <label for="{{ evaluation_form.calificacion.id_for_label }}">{{ evaluation_form.calificacion.label }}</label>
+            {{ evaluation_form.calificacion }}
+            {{ evaluation_form.calificacion.errors }}
+          </div>
+        {% endif %}
+        <div class="acreditacion-form__field acreditacion-form__field--full">
+          <label for="{{ evaluation_form.comentario.id_for_label }}">{{ evaluation_form.comentario.label }}</label>
+          {{ evaluation_form.comentario }}
+          {{ evaluation_form.comentario.errors }}
+        </div>
+      </div>
+
+      <div class="acreditacion-form__actions">
+        <a class="btn btn-ghost" href="{{ close_evaluation_url }}">Cancelar</a>
+        <button class="btn btn-primary" type="submit">Guardar evaluacion</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
 
 <article class="card">
   <h2>Ultimas evaluaciones</h2>
@@ -172,16 +554,17 @@
     <div class="acreditacion-info-dialog__body">
       <p>
         Cuando evalues un registro de esta bandeja: si el criterio es <strong>cuantitativo</strong>, usa una
-        <strong>Calificacion</strong> numerica. Si es <strong>cualitativo</strong>, fundamenta en el
-        <strong>Comentario</strong> y define el <strong>Estado</strong> final de revision.
+        <strong>Calificacion</strong> numerica. Si es <strong>cualitativo</strong>, selecciona
+        <strong>Cumple</strong> o <strong>No cumple</strong> y sustenta la decision en las observaciones de evaluacion.
       </p>
       <ul class="acreditacion-form-guide__list">
         <li><strong>Cuantitativa:</strong> nota numerica alineada al indicador.</li>
-        <li><strong>Cualitativa:</strong> juicio tecnico descriptivo sobre cumplimiento.</li>
+        <li><strong>Cualitativa:</strong> cumplimiento o incumplimiento con observaciones de evaluacion obligatorias.</li>
       </ul>
     </div>
   </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -215,6 +598,40 @@
         closeModal();
       }
     });
+  })();
+
+  (function () {
+    const inputs = document.querySelectorAll('[data-evaluacion-qualitative-input]');
+    if (!inputs.length) {
+      return;
+    }
+
+    const resultTarget = document.querySelector('[data-evaluacion-preview-result]');
+    const complianceTarget = document.querySelector('[data-evaluacion-preview-compliance]');
+    const statusTarget = document.querySelector('[data-evaluacion-preview-status]');
+
+    const renderPreview = function (input) {
+      if (!input) {
+        return;
+      }
+      if (resultTarget) {
+        resultTarget.textContent = input.dataset.result || '--';
+      }
+      if (complianceTarget) {
+        complianceTarget.textContent = input.dataset.compliance || '--';
+      }
+      if (statusTarget) {
+        statusTarget.textContent = input.dataset.status || '--';
+      }
+    };
+
+    inputs.forEach(function (input) {
+      input.addEventListener('change', function () {
+        renderPreview(input);
+      });
+    });
+
+    renderPreview(document.querySelector('[data-evaluacion-qualitative-input]:checked'));
   })();
 </script>
 {% endblock %}

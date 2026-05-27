@@ -33,8 +33,102 @@
   </div>
 </div>
 
+<section class="card dashboard-review-panel">
+  <div class="page-header dashboard-review-panel__header">
+    <div>
+      <h2>Seguimiento por designación</h2>
+      <p class="text-muted">Tareas revisadas, aprobadas y rechazadas con cumplimiento asociado a la evidencia evaluada.</p>
+    </div>
+    <div class="dashboard-review-panel__filters" aria-label="Filtro de estado">
+      {% for option in review_dashboard.filter_options %}
+        <a class="dashboard-review-panel__filter{% if review_dashboard.selected_estado == option.code %} is-active{% endif %}" href="?revision_estado={{ option.code }}">
+          <span>{{ option.label }}</span>
+          <strong>{{ option.count }}</strong>
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="dashboard-designation-grid">
+    {% for item in review_dashboard.designation_summary %}
+      <article class="dashboard-designation-card">
+        <div>
+          <span class="dashboard-designation-card__label">Designación</span>
+          <strong>{{ item.responsable_nombre }}</strong>
+        </div>
+        <dl>
+          <div><dt>Total</dt><dd>{{ item.total }}</dd></div>
+          <div><dt>Aprobadas</dt><dd>{{ item.aprobadas }}</dd></div>
+          <div><dt>Rechazadas</dt><dd>{{ item.rechazadas }}</dd></div>
+          <div><dt>Cumplimiento</dt><dd>{{ item.cumplimiento_label }}</dd></div>
+        </dl>
+      </article>
+    {% empty %}
+      <article class="dashboard-designation-card dashboard-designation-card--empty">
+        <strong>Sin designaciones revisadas</strong>
+        <p class="text-muted">Cuando existan tareas aprobadas, rechazadas o revisadas se consolidarán en este espacio.</p>
+      </article>
+    {% endfor %}
+  </div>
+
+  <div class="table-responsive dashboard-review-table">
+    <table class="acreditacion-table">
+      <thead>
+        <tr>
+          <th>Ciclo</th>
+          <th>Designación</th>
+          <th>Indicador / elemento</th>
+          <th>Estado</th>
+          <th>Cumplimiento</th>
+          <th>Observación</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in review_dashboard.rows %}
+          <tr>
+            <td>
+              <strong>{{ row.tarea.ciclo.nombre }}</strong>
+              <div class="text-muted">{{ row.tarea.fecha_asignacion|date:"d/m/Y H:i"|default:"-" }}</div>
+            </td>
+            <td>
+              <strong>{{ row.responsable.nombre_completo|default:row.responsable }}</strong>
+              <div class="text-muted">Asignado por {{ row.tarea.asignado_por|default:"-" }}</div>
+            </td>
+            <td>
+              <strong>{{ row.tarea.indicador.codigo_indicador }}</strong>
+              <div>{{ row.tarea.indicador.nombre_indicador }}</div>
+              <div class="text-muted">{{ row.tarea.elemento_fundamental.codigo_elemento }} - {{ row.tarea.elemento_fundamental.nombre_elemento }}</div>
+            </td>
+            <td>
+              <span class="acreditacion-status {% if row.bucket == 'APROBADAS' %}acreditacion-status--success{% elif row.bucket == 'RECHAZADAS' %}acreditacion-status--danger{% else %}acreditacion-status--info{% endif %}">
+                {{ row.bucket_label }}
+              </span>
+              <div class="text-muted">
+                {% if row.estado_evaluacion %}{{ row.estado_evaluacion }}{% else %}{{ row.estado_tarea }}{% endif %}
+              </div>
+            </td>
+            <td><strong>{{ row.cumplimiento_label }}</strong></td>
+            <td>{{ row.observacion_revision|default:"-"|truncatechars:120 }}</td>
+            <td>
+              {% if row.registro %}
+                <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ row.registro.pk }}">Ver evidencia</a>
+              {% else %}
+                <a class="btn btn-ghost" href="{% url 'evaluacion-tareas' %}">Ver tareas</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted">No existen tareas para el filtro seleccionado.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
 {% if quick_links %}
-<br>
 <div class="card admin-access-panel">
   <div class="page-header admin-access-panel__header">
     <div>

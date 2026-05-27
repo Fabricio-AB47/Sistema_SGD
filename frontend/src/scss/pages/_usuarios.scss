@@ -146,8 +146,7 @@
   }
 
   .form-check {
-    align-items: center;
-    grid-template-columns: auto 1fr;
+    align-self: end;
   }
 
   .form-actions {
@@ -156,6 +155,94 @@
     gap: 0.5rem;
     justify-content: flex-start;
   }
+}
+
+.form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 2.75rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.62rem 0.78rem;
+  border: 1px solid #dbe3ef;
+  border-radius: $card_radius;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    border-color: rgba(0, 128, 145, 0.34);
+    background: #f3fbfc;
+    transform: translateY(-1px);
+  }
+
+  &:has(input[type="checkbox"]:checked) {
+    border-color: rgba(0, 128, 145, 0.4);
+    background: #eef9fb;
+    box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  }
+
+  span {
+    color: #334155;
+    font-size: 0.95rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+
+  input[type="checkbox"] {
+    appearance: none;
+    position: relative;
+    flex: 0 0 auto;
+    width: 2.45rem;
+    height: 1.38rem;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #e2e8f0;
+    cursor: pointer;
+    transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+
+    &::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 0.18rem;
+      width: 0.92rem;
+      height: 0.92rem;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 2px 5px rgba(15, 23, 42, 0.22);
+      transform: translateY(-50%);
+      transition: transform 0.18s ease;
+    }
+
+    &:checked {
+      border-color: #0f7f8e;
+      background: #0f7f8e;
+    }
+
+    &:checked::before {
+      transform: translate(1.05rem, -50%);
+    }
+
+    &:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+  }
+}
+
+.form-grid .form-check {
+  display: inline-flex;
+  grid-template-columns: none;
 }
 
 .detail-list {

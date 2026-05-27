@@ -4,7 +4,15 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.views.generic import TemplateView
 
-from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.mixins import SigRoleOrPermissionRequiredMixin
+from apps.core.services.navigation_service import (
+    PERM_CONSULTA_VER,
+    PERM_MEJORA_GESTIONAR,
+    ROLE_ADMIN,
+    ROLE_CONSULTA,
+    ROLE_QUALITY,
+    ROLE_RECTOR,
+)
 from apps.mejora.forms import (
     AsignacionResponsableForm,
     CargaInformacionForm,
@@ -41,7 +49,10 @@ def _to_serializable(cleaned_data: dict) -> dict:
     return payload
 
 
-class MejoraBaseView(SigLoginRequiredMixin, TemplateView):
+class MejoraBaseView(SigRoleOrPermissionRequiredMixin, TemplateView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA)
+    allowed_permissions = (PERM_MEJORA_GESTIONAR, PERM_CONSULTA_VER)
+    access_denied_message = "No tienes acceso al proceso de mejora."
     template_name = ""
     page_title = ""
     page_description = ""
@@ -145,6 +156,9 @@ class ProcesoDashboardView(MejoraBaseView):
 
 
 class ProcesoCicloAprobacionView(MejoraBaseView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY)
+    allowed_permissions = (PERM_MEJORA_GESTIONAR,)
+    access_denied_message = "No tienes acceso para iniciar procesos de mejora."
     template_name = "mejora/ciclo_aprobacion.html"
     page_title = "Paso 1: Aprobacion del ciclo"
     page_description = "Registra la aprobacion del ciclo de autoevaluacion."
@@ -167,6 +181,9 @@ class ProcesoCicloAprobacionView(MejoraBaseView):
 
 
 class ProcesoAsignacionResponsablesView(MejoraBaseView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY)
+    allowed_permissions = (PERM_MEJORA_GESTIONAR,)
+    access_denied_message = "No tienes acceso para asignar responsables de mejora."
     template_name = "mejora/asignacion_responsables.html"
     page_title = "Paso 2: Asignacion de responsables"
     page_description = "Registra responsables por area, indicador y elemento."
@@ -197,6 +214,9 @@ class ProcesoAsignacionResponsablesView(MejoraBaseView):
 
 
 class ProcesoCargaInformacionView(MejoraBaseView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY)
+    allowed_permissions = (PERM_MEJORA_GESTIONAR,)
+    access_denied_message = "No tienes acceso para cargar informacion de mejora."
     template_name = "mejora/carga_informacion.html"
     page_title = "Paso 3: Carga de informacion"
     page_description = "Registra las cargas de evidencia y metadatos."
@@ -227,6 +247,9 @@ class ProcesoCargaInformacionView(MejoraBaseView):
 
 
 class ProcesoRevisionJefaturaView(MejoraBaseView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY)
+    allowed_permissions = (PERM_MEJORA_GESTIONAR,)
+    access_denied_message = "No tienes acceso para revisar el proceso de mejora."
     template_name = "mejora/revision_jefatura.html"
     page_title = "Paso 4: Revision de jefatura"
     page_description = "Registra la revision y visto de avance del jefe."
@@ -249,6 +272,9 @@ class ProcesoRevisionJefaturaView(MejoraBaseView):
 
 
 class ProcesoEnvioFormalView(MejoraBaseView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY)
+    allowed_permissions = (PERM_MEJORA_GESTIONAR,)
+    access_denied_message = "No tienes acceso para enviar formalmente el proceso de mejora."
     template_name = "mejora/envio_formal.html"
     page_title = "Paso 5: Envio formal"
     page_description = "Registra la aprobacion y envio formal por el director de area."
@@ -271,6 +297,9 @@ class ProcesoEnvioFormalView(MejoraBaseView):
 
 
 class ProcesoRecepcionEvaluadorView(MejoraBaseView):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY)
+    allowed_permissions = (PERM_MEJORA_GESTIONAR,)
+    access_denied_message = "No tienes acceso para registrar la recepcion del proceso de mejora."
     template_name = "mejora/recepcion_evaluador.html"
     page_title = "Paso 6: Recepcion evaluador"
     page_description = "Registra la recepcion formal por el responsable evaluador."

@@ -57,6 +57,50 @@ def get_pending_login_otp(usuario: Usuario):
 
 
 @transaction.atomic
+def invalidate_login_otp(
+    *,
+    usuario: Usuario | None = None,
+    usuario_id: int | None = None,
+    otp_id: int | None = None,
+    actor=None,
+    request=None,
+    reason: str = "cancelled",
+) -> int:
+    queryset = UsuarioOTP.objects.select_for_update().filter(
+        tipo_otp=OTP_LOGIN_TYPE,
+        usado=False,
+    )
+    target_user_id = getattr(usuario, "pk", None) or usuario_id
+    if target_user_id:
+        queryset = queryset.filter(usuario_id=target_user_id)
+    if otp_id:
+        queryset = queryset.filter(pk=otp_id)
+
+    otp_ids = list(queryset.values_list("pk", flat=True))
+    if not otp_ids:
+        return 0
+
+    updated = UsuarioOTP.objects.filter(pk__in=otp_ids).update(usado=True)
+    registrar_evento(
+        accion="INVALIDAR_OTP_LOGIN",
+        descripcion="Se invalido un OTP pendiente de login antes de generar o validar otro acceso.",
+        usuario=actor or usuario,
+        tipo_evento="SEGURIDAD",
+        tabla_afectada="usuario_otp",
+        id_registro=otp_ids[0] if len(otp_ids) == 1 else None,
+        valores_nuevos={
+            "usuario_id": target_user_id,
+            "otp_ids": otp_ids,
+            "cantidad": updated,
+            "motivo": reason,
+        },
+        criticidad="MEDIA",
+        request=request,
+    )
+    return updated
+
+
+@transaction.atomic
 def create_login_otp(*, usuario: Usuario, actor=None, request=None):
     now = timezone.now()
     UsuarioOTP.objects.filter(
@@ -110,13 +154,14 @@ def create_login_otp(*, usuario: Usuario, actor=None, request=None):
 
 
 @transaction.atomic
-def verify_login_otp(*, usuario: Usuario, codigo: str, actor=None, request=None):
-    otp = (
+def verify_login_otp(*, usuario: Usuario, codigo: str, otp_id: int | None = None, actor=None, request=None):
+    queryset = (
         UsuarioOTP.objects.select_for_update()
         .filter(usuario=usuario, tipo_otp=OTP_LOGIN_TYPE, usado=False)
-        .order_by("-fecha_generacion", "-id_otp")
-        .first()
     )
+    if otp_id:
+        queryset = queryset.filter(pk=otp_id)
+    otp = queryset.order_by("-fecha_generacion", "-id_otp").first()
     now = timezone.now()
     if otp is None:
         return {"success": False, "status": "missing"}

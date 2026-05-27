@@ -8,7 +8,8 @@ from apps.auditoria.selectors.auditoria_selector import (
     obtener_opciones_filtro,
     obtener_resumen_auditoria,
 )
-from apps.core.mixins import SigLoginRequiredMixin
+from apps.core.mixins import SigRoleOrPermissionRequiredMixin
+from apps.core.services.navigation_service import ROLE_ADMIN, ROLE_QUALITY
 
 
 def _pretty_payload(value):
@@ -21,7 +22,13 @@ def _pretty_payload(value):
     return json.dumps(parsed, ensure_ascii=False, indent=2)
 
 
-class AuditoriaListView(SigLoginRequiredMixin, ListView):
+class AuditoriaAccessMixin(SigRoleOrPermissionRequiredMixin):
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY)
+    allowed_permissions = ("auditoria.ver",)
+    access_denied_message = "No tienes acceso a auditoria."
+
+
+class AuditoriaListView(AuditoriaAccessMixin, ListView):
     model = Auditoria
     template_name = "auditoria/lista.html"
     context_object_name = "auditorias"
@@ -37,7 +44,7 @@ class AuditoriaListView(SigLoginRequiredMixin, ListView):
         return context
 
 
-class AuditoriaDetailView(SigLoginRequiredMixin, DetailView):
+class AuditoriaDetailView(AuditoriaAccessMixin, DetailView):
     model = Auditoria
     template_name = "auditoria/detalle.html"
     context_object_name = "auditoria"

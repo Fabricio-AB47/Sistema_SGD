@@ -9,7 +9,12 @@ from django.views.generic import FormView
 
 from apps.core.services.redirect_security import build_login_redirect_url
 from apps.seguridad.forms import OTPVerificationForm
-from apps.seguridad.services import complete_login_after_otp, create_login_otp, verify_login_otp
+from apps.seguridad.services import (
+    complete_login_after_otp,
+    create_login_otp,
+    invalidate_login_otp,
+    verify_login_otp,
+)
 from apps.usuarios.models import Usuario
 from apps.usuarios.services.user_context_service import hydrate_request_session_context
 
@@ -30,8 +35,18 @@ def _clear_pending_otp_session(request):
         "pending_otp_remember",
         "pending_otp_redirect",
         "pending_otp_debug_code",
+        "pending_otp_id",
+        "pending_otp_issued_at",
     ):
         request.session.pop(key, None)
+
+
+def _pending_otp_id(request):
+    try:
+        otp_id = int(request.session.get("pending_otp_id") or 0)
+    except (TypeError, ValueError):
+        return None
+    return otp_id or None
 
 
 def _store_authenticated_session(
@@ -63,11 +78,29 @@ class OTPVerificationView(FormView):
     form_class = OTPVerificationForm
 
     def dispatch(self, request, *args, **kwargs):
-        if _pending_user(request) is None:
+        usuario = _pending_user(request)
+        if usuario is None:
+            if request.session.get("pending_otp_user") or _pending_otp_id(request):
+                invalidate_login_otp(
+                    usuario_id=request.session.get("pending_otp_user"),
+                    otp_id=_pending_otp_id(request),
+                    request=request,
+                    reason="usuario_pendiente_no_valido",
+                )
+                _clear_pending_otp_session(request)
             if request.session.get("sig_user_id"):
                 return redirect(getattr(settings, "LOGIN_REDIRECT_URL", "/dashboard/") or "/dashboard/")
             messages.info(request, "Primero debes iniciar sesion para generar un OTP.")
             return redirect(build_login_redirect_url(request, settings.LOGIN_URL or "/login/"))
+        if _pending_otp_id(request) is None:
+            invalidate_login_otp(
+                usuario=usuario,
+                request=request,
+                reason="otp_id_ausente_en_sesion",
+            )
+            _clear_pending_otp_session(request)
+            messages.error(request, "El OTP pendiente no esta ligado a un intento valido. Inicia sesion nuevamente.")
+            return redirect(settings.LOGIN_URL or "/login/")
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -95,6 +128,7 @@ class OTPVerificationView(FormView):
         result = verify_login_otp(
             usuario=usuario,
             codigo=form.cleaned_data["codigo"],
+            otp_id=_pending_otp_id(self.request),
             actor=usuario,
             request=self.request,
         )
@@ -105,8 +139,15 @@ class OTPVerificationView(FormView):
                 _clear_pending_otp_session(self.request)
                 messages.error(self.request, "Se agotaron los intentos del OTP. Inicia sesion nuevamente.")
                 return redirect(settings.LOGIN_URL or "/login/")
+            elif result["status"] == "missing":
+                _clear_pending_otp_session(self.request)
+                messages.error(
+                    self.request,
+                    "El OTP pendiente ya no corresponde a este acceso. Inicia sesion nuevamente.",
+                )
+                return redirect(settings.LOGIN_URL or "/login/")
             else:
-                form.add_error(None, "El codigo OTP no es valido.")
+                form.add_error(None, "El codigo OTP no corresponde a este acceso o usuario.")
             return self.form_invalid(form)
 
         completion = complete_login_after_otp(
@@ -153,6 +194,8 @@ def resend_login_otp_view(request):
         actor=usuario,
         request=request,
     )
+    request.session["pending_otp_id"] = otp_result["otp"].pk
+    request.session["pending_otp_issued_at"] = timezone.now().isoformat()
     if getattr(settings, "SIG_EXPOSE_DEBUG_OTP", False):
         request.session["pending_otp_debug_code"] = otp_result["codigo"]
     if otp_result["email_sent"]:

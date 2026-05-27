@@ -12,5 +12,6 @@ from .otp_service import (  # noqa: F401
     complete_login_after_otp,
     create_login_otp,
     get_pending_login_otp,
+    invalidate_login_otp,
     verify_login_otp,
 )

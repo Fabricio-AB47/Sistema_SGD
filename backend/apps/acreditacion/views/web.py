@@ -30,6 +30,7 @@ from apps.core.services.navigation_service import (
     _normalize_roles,
 )
 from apps.acreditacion.forms import (
+    CacesCatalogSyncForm,
     CicloEstadoAutorizacionForm,
     ESTADOS_FLUJO_CICLO,
     ESTADOS_RECTOR_DECISION,
@@ -45,12 +46,15 @@ from apps.acreditacion.forms import (
 )
 from apps.core.models import EstadoCiclo
 from apps.acreditacion.selectors import (
+    attach_cycle_indicator_scope,
     get_acreditacion_metrics,
+    get_caces_model_catalog_preview,
     get_ciclo_detail,
     get_ciclos_queryset,
     get_criterios_queryset,
     get_elementos_queryset,
     get_indicator_detail,
+    get_indicator_selection_tree,
     get_indicadores_queryset,
     get_matrix_rows,
     get_subcriterios_queryset,
@@ -62,6 +66,7 @@ from apps.acreditacion.services import (
     crear_elemento,
     crear_indicador,
     crear_subcriterio,
+    sincronizar_catalogo_desde_modelo_caces,
     vincular_indicador_elemento,
 )
 from apps.acreditacion.models import CicloEvaluacion
@@ -102,6 +107,10 @@ def _is_rector_role(role: str) -> bool:
 
 def _is_quality_role(role: str) -> bool:
     return str(role).strip().upper() in QUALITY_ROLE_TOKENS
+
+
+def _is_admin_role(role: str) -> bool:
+    return str(role).strip().upper() == ROLE_ADMIN
 
 
 REVIEWER_COMMENTS_PREFIX = "COMENTARIOS REVISOR:"
@@ -207,6 +216,7 @@ MODULE_TABS = [
     {"label": "Subcriterios", "url_name": "acreditacion-subcriterios-lista", "active_names": ["acreditacion-subcriterios-lista"]},
     {"label": "Indicadores", "url_name": "acreditacion-indicadores-lista", "active_names": ["acreditacion-indicadores-lista", "acreditacion-indicadores-detalle"]},
     {"label": "Elementos fundamentales", "url_name": "acreditacion-elementos-lista", "active_names": ["acreditacion-elementos-lista"]},
+    {"label": "Importar CACES", "url_name": "acreditacion-caces-importar", "active_names": ["acreditacion-caces-importar"]},
     {
         "label": "Matriz de registro",
         "url_name": "acreditacion-matriz-registro",
@@ -219,11 +229,17 @@ MODULE_TABS = [
     {"label": "Matriz de acreditacion", "url_name": "acreditacion-matriz", "active_names": ["acreditacion-matriz"]},
     {"label": "Ciclos y autorizacion", "url_name": "acreditacion-ciclos-lista", "active_names": ["acreditacion-ciclos-lista", "acreditacion-ciclos-crear", "acreditacion-ciclos-detalle"]},
 ]
+QUICK_CACES_IMPORT_ACTION = {
+    "label": "Importar matriz CACES",
+    "url_name": "acreditacion-caces-importar",
+    "variant": "secondary",
+}
 STRUCTURE_TAB_NAMES = {
     "acreditacion-criterios-lista",
     "acreditacion-subcriterios-lista",
     "acreditacion-indicadores-lista",
     "acreditacion-elementos-lista",
+    "acreditacion-caces-importar",
 }
 CYCLE_TAB_NAMES = {"acreditacion-ciclos-lista"}
 MATRIX_TAB_NAMES = {"acreditacion-matriz-registro", "acreditacion-matriz"}
@@ -357,6 +373,15 @@ def _completion_bucket(completion_percent: int) -> str:
     if completion_percent > 0:
         return "10"
     return "0"
+
+
+def _selected_indicator_ids_from_cycle_form(form):
+    field = form.fields["indicadores_evaluar"]
+    if form.is_bound:
+        if form.data.get(form.add_prefix("seleccionar_todos_indicadores")):
+            return list(field.queryset.values_list("pk", flat=True))
+        return form.data.getlist(form.add_prefix("indicadores_evaluar"))
+    return field.initial or []
 
 
 def _summarize_matrix_rows(rows):
@@ -498,6 +523,7 @@ class CriterioListView(AcreditacionManageRequiredMixin, AcreditacionBaseView):
     template_name = "acreditacion/criterio_list.html"
     page_title = "Criterios"
     page_description = "Carga y administra la estructura principal de criterios de acreditacion."
+    page_actions = [QUICK_CACES_IMPORT_ACTION]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -527,6 +553,7 @@ class SubcriterioListView(AcreditacionManageRequiredMixin, AcreditacionBaseView)
     template_name = "acreditacion/subcriterio_list.html"
     page_title = "Subcriterios"
     page_description = "Carga subcriterios asociados a cada criterio real del sistema."
+    page_actions = [QUICK_CACES_IMPORT_ACTION]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -557,6 +584,7 @@ class IndicadorListView(AcreditacionManageRequiredMixin, AcreditacionBaseView):
     template_name = "acreditacion/indicador_list.html"
     page_title = "Indicadores"
     page_description = "Carga indicadores y vincula su tipo, subcriterio y peso de evaluacion."
+    page_actions = [QUICK_CACES_IMPORT_ACTION]
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -659,6 +687,46 @@ class ElementoListView(AcreditacionManageRequiredMixin, AcreditacionBaseView):
                 messages.success(request, "Elemento fundamental registrado correctamente.")
                 return redirect("acreditacion-elementos-lista")
         return self.render_to_response(self.get_context_data(form=form))
+
+
+class CacesCatalogSyncView(AcreditacionManageRequiredMixin, AcreditacionBaseView):
+    template_name = "acreditacion/caces_catalog_sync.html"
+    page_title = "Importar matriz CACES"
+    page_description = "Crea criterios, subcriterios, indicadores y carpetas Graph desde la matriz CACES activa."
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["form"] = kwargs.get("form") or CacesCatalogSyncForm()
+        context["preview"] = get_caces_model_catalog_preview()
+        context["sync_result"] = kwargs.get("sync_result")
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = CacesCatalogSyncForm(request.POST)
+        sync_result = None
+        if form.is_valid():
+            try:
+                sync_result = sincronizar_catalogo_desde_modelo_caces(
+                    actor=self._actor(),
+                    request=request,
+                    ensure_existing_storage=form.cleaned_data.get("asegurar_carpetas_existentes"),
+                )
+            except (GraphServiceError, AuthorizationServiceError, OSError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message=(
+                        "No fue posible sincronizar la matriz CACES. "
+                        "Verifica la conexion a SQL Server y Microsoft Graph."
+                    ),
+                )
+            else:
+                messages.success(request, "Matriz CACES sincronizada correctamente.")
+                form = CacesCatalogSyncForm()
+        return self.render_to_response(
+            self.get_context_data(form=form, sync_result=sync_result)
+        )
 
 
 class MatrizView(AcreditacionMatrixRequiredMixin, AcreditacionBaseView):
@@ -847,7 +915,7 @@ class MatrizRegistroView(AcreditacionMatrizRegistroRequiredMixin, AcreditacionBa
                     )
                 )
             try:
-                register_matrix_evidence(
+                registration_result = register_matrix_evidence(
                     ciclo=form.cleaned_data["ciclo"],
                     indicador=form.cleaned_data["indicador"],
                     elemento_fundamental=form.cleaned_data["elemento_fundamental"],
@@ -881,7 +949,11 @@ class MatrizRegistroView(AcreditacionMatrizRegistroRequiredMixin, AcreditacionBa
             else:
                 messages.success(
                     request,
-                    "Documento y evidencia registrados correctamente.",
+                    (
+                        "Documento y evidencia registrados, aprobados internamente y enviados al evaluador."
+                        if registration_result.get("auto_sent_to_evaluator")
+                        else "Documento y evidencia registrados correctamente."
+                    ),
                 )
                 return redirect(
                     (
@@ -1014,7 +1086,7 @@ class MatrizRegistroUploadView(AcreditacionMatrizRegistroRequiredMixin, Acredita
                     )
                 )
             try:
-                register_matrix_evidence(
+                registration_result = register_matrix_evidence(
                     ciclo=form.cleaned_data["ciclo"],
                     indicador=form.cleaned_data["indicador"],
                     elemento_fundamental=form.cleaned_data["elemento_fundamental"],
@@ -1048,7 +1120,11 @@ class MatrizRegistroUploadView(AcreditacionMatrizRegistroRequiredMixin, Acredita
             else:
                 messages.success(
                     request,
-                    "Documento y evidencia registrados correctamente en la matriz de registro.",
+                    (
+                        "Documento y evidencia registrados, aprobados internamente y enviados al evaluador."
+                        if registration_result.get("auto_sent_to_evaluator")
+                        else "Documento y evidencia registrados correctamente en la matriz de registro."
+                    ),
                 )
                 return redirect(
                     (
@@ -1082,16 +1158,28 @@ class CicloListView(AcreditacionCycleRequiredMixin, AcreditacionBaseView):
         session_roles = tuple(self.request.session.get("sig_roles", []) or [])
         operational_roles = tuple(self.request.session.get("sig_operational_roles", []) or [])
         effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
+        has_admin_role = any(_is_admin_role(role) for role in effective_roles)
         has_quality_role = any(_is_quality_role(role) for role in effective_roles)
         has_rector_role = any(_is_rector_role(role) for role in effective_roles)
         # Quality operations have priority over rector-only restrictions on this screen.
-        context["can_create_cycles"] = has_quality_role or not has_rector_role
-        context["is_quality_actor"] = has_quality_role
-        context["form"] = kwargs.get("form") or CicloEvaluacionForm(
+        context["can_create_cycles"] = has_admin_role or has_quality_role or not has_rector_role
+        context["is_quality_actor"] = has_admin_role or has_quality_role
+        form = kwargs.get("form") or CicloEvaluacionForm(
             usuario_id=self.request.session.get("sig_user_id"),
             assignment_id=self.request.session.get("sig_active_assignment_id"),
         )
-        ciclos = attach_cycle_authorization_status(get_ciclos_queryset())
+        context["form"] = form
+        context["indicator_selection_tree"] = get_indicator_selection_tree(
+            selected_indicator_ids=_selected_indicator_ids_from_cycle_form(form)
+        )
+        context["select_all_indicators"] = bool(
+            form.data.get(form.add_prefix("seleccionar_todos_indicadores"))
+            if form.is_bound
+            else form.fields["seleccionar_todos_indicadores"].initial
+        )
+        ciclos = attach_cycle_indicator_scope(
+            attach_cycle_authorization_status(get_ciclos_queryset())
+        )
         context["ciclos"] = ciclos
         context["ciclos_summary"] = {
             "total": len(ciclos),
@@ -1109,9 +1197,10 @@ class CicloListView(AcreditacionCycleRequiredMixin, AcreditacionBaseView):
         session_roles = tuple(request.session.get("sig_roles", []) or [])
         operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
         effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
+        has_admin_role = any(_is_admin_role(role) for role in effective_roles)
         has_quality_role = any(_is_quality_role(role) for role in effective_roles)
         has_rector_role = any(_is_rector_role(role) for role in effective_roles)
-        if has_rector_role and not has_quality_role:
+        if has_rector_role and not (has_admin_role or has_quality_role):
             messages.warning(request, "El rol RECTOR solo puede revisar, aprobar o rechazar ciclos.")
             return redirect("acreditacion-ciclos-lista")
 
@@ -1165,7 +1254,7 @@ class CicloDetailView(AcreditacionCycleRequiredMixin, AcreditacionBaseView):
         return tuple(dict.fromkeys([*session_roles, *operational_roles]))
 
     def _is_quality(self, request) -> bool:
-        return any(_is_quality_role(role) for role in self._effective_roles(request))
+        return any(_is_admin_role(role) or _is_quality_role(role) for role in self._effective_roles(request))
 
     def _is_rector(self, request) -> bool:
         return any(_is_rector_role(role) for role in self._effective_roles(request))
@@ -1326,7 +1415,7 @@ class CicloEstadoUpdateView(AcreditacionCycleRequiredMixin, View):
         session_roles = tuple(request.session.get("sig_roles", []) or [])
         operational_roles = tuple(request.session.get("sig_operational_roles", []) or [])
         effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
-        return any(_is_quality_role(role) for role in effective_roles)
+        return any(_is_admin_role(role) or _is_quality_role(role) for role in effective_roles)
 
     def _is_rector(self, request) -> bool:
         session_roles = tuple(request.session.get("sig_roles", []) or [])

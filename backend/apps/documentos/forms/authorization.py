@@ -1,6 +1,7 @@
 from django import forms
 
 from apps.core.models import ClasificacionDocumento
+from apps.core.services.upload_security import validate_uploaded_file
 
 
 def _normalize_required_text(value: str) -> str:
@@ -43,3 +44,8 @@ class AuthorizationUploadForm(AuthorizationFolderForm):
 
     def clean_descripcion_documento(self):
         return _normalize_optional_text(self.cleaned_data.get("descripcion_documento"))
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data.get("archivo")
+        validate_uploaded_file(archivo, label="documento de autorizacion")
+        return archivo

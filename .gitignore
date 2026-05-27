@@ -24,6 +24,10 @@ backend/media/
 backend/staticfiles/
 *.log
 
+# Espejo local de documentos Graph
+SISTEMA INFORMATICO DE GESTION/*
+!SISTEMA INFORMATICO DE GESTION/.gitkeep
+
 # IDE
 .vscode/
 .idea/

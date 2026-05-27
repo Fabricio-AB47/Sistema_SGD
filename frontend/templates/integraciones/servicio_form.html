@@ -30,10 +30,10 @@
       <span>Descripcion</span>
       {{ form.descripcion }}{{ form.descripcion.errors }}
     </div>
-    <div class="form-check">
+    <label class="form-check">
       {{ form.activo }} <span>Activo</span>
-      {{ form.activo.errors }}
-    </div>
+    </label>
+    {{ form.activo.errors }}
 
     <div class="form-actions">
       <button class="btn btn-primary" type="submit">Guardar</button>

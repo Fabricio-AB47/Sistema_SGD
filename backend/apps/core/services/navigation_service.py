@@ -220,6 +220,13 @@ NAVIGATION_GROUPS = (
                 permissions=(PERM_ACREDITACION_GESTIONAR,),
             ),
             NavigationItem(
+                label="Importar matriz CACES",
+                url_name="acreditacion-caces-importar",
+                active_names=("acreditacion-caces-importar",),
+                roles=(ROLE_ADMIN, ROLE_QUALITY),
+                permissions=(PERM_ACREDITACION_GESTIONAR,),
+            ),
+            NavigationItem(
                 label="Elementos fundamentales",
                 url_name="acreditacion-elementos-lista",
                 active_names=("acreditacion-elementos-lista",),
@@ -297,23 +304,20 @@ NAVIGATION_GROUPS = (
             NavigationItem(
                 label="Bandeja de evaluacion",
                 url_name="evaluacion-bandeja",
-                active_names=("evaluacion-bandeja",),
-                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_EVALUATOR),
-                permissions=(PERM_EVALUACION_REVISAR,),
-            ),
-            NavigationItem(
-                label="Evaluar evidencia",
-                url_name="evaluacion-evaluar",
-                active_names=("evaluacion-evaluar",),
+                active_names=(
+                    "evaluacion-bandeja",
+                    "evaluacion-caces",
+                    "evaluacion-caces-ciclo",
+                    "evaluacion-caces-indicador",
+                    "evaluacion-caces-reporte",
+                ),
                 roles=(ROLE_ADMIN, ROLE_EVALUATOR),
-                permissions=(PERM_EVALUACION_REVISAR,),
             ),
             NavigationItem(
                 label="Observaciones",
                 url_name="evaluacion-observaciones",
                 active_names=("evaluacion-observaciones",),
                 roles=(ROLE_ADMIN, ROLE_EVALUATOR),
-                permissions=(PERM_EVALUACION_REVISAR,),
             ),
         ),
     },
@@ -340,6 +344,27 @@ NAVIGATION_GROUPS = (
                 active_names=("informes-aprobar",),
                 roles=(ROLE_ADMIN, ROLE_RECTOR),
                 permissions=("informes.aprobar",),
+            ),
+            NavigationItem(
+                label="Reporte por indicador",
+                url_name="informes-reporte-indicador",
+                active_names=("informes-reporte-indicador",),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA),
+                permissions=(PERM_CONSULTA_VER,),
+            ),
+            NavigationItem(
+                label="Reporte por estado",
+                url_name="informes-reporte-estado",
+                active_names=("informes-reporte-estado",),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA),
+                permissions=(PERM_CONSULTA_VER,),
+            ),
+            NavigationItem(
+                label="Reporte por periodo",
+                url_name="informes-reporte-periodo",
+                active_names=("informes-reporte-periodo",),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA),
+                permissions=(PERM_CONSULTA_VER,),
             ),
             NavigationItem(
                 label="Proceso de mejora",
@@ -465,10 +490,18 @@ def build_navigation_groups(*, role_names=(), permission_codes=()):
             if role_ok or permission_ok:
                 visible_items.append(item)
         if visible_items:
+            active_names = tuple(
+                dict.fromkeys(
+                    active_name
+                    for item in visible_items
+                    for active_name in item.active_names
+                )
+            )
             visible_groups.append(
                 {
                     "label": group["label"],
                     "items": visible_items,
+                    "active_names": active_names,
                 }
             )
 

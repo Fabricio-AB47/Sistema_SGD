@@ -1,3 +1,3 @@
-from .informe_form import InformeAprobacionForm, InformeGeneracionForm
+from .informe_form import InformeAprobacionForm, InformeGeneracionForm, ReporteOperativoFilterForm
 
-__all__ = ["InformeAprobacionForm", "InformeGeneracionForm"]
+__all__ = ["InformeAprobacionForm", "InformeGeneracionForm", "ReporteOperativoFilterForm"]

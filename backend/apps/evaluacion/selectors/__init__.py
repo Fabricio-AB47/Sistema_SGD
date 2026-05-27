@@ -21,6 +21,21 @@ from .tareas_selector import (
     get_tarea_evidencia_metrics,
     get_tareas_evidencia_queryset,
 )
+from .caces_selector import (
+    get_actor_role_ids,
+    get_caces_categories,
+    get_caces_cycle,
+    get_caces_cycle_result,
+    get_caces_cycles,
+    get_caces_final_report,
+    get_caces_indicator_detail,
+    get_caces_indicator_matrix,
+    get_caces_indicator_result,
+    get_caces_pending_indicators,
+    get_caces_required_variables,
+    get_caces_coverage_by_indicator,
+    get_default_caces_cycle,
+)
 
 __all__ = [
     "UPLOADED_EVIDENCE_STATES",
@@ -40,4 +55,17 @@ __all__ = [
     "get_tarea_evidencia_metrics",
     "get_tareas_evidencia_queryset",
     "get_registros_queryset",
+    "get_actor_role_ids",
+    "get_caces_categories",
+    "get_caces_cycle",
+    "get_caces_cycle_result",
+    "get_caces_cycles",
+    "get_caces_final_report",
+    "get_caces_indicator_detail",
+    "get_caces_indicator_matrix",
+    "get_caces_indicator_result",
+    "get_caces_pending_indicators",
+    "get_caces_required_variables",
+    "get_caces_coverage_by_indicator",
+    "get_default_caces_cycle",
 ]

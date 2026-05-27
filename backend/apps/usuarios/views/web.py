@@ -78,7 +78,12 @@ class UsuarioListView(SeguridadAdministracionRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["roles"] = Rol.objects.filter(activo=True).order_by("nombre_rol")
         session_roles = tuple(self.request.session.get("sig_roles", []) or [])
-        ctx["can_create_user"] = any(str(role).strip().lower() == "administrador" for role in session_roles)
+        operational_roles = tuple(self.request.session.get("sig_operational_roles", []) or [])
+        effective_roles = tuple(dict.fromkeys([*session_roles, *operational_roles]))
+        ctx["can_create_user"] = any(
+            str(role).strip().lower() == "administrador"
+            for role in effective_roles
+        )
         return ctx
 
 

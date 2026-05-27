@@ -12,6 +12,7 @@ from apps.core.mixins import SigLoginRequiredMixin
 from apps.core.selectors.dashboard_selector import (
     get_dashboard_metrics,
     get_dashboard_quick_links,
+    get_dashboard_review_grid,
 )
 from apps.core.services.notification_service import marcar_notificacion_leida
 
@@ -33,6 +34,9 @@ class DashboardView(SigLoginRequiredMixin, TemplateView):
         effective_roles = tuple(dict.fromkeys([*roles, *operational_roles]))
         permissions = tuple(self.request.session.get("sig_permissions", []) or [])
         context["dashboard_metrics"] = get_dashboard_metrics()
+        context["review_dashboard"] = get_dashboard_review_grid(
+            estado=self.request.GET.get("revision_estado")
+        )
         context["quick_links"] = get_dashboard_quick_links(
             role_names=effective_roles,
             permission_codes=permissions,

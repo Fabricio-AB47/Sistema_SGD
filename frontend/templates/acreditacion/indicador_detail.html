@@ -58,8 +58,7 @@
           <tr>
             <th>Codigo</th>
             <th>Elemento</th>
-            <th>Clasificacion</th>
-            <th>Tipo</th>
+            <th>Clasificacion del elemento</th>
             <th>Orden</th>
             <th>Estado</th>
           </tr>
@@ -71,7 +70,6 @@
                 {{ elemento.codigo_elemento }}
               </td>
               <td>{{ elemento.nombre_elemento }}</td>
-              <td>{{ elemento.clasificacion.nombre|default:"--" }}</td>
               <td>{{ elemento.tipo_elemento|default:"--" }}</td>
               <td>{{ elemento.orden_visual|default:"--" }}</td>
               <td>
@@ -84,7 +82,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="text-center text-muted">Este indicador aun no tiene elementos relacionados.</td>
+              <td colspan="5" class="text-center text-muted">Este indicador aun no tiene elementos relacionados.</td>
             </tr>
           {% endfor %}
         </tbody>

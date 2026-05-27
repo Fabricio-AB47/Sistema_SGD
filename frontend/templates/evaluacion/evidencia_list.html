@@ -103,7 +103,9 @@
             <td>
               <div class="page-header__actions">
                 <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ registro.pk }}">Detalle</a>
-                <a class="btn btn-secondary" href="{% url 'evaluacion-evaluar' %}?registro={{ registro.pk }}">Evaluar</a>
+                {% if scope_flags.can_enter_evaluation %}
+                  <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?registro={{ registro.pk }}&modal=evaluar">Evaluar</a>
+                {% endif %}
               </div>
             </td>
           </tr>

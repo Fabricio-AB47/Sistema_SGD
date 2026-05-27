@@ -16,8 +16,7 @@
             <th>Codigo</th>
             <th>Elemento</th>
             <th>Indicador</th>
-            <th>Clasificacion</th>
-            <th>Tipo</th>
+            <th>Clasificacion del elemento</th>
             <th>Orden</th>
             <th>Estado</th>
           </tr>
@@ -33,7 +32,6 @@
               <td>
                 {{ elemento.indicador.codigo_indicador }} - {{ elemento.indicador.nombre_indicador }}
               </td>
-              <td>{{ elemento.clasificacion.nombre|default:"--" }}</td>
               <td>{{ elemento.tipo_elemento|default:"--" }}</td>
               <td>{{ elemento.orden_visual|default:"--" }}</td>
               <td>
@@ -46,7 +44,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="7" class="text-center text-muted">No existen elementos fundamentales registrados.</td>
+              <td colspan="6" class="text-center text-muted">No existen elementos fundamentales registrados.</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -68,12 +66,7 @@
           <small>El elemento queda vinculado desde el inicio al indicador operativo.</small>
         </label>
         <label class="acreditacion-form__field">
-          <span>Clasificacion</span>
-          {{ form.clasificacion }}
-          {{ form.clasificacion.errors }}
-        </label>
-        <label class="acreditacion-form__field">
-          <span>Tipo de elemento</span>
+          <span>Clasificacion del elemento</span>
           {{ form.tipo_elemento }}
           {{ form.tipo_elemento.errors }}
         </label>

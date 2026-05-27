@@ -3,7 +3,6 @@ from django.db.models import Max
 
 from apps.acreditacion.models import (
     CicloEvaluacion,
-    ClasificacionElementoFundamental,
     Criterio,
     ElementoFundamental,
     Indicador,
@@ -40,7 +39,6 @@ ERROR_ELEMENT_ALREADY_LINKED = "El elemento ya pertenece al indicador selecciona
 ERROR_END_DATE_BEFORE_START = "La fecha fin no puede ser menor a la fecha inicio."
 ERROR_ASSIGNMENT_REQUIRED = "Debes tener un area/cargo activo para gestionar este recurso."
 
-CLASIFICACION_ELEMENTO_DEFAULT = "EV-DOC"
 CLASIFICACION_AUT_CICLO = "AUT_CICLO"
 CLASIFICACION_ACTA = "ACTA"
 ESTADO_ENVIADO = "ENVIADO"
@@ -86,14 +84,6 @@ def _filter_estados(queryset, allowed_states: tuple[str, ...]):
         if _normalize_estado(getattr(estado, "descripcion", "")) in normalized_allowed
     ]
     return queryset.filter(pk__in=allowed_ids).order_by("id_estado_ciclo")
-
-
-def _default_elemento_clasificacion():
-    queryset = ClasificacionElementoFundamental.objects.filter(activo=True).order_by("codigo")
-    return (
-        queryset.filter(codigo__iexact=CLASIFICACION_ELEMENTO_DEFAULT).first()
-        or queryset.first()
-    )
 
 
 def _next_elemento_orden_visual(indicador_id, *, exclude_elemento_id=None) -> int:
@@ -233,7 +223,6 @@ class ElementoFundamentalForm(forms.ModelForm):
         model = ElementoFundamental
         fields = [
             "indicador",
-            "clasificacion",
             "codigo_elemento",
             "nombre_elemento",
             "descripcion",
@@ -259,13 +248,6 @@ class ElementoFundamentalForm(forms.ModelForm):
                 f"{indicador.codigo_indicador} - {indicador.nombre_indicador}"
             )
         )
-        self.fields["clasificacion"].queryset = (
-            ClasificacionElementoFundamental.objects.filter(activo=True).order_by("codigo")
-        )
-        default_clasificacion = _default_elemento_clasificacion()
-        if default_clasificacion and not self.is_bound and not self.instance.pk:
-            self.fields["clasificacion"].initial = default_clasificacion
-            self.initial.setdefault("clasificacion", default_clasificacion.pk)
 
         self._initial_indicator_id = self._selected_indicator_id()
         self._initial_orden_visual = None
@@ -295,9 +277,6 @@ class ElementoFundamentalForm(forms.ModelForm):
             return None
         first_indicator = self.fields["indicador"].queryset.first()
         return first_indicator.pk if first_indicator else None
-
-    def clean_clasificacion(self):
-        return self.cleaned_data.get("clasificacion") or _default_elemento_clasificacion()
 
     def clean_orden_visual(self):
         indicador = self.cleaned_data.get("indicador")
@@ -407,6 +386,16 @@ class IndicadorElementoForm(forms.Form):
 
 
 class CicloEvaluacionForm(forms.ModelForm):
+    seleccionar_todos_indicadores = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Seleccionar todos los indicadores",
+    )
+    indicadores_evaluar = forms.ModelMultipleChoiceField(
+        queryset=Indicador.objects.none(),
+        required=False,
+        label="Indicadores a evaluar",
+    )
     estado = forms.ModelChoiceField(
         queryset=EstadoCiclo.objects.filter(activo=True)
         .only("id_estado_ciclo", "descripcion", "activo")
@@ -459,6 +448,30 @@ class CicloEvaluacionForm(forms.ModelForm):
         self.fields["fecha_inicio"].input_formats = DATETIME_INPUT_FORMATS
         self.fields["fecha_fin"].input_formats = DATETIME_INPUT_FORMATS
         self.fields["archivo"].widget.attrs.update({"accept": ALLOWED_DOCUMENT_TYPES})
+        self.fields["indicadores_evaluar"].queryset = (
+            Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador")
+            .filter(
+                activo=True,
+                subcriterio__activo=True,
+                subcriterio__criterio__activo=True,
+            )
+            .order_by(
+                "subcriterio__criterio__orden_visual",
+                "subcriterio__criterio__codigo_criterio",
+                "subcriterio__orden_visual",
+                "subcriterio__codigo_subcriterio",
+                "orden_visual",
+                "codigo_indicador",
+            )
+        )
+        self.fields["indicadores_evaluar"].widget = forms.CheckboxSelectMultiple()
+        self.fields["indicadores_evaluar"].label_from_instance = (
+            lambda indicador: f"{indicador.codigo_indicador} - {indicador.nombre_indicador}"
+        )
+        if not self.is_bound:
+            self.fields["indicadores_evaluar"].initial = list(
+                self.fields["indicadores_evaluar"].queryset.values_list("pk", flat=True)
+            )
 
         self.active_assignment = None
         if self.usuario_id:
@@ -498,10 +511,38 @@ class CicloEvaluacionForm(forms.ModelForm):
     def clean_descripcion_documento(self):
         return _normalize_optional_text(self.cleaned_data.get("descripcion_documento"))
 
+    def clean_indicadores_evaluar(self):
+        indicadores = self.cleaned_data.get("indicadores_evaluar")
+        select_all = bool(self.cleaned_data.get("seleccionar_todos_indicadores"))
+        if select_all:
+            return self.fields["indicadores_evaluar"].queryset
+        if not indicadores:
+            raise forms.ValidationError(
+                "Selecciona al menos un indicador o marca la opcion de seleccionar todo."
+            )
+        return indicadores
+
     def clean_archivo(self):
         archivo = self.cleaned_data.get("archivo")
         validate_uploaded_file(archivo, label=AUTHORIZED_DOCUMENT_LABEL)
         return archivo
+
+
+class CacesCatalogSyncForm(forms.Form):
+    sincronizar = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.HiddenInput,
+        label="Crear estructura faltante desde modelo CACES",
+    )
+    asegurar_carpetas_existentes = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Validar carpetas de registros existentes",
+    )
+
+    def clean_sincronizar(self):
+        return True
 
 
 class CicloEstadoUpdateForm(forms.Form):

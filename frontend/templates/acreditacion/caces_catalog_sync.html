@@ -1,0 +1,109 @@
+{% extends "acreditacion/_page_base.html" %}
+
+{% block acreditacion_content %}
+<div class="caces-sync-page">
+  <section class="caces-sync-summary">
+    <article class="card caces-sync-summary__card">
+      <span class="caces-sync-summary__label">Modelos activos</span>
+      <strong>{{ preview.summary.modelos }}</strong>
+    </article>
+    <article class="card caces-sync-summary__card">
+      <span class="caces-sync-summary__label">Criterios</span>
+      <strong>{{ preview.summary.criterios }}</strong>
+    </article>
+    <article class="card caces-sync-summary__card">
+      <span class="caces-sync-summary__label">Subcriterios</span>
+      <strong>{{ preview.summary.subcriterios }}</strong>
+    </article>
+    <article class="card caces-sync-summary__card">
+      <span class="caces-sync-summary__label">Indicadores faltantes</span>
+      <strong>{{ preview.summary.indicadores_faltantes }}</strong>
+    </article>
+  </section>
+
+  <div class="caces-sync-layout">
+    <article class="card acreditacion-panel">
+      <div class="acreditacion-panel__header">
+        <div>
+          <p class="eyebrow">Sincronizacion</p>
+          <h3>Crear estructura desde modelo CACES</h3>
+          <p class="text-muted">Lee la matriz CACES activa y crea de forma automatica los criterios, subcriterios, indicadores, mapeos y carpetas Graph que falten.</p>
+        </div>
+      </div>
+
+      {% if sync_result %}
+        <div class="caces-sync-result">
+          <div><span>Modelos leidos</span><strong>{{ sync_result.modelos }}</strong></div>
+          <div><span>Criterios creados</span><strong>{{ sync_result.criterios_creados }}</strong></div>
+          <div><span>Subcriterios creados</span><strong>{{ sync_result.subcriterios_creados }}</strong></div>
+          <div><span>Indicadores creados</span><strong>{{ sync_result.indicadores_creados }}</strong></div>
+          <div><span>Mapeos creados</span><strong>{{ sync_result.mapeos_creados }}</strong></div>
+        </div>
+      {% endif %}
+
+      <form method="post" class="acreditacion-form">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {{ form.sincronizar }}
+        {{ form.sincronizar.errors }}
+        <label class="caces-sync-confirm">
+          {{ form.asegurar_carpetas_existentes }}
+          <span>{{ form.asegurar_carpetas_existentes.label }}</span>
+        </label>
+        {{ form.asegurar_carpetas_existentes.errors }}
+        <div class="acreditacion-form__actions">
+          <button class="btn btn-primary" type="submit">Crear desde matriz CACES</button>
+        </div>
+      </form>
+    </article>
+
+    <aside class="card acreditacion-panel caces-sync-guide">
+      <h3>Resultado esperado</h3>
+      <ul class="acreditacion-links">
+        <li>Organizacion, Infraestructura, Profesores y demas criterios se crean una sola vez.</li>
+        <li>Cada subcriterio se ubica bajo su criterio correspondiente.</li>
+        <li>Cada indicador CACES se crea con codigo, tipo y ponderacion base.</li>
+        <li>El mapeo CACES queda conectado para evaluar el ciclo con ponderaciones oficiales.</li>
+        <li>Las carpetas se preparan bajo la misma jerarquia de Graph usada por la carga documental.</li>
+      </ul>
+    </aside>
+  </div>
+
+  <article class="card acreditacion-panel acreditacion-panel--wide caces-sync-preview">
+    <div class="acreditacion-panel__header">
+      <div>
+        <p class="eyebrow">Vista previa</p>
+        <h3>Matriz detectada</h3>
+        <p class="text-muted">{{ preview.summary.indicadores_existentes }} indicadores ya existen y {{ preview.summary.indicadores_faltantes }} se crearan si faltan.</p>
+      </div>
+    </div>
+
+    <div class="caces-sync-tree">
+      {% for group in preview.groups %}
+        <section class="caces-sync-tree__criterion">
+          <h4>{{ group.nombre }}</h4>
+          {% for subcriterion in group.subcriteria %}
+            <div class="caces-sync-tree__subcriterion">
+              <strong>{{ subcriterion.nombre }}</strong>
+              <div class="caces-sync-tree__indicators">
+                {% for indicator in subcriterion.indicators %}
+                  <span class="caces-sync-indicator{% if indicator.exists %} is-existing{% endif %}">
+                    <b>{{ indicator.codigo }}</b>
+                    {{ indicator.nombre }}
+                    <small>{{ indicator.tipo }}{% if indicator.exists %} · existente{% endif %}</small>
+                  </span>
+                {% endfor %}
+              </div>
+            </div>
+          {% endfor %}
+        </section>
+      {% empty %}
+        <div class="ciclos-empty-state">
+          <strong>No hay registros activos en modelo_indicador_caces.</strong>
+          <p class="text-muted">Carga primero la matriz base para poder sincronizarla.</p>
+        </div>
+      {% endfor %}
+    </div>
+  </article>
+</div>
+{% endblock %}

@@ -1,8 +1,12 @@
 from types import SimpleNamespace
 
+from django.contrib.messages.storage.fallback import FallbackStorage
+from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.views import View
 
 from application.services import build_document_drive_path
+from apps.core.mixins import SigRoleOrPermissionRequiredMixin
 from apps.core.services.redirect_security import (
     build_login_redirect_url,
     get_auth_flow_redirect_blocklist,
@@ -74,3 +78,44 @@ class DocumentDrivePathTests(SimpleTestCase):
             "IN001_PRIMER_INDICADOR/EL001_PRIMER_ELEMENTO/2026_CICLO_PRB_1",
         )
         self.assertNotIn("/CICLO/", path)
+
+
+class ConsultaReadOnlyGuardTests(SimpleTestCase):
+    class ProtectedView(SigRoleOrPermissionRequiredMixin, View):
+        allowed_roles = ("CONSULTA",)
+
+        def get(self, request):
+            return HttpResponse("ok")
+
+        def post(self, request):
+            return HttpResponse("posted")
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.view = self.ProtectedView.as_view()
+
+    def _request(self, method: str, roles):
+        request = getattr(self.factory, method.lower())("/dummy/")
+        request.session = {
+            "sig_user_id": 1,
+            "sig_roles": tuple(roles),
+            "sig_operational_roles": (),
+            "sig_permissions": (),
+        }
+        request._messages = FallbackStorage(request)
+        return request
+
+    def test_consulta_can_read_allowed_views(self):
+        response = self.view(self._request("get", ("CONSULTA",)))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_consulta_cannot_post_allowed_views(self):
+        response = self.view(self._request("post", ("CONSULTA",)))
+
+        self.assertEqual(response.status_code, 302)
+
+    def test_admin_with_consulta_can_post(self):
+        response = self.view(self._request("post", ("CONSULTA", "ADMINISTRADOR")))
+
+        self.assertEqual(response.status_code, 200)

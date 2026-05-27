@@ -1,14 +1,14 @@
 """
 Construccion de rutas documentales para la jerarquia CACES.
 
-La provision de carpetas se realiza exclusivamente en Microsoft Graph.
-Las funciones locales se conservan solo para compatibilidad de lectura con
-registros legacy y no deben crear directorios en disco.
+Microsoft Graph sigue siendo el almacenamiento principal. El espejo local usa
+las mismas rutas relativas para mantener una copia navegable dentro del proyecto.
 """
 
 from __future__ import annotations
 
 import re
+import tempfile
 import unicodedata
 from pathlib import Path, PurePosixPath
 from urllib.parse import parse_qs, unquote, urlparse
@@ -56,7 +56,73 @@ def _local_path_from_drive_path(relative_path: PurePosixPath) -> Path:
 
 
 def get_local_storage_root() -> Path:
+    configured = str(getattr(settings, "SIG_LOCAL_DOCUMENT_MIRROR_ROOT", "") or "").strip()
+    if configured:
+        configured_path = Path(configured)
+        if configured_path.is_absolute():
+            return configured_path
+        return get_project_storage_root() / configured_path
     return _local_path_from_drive_path(get_drive_root_path())
+
+
+def local_document_mirror_enabled() -> bool:
+    return bool(getattr(settings, "SIG_LOCAL_DOCUMENT_MIRROR_ENABLED", True))
+
+
+def _drive_suffix(relative_path: str | PurePosixPath) -> PurePosixPath:
+    normalized = PurePosixPath(str(relative_path or "").replace("\\", "/"))
+    drive_root = get_drive_root_path()
+    try:
+        return normalized.relative_to(drive_root)
+    except ValueError:
+        return normalized
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    return path == root or root in path.parents
+
+
+def resolve_local_mirror_path(relative_path: str | PurePosixPath) -> Path:
+    root = get_local_storage_root().resolve(strict=False)
+    suffix = _drive_suffix(relative_path)
+    candidate = root.joinpath(*suffix.parts).resolve(strict=False)
+    if not _is_relative_to(candidate, root):
+        raise ValueError("La ruta del espejo local debe permanecer dentro de la carpeta configurada.")
+    return candidate
+
+
+def ensure_local_mirror_folder(relative_path: str | PurePosixPath) -> Path | None:
+    if not local_document_mirror_enabled():
+        return None
+    folder_path = resolve_local_mirror_path(relative_path)
+    folder_path.mkdir(parents=True, exist_ok=True)
+    return folder_path
+
+
+def write_local_mirror_file(relative_file_path: str | PurePosixPath, content: bytes) -> Path | None:
+    if not local_document_mirror_enabled():
+        return None
+    file_path = resolve_local_mirror_path(relative_file_path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_name = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=file_path.parent, delete=False) as tmp_file:
+            tmp_name = tmp_file.name
+            tmp_file.write(content)
+        Path(tmp_name).replace(file_path)
+    finally:
+        if tmp_name:
+            tmp_path = Path(tmp_name)
+            if tmp_path.exists():
+                tmp_path.unlink()
+    return file_path
+
+
+def get_existing_local_mirror_file(relative_file_path: str | PurePosixPath | None) -> Path | None:
+    if not relative_file_path or not local_document_mirror_enabled():
+        return None
+    file_path = resolve_local_mirror_path(relative_file_path)
+    return file_path if file_path.is_file() else None
 
 
 def _slugify_segment(value: str) -> str:

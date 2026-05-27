@@ -3,6 +3,7 @@ from .catalogo import (  # noqa: F401
     CicloAuthorizationRevisionForm,
     CicloEstadoUpdateForm,
     CicloEvaluacionForm,
+    CacesCatalogSyncForm,
     ESTADOS_FLUJO_CICLO,
     ESTADOS_RECTOR_DECISION,
     CriterioForm,

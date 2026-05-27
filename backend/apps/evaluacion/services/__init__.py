@@ -21,6 +21,16 @@ from .tareas_service import (
     registrar_tareas_evidencia_lote,
     tarea_tiene_visto_bueno_director,
 )
+from .caces_service import (
+    CacesEvaluationError,
+    SQL_REFERENCES,
+    calcular_evaluacion_cuantitativa_caces,
+    guardar_escenario_ponderacion_caces,
+    guardar_evaluacion_cualitativa_caces,
+    guardar_evaluacion_cuantitativa_manual_caces,
+    guardar_variable_cuantitativa_caces,
+    guardar_variables_cuantitativas_caces,
+)
 
 __all__ = [
     "aprobar_tarea_visto_bueno_director",
@@ -40,4 +50,12 @@ __all__ = [
     "resolver_observacion",
     "tarea_tiene_visto_bueno_director",
     "TareaEvidenciaWorkflowError",
+    "CacesEvaluationError",
+    "SQL_REFERENCES",
+    "calcular_evaluacion_cuantitativa_caces",
+    "guardar_escenario_ponderacion_caces",
+    "guardar_evaluacion_cualitativa_caces",
+    "guardar_evaluacion_cuantitativa_manual_caces",
+    "guardar_variable_cuantitativa_caces",
+    "guardar_variables_cuantitativas_caces",
 ]

@@ -23,6 +23,11 @@ from apps.evaluacion.forms import (
 from apps.evaluacion.selectors import (
     UPLOADED_EVIDENCE_STATES,
     get_current_enabled_cycle,
+    get_caces_cycle,
+    get_caces_cycle_result,
+    get_caces_cycles,
+    get_caces_indicator_matrix,
+    get_default_caces_cycle,
     get_estado_tarea_options,
     get_evaluation_inbox_data,
     get_evaluacion_detail,
@@ -75,10 +80,15 @@ QUALITY_ROLE_TOKENS = {
     "CALIDAD",
 }
 ADMIN_ROLE_TOKEN = "ADMINISTRADOR"
+EVALUATOR_ROLE_TOKEN = "EVALUADOR"
 DIRECTOR_REDIRECT_BLOCKED_ROLE_TOKENS = {
-    "EVALUADOR",
+    EVALUATOR_ROLE_TOKEN,
     "CONSULTA",
 }
+EVALUACION_ENTRY_ROLE_TOKENS = {ADMIN_ROLE_TOKEN, EVALUATOR_ROLE_TOKEN}
+EVALUACION_ENTRY_ACCESS_DENIED_MESSAGE = (
+    "Solo los roles ADMINISTRADOR o EVALUADOR pueden ingresar a evaluacion."
+)
 
 MODULE_TITLE = "Evaluacion"
 MODULE_DESCRIPTION = "Gestiona evidencias registradas, evaluaciones y observaciones del flujo operativo."
@@ -106,12 +116,13 @@ MODULE_TABS = [
     {
         "label": "Bandeja de evaluacion",
         "url_name": "evaluacion-bandeja",
-        "active_names": ("evaluacion-bandeja",),
-    },
-    {
-        "label": "Evaluar evidencia",
-        "url_name": "evaluacion-evaluar",
-        "active_names": ("evaluacion-evaluar",),
+        "active_names": (
+            "evaluacion-bandeja",
+            "evaluacion-caces",
+            "evaluacion-caces-ciclo",
+            "evaluacion-caces-indicador",
+            "evaluacion-caces-reporte",
+        ),
     },
     {
         "label": "Observaciones",
@@ -126,6 +137,24 @@ def _report_operation_error(*, request, exc: Exception, user_message: str, form=
     messages.error(request, user_message)
     if form is not None:
         form.add_error(None, user_message)
+
+
+def _request_role_tokens(request):
+    return tuple(
+        dict.fromkeys(
+            _normalize_token(role)
+            for role in [
+                *(request.session.get("sig_roles", []) or []),
+                *(request.session.get("sig_operational_roles", []) or []),
+            ]
+            if _normalize_token(role)
+        )
+    )
+
+
+def _has_evaluation_entry_access(request) -> bool:
+    role_tokens = set(_request_role_tokens(request))
+    return bool(role_tokens.intersection(EVALUACION_ENTRY_ROLE_TOKENS))
 
 
 def _build_bulk_structure_groups():
@@ -204,6 +233,16 @@ def _build_bulk_structure_groups():
     }
 
 
+class EvaluacionEntryRoleRequiredMixin:
+    access_denied_message = EVALUACION_ENTRY_ACCESS_DENIED_MESSAGE
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.session.get("sig_user_id") and not _has_evaluation_entry_access(request):
+            messages.error(request, self.access_denied_message)
+            return redirect("core-dashboard")
+        return super().dispatch(request, *args, **kwargs)
+
+
 class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
     template_name = ""
     page_title = ""
@@ -233,10 +272,7 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
 
     def _actor_scope_flags(self):
         assignment = self._actor_assignment()
-        role_tokens = tuple(
-            _normalize_token(role)
-            for role in (self.request.session.get("sig_roles", []) or [])
-        )
+        role_tokens = _request_role_tokens(self.request)
         cargo_name = _normalize_token(getattr(getattr(assignment, "cargo", None), "nombre_cargo", ""))
         cargo_level = getattr(getattr(assignment, "cargo", None), "nivel_jerarquico", None)
         cargo_approves = bool(getattr(getattr(assignment, "cargo", None), "aprueba_interno", False))
@@ -244,9 +280,9 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
         is_level_one_approver = bool(cargo_approves and cargo_level == 1)
         is_tech_director = cargo_name == "DIRECTOR DE TECNOLOGIA"
         is_area_director = "DIRECTOR" in cargo_name if cargo_name else False
-        is_evaluator = any("EVALUADOR" in token for token in role_tokens)
-        is_consulta = any("CONSULTA" in token for token in role_tokens)
-        is_admin = any(token == ADMIN_ROLE_TOKEN for token in role_tokens)
+        is_evaluator = EVALUATOR_ROLE_TOKEN in role_tokens
+        is_consulta = "CONSULTA" in role_tokens
+        is_admin = ADMIN_ROLE_TOKEN in role_tokens
         is_quality = any(token in QUALITY_ROLE_TOKENS for token in role_tokens)
 
         return {
@@ -257,8 +293,10 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
             "is_evaluator": is_evaluator,
             "is_consulta": is_consulta,
             "is_quality": is_quality,
+            "can_enter_evaluation": is_admin or is_evaluator,
             "can_assign_tasks": is_admin or is_quality,
             "can_manage_release": is_admin or is_level_one_approver or is_tech_director,
+            "can_manage_corrections": is_admin or is_quality,
             "can_redirect_subordinates": (
                 is_admin
                 or (
@@ -512,6 +550,19 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         if tarea.usuario_responsable_id == actor_id:
             return False
         return tarea.asignado_por_id == actor_id
+
+    @staticmethod
+    def _latest_registro_for_tarea(tarea):
+        return (
+            RegistroEvidencia.objects.select_related("documento", "estado")
+            .filter(
+                ciclo=tarea.ciclo,
+                indicador=tarea.indicador,
+                elemento_fundamental=tarea.elemento_fundamental,
+            )
+            .order_by("-fecha_registro", "-id_registro")
+            .first()
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -853,10 +904,37 @@ class TareaEvidenciaListView(EvaluacionBaseView):
                 user_message="No fue posible registrar el visto bueno del director.",
             )
         else:
-            messages.success(
-                request,
-                "Documento aprobado. Se envio la alerta y el correo de aprobacion correspondiente.",
-            )
+            try:
+                registro = self._latest_registro_for_tarea(tarea)
+                if registro is None:
+                    raise EvaluacionWorkflowError("No fue posible identificar la evidencia aprobada.")
+                release_result = habilitar_salida_evaluador(
+                    registro=registro,
+                    actor=actor,
+                    allow_reassign=scope_flags["can_manage_release"],
+                    require_actor_approver=not scope_flags.get("is_admin"),
+                    request=request,
+                )
+            except (EvaluacionWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    user_message=(
+                        "El visto bueno fue registrado, pero no fue posible enviar la evidencia "
+                        "automaticamente al evaluador."
+                    ),
+                )
+            else:
+                if release_result["status"] == "already_released":
+                    messages.info(
+                        request,
+                        "Documento aprobado. La evidencia ya estaba habilitada para evaluacion.",
+                    )
+                else:
+                    messages.success(
+                        request,
+                        "Documento aprobado y enviado automaticamente al evaluador.",
+                    )
 
         return redirect(redirect_url_name)
 
@@ -927,7 +1005,7 @@ class TareaEvidenciaListView(EvaluacionBaseView):
 
         scope_flags = self._actor_scope_flags()
         if not scope_flags.get("can_assign_tasks"):
-            messages.error(request, "Solo Calidad puede asignar tareas de evidencia.")
+            messages.error(request, "Solo Administrador o Calidad puede asignar tareas de evidencia.")
             return redirect("evaluacion-tareas")
 
         form = TareaEvidenciaForm(request.POST)
@@ -1270,6 +1348,7 @@ class EvidenciaDetailView(EvaluacionBaseView):
         approval_status = obtener_aprobacion_principal_registro(registro) if registro else None
         approval_task = approval_status.get("task") if approval_status else None
         context["registro"] = registro
+        context["scope_flags"] = scope_flags
         context["release_controls"] = {
             "can_manage": scope_flags["can_manage_release"],
             "is_released": self._registro_released(registro) if registro else False,
@@ -1297,7 +1376,9 @@ class EvidenciaDetailView(EvaluacionBaseView):
         )
         context["selected_evaluation"] = selected_evaluation
         context["is_rejected_context"] = rejected_context
-        context["can_manage_corrections"] = bool(scope_flags.get("is_quality") and rejected_context)
+        context["can_manage_corrections"] = bool(
+            scope_flags.get("can_manage_corrections") and rejected_context
+        )
         return context
 
     def get(self, request, *args, **kwargs):
@@ -1305,17 +1386,67 @@ class EvidenciaDetailView(EvaluacionBaseView):
         if registro is None:
             raise Http404("La evidencia solicitada no existe.")
         scope_flags = self._actor_scope_flags()
-        if scope_flags["is_evaluator"] and not self._registro_released(registro):
+        if (
+            scope_flags["is_evaluator"]
+            and not scope_flags["is_admin"]
+            and not self._registro_released(registro)
+        ):
             messages.warning(
                 request,
                 "La evidencia todavia no ha sido habilitada para evaluacion por un cargo de nivel 1.",
             )
             return redirect("evaluacion-evidencias-lista")
+        if self._auto_release_approved_registro(
+            request=request,
+            registro=registro,
+            scope_flags=scope_flags,
+        ):
+            return self._detail_redirect(registro)
         return self.render_to_response(self.get_context_data(registro=registro))
 
     @staticmethod
     def _detail_redirect(registro):
         return redirect(f"{reverse('evaluacion-evidencia-detalle')}?registro={registro.pk}")
+
+    def _auto_release_approved_registro(self, *, request, registro, scope_flags) -> bool:
+        if self._registro_released(registro) or not scope_flags["can_manage_release"]:
+            return False
+
+        approval_status = obtener_aprobacion_principal_registro(registro)
+        approval_task = approval_status.get("task") if approval_status else None
+        actor = self._actor()
+        actor_id = getattr(actor, "pk", None)
+        can_release = bool(
+            approval_status
+            and approval_status["approved"]
+            and (
+                scope_flags.get("is_admin")
+                or getattr(approval_task, "asignado_por_id", None) == actor_id
+            )
+        )
+        if not can_release:
+            return False
+
+        try:
+            result = habilitar_salida_evaluador(
+                registro=registro,
+                actor=actor,
+                allow_reassign=scope_flags["can_manage_release"],
+                require_actor_approver=not scope_flags.get("is_admin"),
+                request=request,
+            )
+        except (EvaluacionWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
+            _report_operation_error(
+                request=request,
+                exc=exc,
+                user_message="No fue posible enviar automaticamente la evidencia al evaluador.",
+            )
+            return False
+
+        if result["status"] == "already_released":
+            return False
+        messages.success(request, "Evidencia aprobada y enviada automaticamente al evaluador.")
+        return True
 
     def _resolve_observacion_from_request(self, *, request, registro):
         observacion_id = request.POST.get("observacion_id")
@@ -1331,8 +1462,8 @@ class EvidenciaDetailView(EvaluacionBaseView):
             messages.error(request, "La recomendacion seleccionada no existe para este registro.")
             return self._detail_redirect(registro)
 
-        if not scope_flags.get("is_quality"):
-            messages.error(request, "Solo Calidad puede gestionar correcciones en esta pantalla.")
+        if not scope_flags.get("can_manage_corrections"):
+            messages.error(request, "Solo Administrador o Calidad puede gestionar correcciones en esta pantalla.")
             return self._detail_redirect(registro)
 
         estado_actual = _normalize_token(
@@ -1360,38 +1491,6 @@ class EvidenciaDetailView(EvaluacionBaseView):
             messages.success(request, "Correccion actualizada correctamente.")
         return self._detail_redirect(registro)
 
-    def _handle_release(self, *, request, registro, scope_flags):
-        if not scope_flags["can_manage_release"]:
-            messages.error(request, "No tienes permisos para habilitar la salida al evaluador.")
-            return self._detail_redirect(registro)
-
-        if request.POST.get("habilitar_salida") != "1":
-            messages.warning(request, "Debes marcar la casilla para habilitar la salida al evaluador.")
-            return self._detail_redirect(registro)
-
-        try:
-            result = habilitar_salida_evaluador(
-                registro=registro,
-                actor=self._actor(),
-                allow_reassign=scope_flags["can_manage_release"],
-                require_actor_approver=not scope_flags.get("is_admin"),
-                request=request,
-            )
-        except (EvaluacionWorkflowError, ValueError, IntegrityError, OperationalError, DatabaseError) as exc:
-            _report_operation_error(
-                request=request,
-                exc=exc,
-                user_message="No fue posible actualizar la salida hacia evaluacion.",
-            )
-        else:
-            if result["status"] == "released":
-                messages.success(request, "Salida al evaluador habilitada correctamente.")
-            elif result["status"] == "reassigned":
-                messages.success(request, "Salida al evaluador reasignada por la cabeza principal.")
-            else:
-                messages.info(request, "La evidencia ya se encontraba habilitada para evaluacion.")
-        return self._detail_redirect(registro)
-
     def post(self, request, *args, **kwargs):
         registro = get_registro_detail(request.POST.get("registro"))
         if registro is None:
@@ -1407,39 +1506,221 @@ class EvidenciaDetailView(EvaluacionBaseView):
                 scope_flags=scope_flags,
             )
 
-        return self._handle_release(
-            request=request,
-            registro=registro,
-            scope_flags=scope_flags,
+        messages.info(
+            request,
+            "La salida al evaluador se habilita automaticamente cuando el director registra el visto bueno.",
         )
+        return self._detail_redirect(registro)
 
 
-class EvaluacionInboxView(EvaluacionBaseView):
+class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
     template_name = "evaluacion/bandeja_evaluacion.html"
     page_title = "Bandeja de evaluacion"
-    page_description = "Prioriza evidencias pendientes, observadas o en análisis para seguimiento operativo."
+    page_description = "Centraliza la evaluacion documental y la evaluacion CACES por tipo de indicador."
+
+    PANEL_EVIDENCIAS = "evidencias"
+    PANEL_CACES = "caces"
+    CACES_TYPE_OPTIONS = (
+        ("TODOS", "Todos"),
+        ("CUALITATIVO", "Cualitativos"),
+        ("CUANTITATIVO", "Cuantitativos"),
+    )
+
+    def _selected_estado(self):
+        return self.request.POST.get("estado_filtro") or self.request.GET.get("estado", "TODOS")
+
+    def _selected_evidence_cycle_id(self):
+        return self.request.POST.get("ciclo") or self.request.GET.get("ciclo")
+
+    def _selected_panel(self):
+        panel = (self.request.GET.get("panel") or self.PANEL_EVIDENCIAS).strip().lower()
+        return panel if panel in {self.PANEL_EVIDENCIAS, self.PANEL_CACES} else self.PANEL_EVIDENCIAS
+
+    def _selected_caces_type(self):
+        selected_type = (self.request.GET.get("tipo") or "TODOS").strip().upper()
+        valid_types = {value for value, _label in self.CACES_TYPE_OPTIONS}
+        return selected_type if selected_type in valid_types else "TODOS"
+
+    def _selected_caces_cycle(self):
+        cycle_id = self.request.GET.get("ciclo") or self.request.POST.get("ciclo")
+        return get_caces_cycle(cycle_id) or get_default_caces_cycle()
+
+    def _bandeja_url(self, *, registro_id=None, modal=False):
+        url = f"{reverse('evaluacion-bandeja')}?panel={self.PANEL_EVIDENCIAS}&estado={self._selected_estado()}"
+        cycle_id = self._selected_evidence_cycle_id()
+        if cycle_id:
+            url = f"{url}&ciclo={cycle_id}"
+        if registro_id:
+            url = f"{url}&registro={registro_id}"
+        if modal:
+            url = f"{url}&modal=evaluar"
+        return url
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         scope_flags = self._actor_scope_flags()
-        selected_estado = self.request.GET.get("estado", "TODOS")
+        selected_estado = self._selected_estado()
         inbox_data = get_evaluation_inbox_data(
             estado=selected_estado,
-            only_released=scope_flags["is_evaluator"],
+            only_released=scope_flags["is_evaluator"] and not scope_flags["is_admin"],
+            ciclo_id=self._selected_evidence_cycle_id(),
+        )
+        selected_registro = kwargs.get("registro") or get_registro_detail(
+            self.request.GET.get("registro") or self.request.POST.get("registro")
+        )
+        if (
+            scope_flags["is_evaluator"]
+            and not scope_flags["is_admin"]
+            and selected_registro is not None
+            and not self._registro_released(selected_registro)
+        ):
+            selected_registro = None
+            messages.warning(
+                self.request,
+                "La evidencia no esta habilitada para evaluacion. Debe ser liberada por un cargo de nivel 1.",
+            )
+        evaluation_form = kwargs.get("evaluation_form") or EvaluacionGestionForm(
+            registro_initial=selected_registro
         )
         context["registros_pendientes"] = inbox_data["rows"]
         context["inbox_counts"] = inbox_data["counts"]
+        context["inbox_summary"] = inbox_data["summary"]
+        context["criterion_summaries"] = inbox_data["criterion_summaries"]
         context["selected_estado"] = inbox_data["selected_estado"]
         context["inbox_filter_options"] = inbox_data["filter_options"]
         context["evaluaciones_recientes"] = inbox_data["evaluaciones_recientes"]
+        context["selected_evidence_cycle"] = inbox_data["selected_cycle"]
+        context["evidence_cycles"] = inbox_data["available_cycles"]
         context["scope_flags"] = scope_flags
+        context["selected_evaluation_record"] = selected_registro
+        context["evaluation_form"] = evaluation_form
+        context["evaluation_mode"] = getattr(evaluation_form, "evaluation_mode", "quantitative")
+        context["indicator_type"] = getattr(
+            getattr(getattr(selected_registro, "indicador", None), "tipo_indicador", None),
+            "descripcion",
+            "",
+        )
+        context["show_evaluation_modal"] = bool(
+            selected_registro
+            and (
+                self.request.GET.get("modal") == "evaluar"
+                or kwargs.get("evaluation_form") is not None
+            )
+        )
+        context["close_evaluation_url"] = self._bandeja_url()
+
+        selected_panel = self._selected_panel()
+        selected_caces_cycle = (
+            self._selected_caces_cycle()
+            if selected_panel == self.PANEL_CACES
+            else None
+        )
+        caces_matrix = (
+            get_caces_indicator_matrix(selected_caces_cycle.pk)
+            if selected_caces_cycle
+            else None
+        )
+        context["selected_evaluation_panel"] = selected_panel
+        context["evaluation_panel_options"] = (
+            {
+                "key": self.PANEL_EVIDENCIAS,
+                "label": "Evidencias",
+                "description": "Revisa documentos enviados y registra la evaluacion operativa.",
+                "url": (
+                    f"{reverse('evaluacion-bandeja')}?panel={self.PANEL_EVIDENCIAS}&estado={selected_estado}"
+                    + (
+                        f"&ciclo={inbox_data['selected_cycle'].pk}"
+                        if inbox_data.get("selected_cycle")
+                        else ""
+                    )
+                ),
+            },
+            {
+                "key": self.PANEL_CACES,
+                "label": "CACES",
+                "description": "Evalua indicadores cualitativos y cuantitativos por ponderacion.",
+                "url": f"{reverse('evaluacion-bandeja')}?panel={self.PANEL_CACES}",
+            },
+        )
+        context["caces_cycles"] = get_caces_cycles() if selected_panel == self.PANEL_CACES else []
+        context["selected_caces_cycle"] = selected_caces_cycle
+        context["selected_caces_type"] = self._selected_caces_type()
+        context["caces_type_options"] = self.CACES_TYPE_OPTIONS
+        context["caces_matrix"] = caces_matrix
+        context["caces_cycle_result"] = (
+            get_caces_cycle_result(selected_caces_cycle.pk)
+            if selected_caces_cycle
+            else None
+        )
         return context
 
+    def post(self, request, *args, **kwargs):
+        form = EvaluacionGestionForm(request.POST)
+        scope_flags = self._actor_scope_flags()
+        selected_registro = get_registro_detail(request.POST.get("registro"))
+        if form.is_valid():
+            registro = form.cleaned_data["registro"]
+            if (
+                scope_flags["is_evaluator"]
+                and not scope_flags["is_admin"]
+                and not self._registro_released(registro)
+            ):
+                form.add_error("registro", "La evidencia no esta habilitada para evaluacion.")
+                return self.render_to_response(
+                    self.get_context_data(
+                        evaluation_form=form,
+                        registro=selected_registro,
+                    )
+                )
+            try:
+                result = registrar_evaluacion(
+                    registro=registro,
+                    estado=form.cleaned_data["estado"],
+                    calificacion=form.cleaned_data.get("calificacion"),
+                    comentario=form.cleaned_data.get("comentario"),
+                    actor=self._actor(),
+                    request=request,
+                )
+            except (
+                EvaluacionWorkflowError,
+                ValueError,
+                IntegrityError,
+                OperationalError,
+                DatabaseError,
+            ) as exc:
+                _report_operation_error(
+                    request=request,
+                    exc=exc,
+                    form=form,
+                    user_message="No fue posible registrar la evaluacion de la evidencia.",
+                )
+            else:
+                messages.success(
+                    request,
+                    "Evaluacion registrada correctamente."
+                    if result["created"]
+                    else "Evaluacion actualizada correctamente.",
+                )
+                return redirect(self._bandeja_url())
+        return self.render_to_response(
+            self.get_context_data(
+                evaluation_form=form,
+                registro=selected_registro,
+            )
+        )
 
-class EvaluacionFormView(EvaluacionBaseView):
+
+class EvaluacionFormView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
     template_name = "evaluacion/evaluacion_form.html"
     page_title = "Evaluar evidencia"
     page_description = "Registra el resultado de la evaluacion formal y sincroniza el estado operativo de la evidencia."
+
+    def get(self, request, *args, **kwargs):
+        url = reverse("evaluacion-bandeja")
+        registro_id = request.GET.get("registro")
+        if registro_id:
+            url = f"{url}?registro={registro_id}&modal=evaluar"
+        return redirect(url)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1447,7 +1728,12 @@ class EvaluacionFormView(EvaluacionBaseView):
         registro = kwargs.get("registro") or get_registro_detail(
             self.request.GET.get("registro") or self.request.POST.get("registro")
         )
-        if scope_flags["is_evaluator"] and registro is not None and not self._registro_released(registro):
+        if (
+            scope_flags["is_evaluator"]
+            and not scope_flags["is_admin"]
+            and registro is not None
+            and not self._registro_released(registro)
+        ):
             registro = None
             messages.warning(
                 self.request,
@@ -1473,7 +1759,11 @@ class EvaluacionFormView(EvaluacionBaseView):
         scope_flags = self._actor_scope_flags()
         if form.is_valid():
             registro = form.cleaned_data["registro"]
-            if scope_flags["is_evaluator"] and not self._registro_released(registro):
+            if (
+                scope_flags["is_evaluator"]
+                and not scope_flags["is_admin"]
+                and not self._registro_released(registro)
+            ):
                 form.add_error("registro", "La evidencia no esta habilitada para evaluacion.")
                 return self.render_to_response(
                     self.get_context_data(
@@ -1521,7 +1811,7 @@ class EvaluacionFormView(EvaluacionBaseView):
         )
 
 
-class ObservacionFormView(EvaluacionBaseView):
+class ObservacionFormView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
     template_name = "evaluacion/observacion_form.html"
     page_title = "Observaciones"
     page_description = "Registra observaciones asociadas a una evaluacion y deja trazabilidad para correcciones."

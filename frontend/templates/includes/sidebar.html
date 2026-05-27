@@ -12,10 +12,10 @@
         <small>{{ sig_profile.area_cargo.area }} · {{ sig_profile.area_cargo.cargo }}</small>
       {% endif %}
       {% if sig_profile.assignment_options|length > 1 %}
-        <form method="post" action="{% url 'usuarios-cambiar-contexto' %}" style="margin-top: .5rem;">
+        <form method="post" action="{% url 'usuarios-cambiar-contexto' %}" class="sidebar__context-form">
           {% csrf_token %}
           <input type="hidden" name="next" value="{{ request.get_full_path }}">
-          <label for="assignment_id" class="visually-hidden">Contexto operativo</label>
+          <label for="assignment_id" class="sidebar__context-label">Contexto operativo</label>
           <select id="assignment_id" name="assignment_id" class="form-select form-select-sm" onchange="this.form.submit()">
             {% for option in sig_profile.assignment_options %}
               <option value="{{ option.id }}" {% if option.id == sig_profile.active_assignment_id %}selected{% endif %}>
@@ -30,8 +30,8 @@
 
   <nav class="sidebar__nav" aria-label="Menu principal">
     {% for group in sig_navigation_groups %}
-      <div class="sidebar__group sidebar__group--open" data-sidebar-group>
-        <button class="sidebar__toggle" type="button" data-sidebar-toggle aria-expanded="true">
+      <div class="sidebar__group{% if current_url_name in group.active_names %} sidebar__group--current{% endif %}" data-sidebar-group>
+        <button class="sidebar__toggle" type="button" data-sidebar-toggle aria-expanded="false">
           <span class="sidebar__toggle-main">
             <span>{{ group.label }}</span>
           </span>

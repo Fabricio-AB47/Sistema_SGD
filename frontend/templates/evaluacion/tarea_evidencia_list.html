@@ -24,14 +24,14 @@
   </article>
 </div>
 
-{% if not scope_flags.is_admin %}
+{% if scope_flags.can_assign_tasks or not scope_flags.is_admin %}
 <div class="acreditacion-overview acreditacion-overview--tasks">
   {% if scope_flags.can_assign_tasks %}
   <article class="card acreditacion-panel">
     <div class="acreditacion-panel__header">
       <div>
         <h3>Asignacion puntual</h3>
-        <p class="text-muted">Calidad puede delegar un elemento puntual a un director o jefe de area.</p>
+        <p class="text-muted">Administrador o Calidad puede delegar un elemento puntual a un director o jefe de area.</p>
       </div>
     </div>
 
@@ -156,12 +156,12 @@
 </div>
 {% endif %}
 
-{% if scope_flags.can_assign_tasks and not scope_flags.is_admin %}
+{% if scope_flags.can_assign_tasks %}
 <article class="card acreditacion-panel evaluacion-bulk-assignment">
   <div class="acreditacion-panel__header">
     <div>
       <h3>Asignacion parcial por criterio, indicador o elemento</h3>
-      <p class="text-muted">Calidad puede bajar por criterio, subcriterio, indicador o elemento para delegar solo el tramo que gestionara cada director o jefe.</p>
+      <p class="text-muted">Administrador o Calidad puede bajar por criterio, subcriterio, indicador o elemento para delegar solo el tramo que gestionara cada director o jefe.</p>
     </div>
   </div>
 

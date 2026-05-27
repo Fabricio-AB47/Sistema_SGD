@@ -123,7 +123,14 @@ def _validate_runtime_security_settings():
     if DEBUG:
         return
 
-    if not SECRET_KEY or SECRET_KEY == "change-me-in-env":
+    weak_secret = (
+        not SECRET_KEY
+        or SECRET_KEY == "change-me-in-env"
+        or SECRET_KEY.startswith("django-insecure-")
+        or len(SECRET_KEY) < 50
+        or len(set(SECRET_KEY)) < 5
+    )
+    if weak_secret:
         raise ImproperlyConfigured(
             "DJANGO_SECRET_KEY debe configurarse con un valor seguro fuera del codigo."
         )
@@ -223,9 +230,11 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
-SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", False)
-SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0") or "0")
-SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
+SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", not DEBUG)
+SECURE_HSTS_SECONDS = int(
+    os.getenv("SECURE_HSTS_SECONDS", "0" if DEBUG else "31536000") or "0"
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", not DEBUG)
 SECURE_HSTS_PRELOAD = _env_bool("SECURE_HSTS_PRELOAD", False)
 if _env_bool("DJANGO_USE_X_FORWARDED_PROTO", False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -266,12 +275,14 @@ GRAPH_CICLO_AUTH_FOLDER = os.getenv("GRAPH_CICLO_AUTH_FOLDER", "DOCUMENTOS CICLO
 GRAPH_CICLO_AUTH_FOLDER_URL = os.getenv("GRAPH_CICLO_AUTH_FOLDER_URL", "").strip()
 GRAPH_REQUEST_TIMEOUT_SECONDS = int(os.getenv("GRAPH_REQUEST_TIMEOUT_SECONDS", "10") or "10")
 GRAPH_UPLOAD_TIMEOUT_SECONDS = int(os.getenv("GRAPH_UPLOAD_TIMEOUT_SECONDS", "30") or "30")
+SIG_LOCAL_DOCUMENT_MIRROR_ENABLED = _env_bool("SIG_LOCAL_DOCUMENT_MIRROR_ENABLED", True)
+SIG_LOCAL_DOCUMENT_MIRROR_ROOT = os.getenv("SIG_LOCAL_DOCUMENT_MIRROR_ROOT", "").strip()
 SIG_ALLOWED_OUTBOUND_HOSTS = _env_csv("SIG_ALLOWED_OUTBOUND_HOSTS")
 SIG_REQUIRE_HTTPS_OUTBOUND = _env_bool("SIG_REQUIRE_HTTPS_OUTBOUND", not DEBUG)
 SIG_BLOCK_PRIVATE_OUTBOUND = _env_bool("SIG_BLOCK_PRIVATE_OUTBOUND", not DEBUG)
 
 # Seguridad de acceso: exigir correo verificado antes de permitir login.
-SIG_REQUIRE_EMAIL_VERIFICATION = _env_bool("SIG_REQUIRE_EMAIL_VERIFICATION", False)
+SIG_REQUIRE_EMAIL_VERIFICATION = _env_bool("SIG_REQUIRE_EMAIL_VERIFICATION", not DEBUG)
 SIG_REQUIRE_OTP_EVERY_LOGIN = _env_bool("SIG_REQUIRE_OTP_EVERY_LOGIN", True)
 SIG_OTP_CODE_LENGTH = int(os.getenv("SIG_OTP_CODE_LENGTH", "6") or "6")
 SIG_OTP_EXPIRATION_MINUTES = int(os.getenv("SIG_OTP_EXPIRATION_MINUTES", "10") or "10")
@@ -295,6 +306,8 @@ DEFAULT_FROM_EMAIL = (
 )
 SIG_SITE_NAME = os.getenv("SIG_SITE_NAME", "SIG").strip() or "SIG"
 SIG_MAIL_SENDER = os.getenv("SIG_MAIL_SENDER", "").strip() or GRAPH_DRIVE_USER
+SIG_ALERT_REMINDER_INTERVAL_DAYS = int(os.getenv("SIG_ALERT_REMINDER_INTERVAL_DAYS", "2") or "2")
+SIG_ALERT_REMINDER_COUNT = int(os.getenv("SIG_ALERT_REMINDER_COUNT", "3") or "3")
 OTP_URL = "/otp/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

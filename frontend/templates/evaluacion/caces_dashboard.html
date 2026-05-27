@@ -1,0 +1,168 @@
+{% extends "evaluacion/_page_base.html" %}
+
+{% block evaluacion_content %}
+{% if selected_cycle %}
+  <section class="acreditacion-toolbar card">
+    <form method="get" class="acreditacion-inline-form">
+      <label class="acreditacion-form__field">
+        <span>Ciclo</span>
+        <select name="ciclo" onchange="this.form.submit()">
+          {% for ciclo in ciclos %}
+            <option value="{{ ciclo.pk }}"{% if selected_cycle.pk == ciclo.pk %} selected{% endif %}>{{ ciclo.nombre }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </form>
+    <div class="acreditacion-panel__actions">
+      <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?panel=caces&ciclo={{ selected_cycle.pk }}">Bandeja</a>
+      <a class="btn btn-secondary" href="{% url 'evaluacion-caces-ciclo' %}?ciclo={{ selected_cycle.pk }}">Ver matriz</a>
+      <a class="btn btn-secondary" href="{% url 'evaluacion-caces-reporte' %}?ciclo={{ selected_cycle.pk }}">Reporte final</a>
+    </div>
+  </section>
+
+  <section class="acreditacion-kpis">
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Resultado CACES</span>
+      <strong class="acreditacion-kpis__value">{{ cycle_result.resultado_porcentaje|default:"0.00" }}%</strong>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Avance de evaluacion</span>
+      <strong class="acreditacion-kpis__value">{{ matrix_summary.evaluation_progress|default:"0.00" }}%</strong>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Cobertura de evidencias</span>
+      <strong class="acreditacion-kpis__value">{{ matrix_summary.evidence_coverage|default:"0.00" }}%</strong>
+    </article>
+    <article class="acreditacion-kpis__card">
+      <span class="acreditacion-kpis__label">Indicadores pendientes</span>
+      <strong class="acreditacion-kpis__value">{{ matrix_summary.pending_total|default:"0" }}</strong>
+      <span class="acreditacion-kpis__meta">{{ matrix_summary.evaluated_total|default:"0" }} evaluados</span>
+    </article>
+  </section>
+
+  <div class="acreditacion-overview acreditacion-overview--tasks">
+    <article class="card acreditacion-panel">
+      <div class="acreditacion-panel__header">
+        <div>
+          <h3>Ciclo activo</h3>
+          <p class="text-muted">{{ selected_cycle.nombre }}</p>
+        </div>
+        <span class="acreditacion-status acreditacion-status--info">{{ selected_cycle.estado.descripcion }}</span>
+      </div>
+      <dl class="acreditacion-detail-list">
+        <div><dt>Indicadores</dt><dd>{{ matrix_summary.indicators_total }}</dd></div>
+        <div><dt>Cualitativos</dt><dd>{{ matrix_summary.qualitative_total }}</dd></div>
+        <div><dt>Cuantitativos</dt><dd>{{ matrix_summary.quantitative_total }}</dd></div>
+        <div><dt>Sin mapeo CACES</dt><dd>{{ matrix_summary.unmapped_total }}</dd></div>
+      </dl>
+    </article>
+
+    <article class="card acreditacion-panel">
+      <div class="acreditacion-panel__header">
+        <div>
+          <h3>Pendientes</h3>
+          <p class="text-muted">Indicadores sin resultado en el ciclo seleccionado.</p>
+        </div>
+      </div>
+      <ul class="acreditacion-list">
+        {% for indicador in pending_indicators %}
+          <li>
+            <strong>{{ indicador.codigo_indicador|default:indicador.id_indicador }}</strong>
+            {{ indicador.nombre_indicador|default:"Indicador pendiente" }}
+          </li>
+        {% empty %}
+          <li>No existen indicadores pendientes.</li>
+        {% endfor %}
+      </ul>
+    </article>
+  </div>
+
+  <section class="caces-type-summary">
+    <article class="card caces-type-summary__card">
+      <div>
+        <span class="caces-type-summary__eyebrow">Evaluacion cualitativa</span>
+        <h3>{{ matrix_summary.qualitative_evaluation_progress }}% evaluado</h3>
+      </div>
+      <dl>
+        <div>
+          <dt>Indicadores</dt>
+          <dd>{{ matrix_summary.qualitative_evaluated_total }} / {{ matrix_summary.qualitative_total }}</dd>
+        </div>
+        <div>
+          <dt>Ponderacion</dt>
+          <dd>{{ matrix_summary.qualitative_weight_total }}</dd>
+        </div>
+        <div>
+          <dt>Aporte</dt>
+          <dd>{{ matrix_summary.qualitative_aporte_total }}</dd>
+        </div>
+      </dl>
+    </article>
+    <article class="card caces-type-summary__card">
+      <div>
+        <span class="caces-type-summary__eyebrow">Evaluacion cuantitativa</span>
+        <h3>{{ matrix_summary.quantitative_evaluation_progress }}% evaluado</h3>
+      </div>
+      <dl>
+        <div>
+          <dt>Indicadores</dt>
+          <dd>{{ matrix_summary.quantitative_evaluated_total }} / {{ matrix_summary.quantitative_total }}</dd>
+        </div>
+        <div>
+          <dt>Ponderacion</dt>
+          <dd>{{ matrix_summary.quantitative_weight_total }}</dd>
+        </div>
+        <div>
+          <dt>Aporte</dt>
+          <dd>{{ matrix_summary.quantitative_aporte_total }}</dd>
+        </div>
+      </dl>
+    </article>
+  </section>
+
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    <div class="acreditacion-panel__header">
+      <div>
+        <h3>Ciclos</h3>
+        <p class="text-muted">Resultado consolidado solo para ciclos aprobados o finalizados.</p>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="acreditacion-table">
+        <thead>
+          <tr>
+            <th>Ciclo</th>
+            <th>Estado</th>
+            <th>Resultado</th>
+            <th>Accion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ciclo in ciclos %}
+            <tr>
+              <td>
+                <strong>{{ ciclo.nombre }}</strong>
+                <div class="text-muted">{{ ciclo.anio|default:"--" }}</div>
+              </td>
+              <td>{{ ciclo.estado.descripcion }}</td>
+              <td>{{ ciclo.resultado_caces.resultado_porcentaje|default:"0.00" }}%</td>
+              <td>
+                <a class="btn btn-secondary" href="{% url 'evaluacion-caces-ciclo' %}?ciclo={{ ciclo.pk }}">Abrir</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="4" class="text-center text-muted">No existen ciclos aprobados o finalizados.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+{% else %}
+  <article class="card acreditacion-panel">
+    <h3>Sin ciclos</h3>
+    <p class="text-muted">No existen ciclos aprobados o finalizados para evaluacion CACES.</p>
+  </article>
+{% endif %}
+{% endblock %}
