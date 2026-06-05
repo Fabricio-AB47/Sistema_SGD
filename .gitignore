@@ -24,6 +24,9 @@ backend/media/
 backend/staticfiles/
 *.log
 
+# IIS local
+web.config
+
 # Espejo local de documentos Graph
 SISTEMA INFORMATICO DE GESTION/*
 !SISTEMA INFORMATICO DE GESTION/.gitkeep
