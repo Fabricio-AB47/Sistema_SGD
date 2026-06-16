@@ -85,10 +85,33 @@ DIRECTOR_REDIRECT_BLOCKED_ROLE_TOKENS = {
     EVALUATOR_ROLE_TOKEN,
     "CONSULTA",
 }
-EVALUACION_ENTRY_ROLE_TOKENS = {ADMIN_ROLE_TOKEN, EVALUATOR_ROLE_TOKEN}
+EVALUACION_ENTRY_ROLE_TOKENS = {
+    ADMIN_ROLE_TOKEN,
+    EVALUATOR_ROLE_TOKEN,
+    *QUALITY_ROLE_TOKENS,
+}
 EVALUACION_ENTRY_ACCESS_DENIED_MESSAGE = (
-    "Solo los roles ADMINISTRADOR o EVALUADOR pueden ingresar a evaluacion."
+    "Solo los roles ADMINISTRADOR, CALIDAD o EVALUADOR pueden ingresar a evaluacion."
 )
+EVALUATOR_ALLOWED_URL_NAMES = {
+    "evaluacion-bandeja",
+    "evaluacion-evaluar",
+    "evaluacion-caces",
+    "evaluacion-caces-ciclo",
+    "evaluacion-caces-indicador",
+    "evaluacion-caces-api-ciclos",
+    "evaluacion-caces-api-indicadores",
+    "evaluacion-caces-api-pendientes",
+    "evaluacion-caces-api-categorias",
+    "evaluacion-caces-api-variables",
+    "evaluacion-caces-api-cualitativa",
+    "evaluacion-caces-api-guardar-variables",
+    "evaluacion-caces-api-calcular",
+    "evaluacion-caces-api-manual",
+    "evaluacion-caces-api-resultado-indicador",
+    "evaluacion-caces-api-resultado-ciclo",
+    "evaluacion-caces-api-cobertura",
+}
 
 MODULE_TITLE = "Evaluacion"
 MODULE_DESCRIPTION = "Gestiona evidencias registradas, evaluaciones y observaciones del flujo operativo."
@@ -155,6 +178,15 @@ def _request_role_tokens(request):
 def _has_evaluation_entry_access(request) -> bool:
     role_tokens = set(_request_role_tokens(request))
     return bool(role_tokens.intersection(EVALUACION_ENTRY_ROLE_TOKENS))
+
+
+def _is_evaluator_only_request(request) -> bool:
+    role_tokens = set(_request_role_tokens(request))
+    return (
+        EVALUATOR_ROLE_TOKEN in role_tokens
+        and ADMIN_ROLE_TOKEN not in role_tokens
+        and not role_tokens.intersection(QUALITY_ROLE_TOKENS)
+    )
 
 
 def _build_bulk_structure_groups():
@@ -250,6 +282,17 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
     page_status = "Operacion real"
     page_actions = []
 
+    def dispatch(self, request, *args, **kwargs):
+        current_url_name = request.resolver_match.url_name if request.resolver_match else ""
+        if (
+            request.session.get("sig_user_id")
+            and _is_evaluator_only_request(request)
+            and current_url_name not in EVALUATOR_ALLOWED_URL_NAMES
+        ):
+            messages.error(request, "El rol Evaluador solo puede acceder a la bandeja CACES de evaluacion.")
+            return redirect("evaluacion-bandeja")
+        return super().dispatch(request, *args, **kwargs)
+
     def _actor(self):
         user_id = self.request.session.get("sig_user_id")
         if not user_id:
@@ -284,6 +327,7 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
         is_consulta = "CONSULTA" in role_tokens
         is_admin = ADMIN_ROLE_TOKEN in role_tokens
         is_quality = any(token in QUALITY_ROLE_TOKENS for token in role_tokens)
+        is_evaluator_only = is_evaluator and not is_admin and not is_quality
 
         return {
             "is_admin": is_admin,
@@ -291,6 +335,7 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
             "is_tech_director": is_tech_director,
             "is_area_director": is_area_director,
             "is_evaluator": is_evaluator,
+            "is_evaluator_only": is_evaluator_only,
             "is_consulta": is_consulta,
             "is_quality": is_quality,
             "can_enter_evaluation": is_admin or is_evaluator,
@@ -312,6 +357,12 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
 
     def _module_tabs(self):
         scope_flags = self._actor_scope_flags()
+        if scope_flags.get("is_evaluator_only"):
+            return [
+                tab
+                for tab in MODULE_TABS
+                if tab["url_name"] == "evaluacion-bandeja"
+            ]
         tabs = []
         for tab in MODULE_TABS:
             if (
@@ -335,6 +386,7 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
                 "page_actions": self.page_actions,
                 "current_url_name": self.request.resolver_match.url_name if self.request.resolver_match else "",
                 "evaluation_metrics": get_evidencia_dashboard_metrics(),
+                "scope_flags": self._actor_scope_flags(),
             }
         )
         context.update(kwargs)
@@ -1533,6 +1585,8 @@ class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
         return self.request.POST.get("ciclo") or self.request.GET.get("ciclo")
 
     def _selected_panel(self):
+        if self._actor_scope_flags().get("is_evaluator_only"):
+            return self.PANEL_CACES
         panel = (self.request.GET.get("panel") or self.PANEL_EVIDENCIAS).strip().lower()
         return panel if panel in {self.PANEL_EVIDENCIAS, self.PANEL_CACES} else self.PANEL_EVIDENCIAS
 
@@ -1621,7 +1675,7 @@ class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
             else None
         )
         context["selected_evaluation_panel"] = selected_panel
-        context["evaluation_panel_options"] = (
+        evaluation_panel_options = [
             {
                 "key": self.PANEL_EVIDENCIAS,
                 "label": "Evidencias",
@@ -1641,7 +1695,14 @@ class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
                 "description": "Evalua indicadores cualitativos y cuantitativos por ponderacion.",
                 "url": f"{reverse('evaluacion-bandeja')}?panel={self.PANEL_CACES}",
             },
-        )
+        ]
+        if scope_flags.get("is_evaluator_only"):
+            evaluation_panel_options = [
+                option
+                for option in evaluation_panel_options
+                if option["key"] == self.PANEL_CACES
+            ]
+        context["evaluation_panel_options"] = tuple(evaluation_panel_options)
         context["caces_cycles"] = get_caces_cycles() if selected_panel == self.PANEL_CACES else []
         context["selected_caces_cycle"] = selected_caces_cycle
         context["selected_caces_type"] = self._selected_caces_type()
@@ -1657,6 +1718,9 @@ class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
     def post(self, request, *args, **kwargs):
         form = EvaluacionGestionForm(request.POST)
         scope_flags = self._actor_scope_flags()
+        if scope_flags.get("is_evaluator_only"):
+            messages.error(request, "El rol Evaluador debe registrar la calificacion desde la matriz CACES.")
+            return redirect(f"{reverse('evaluacion-bandeja')}?panel={self.PANEL_CACES}")
         selected_registro = get_registro_detail(request.POST.get("registro"))
         if form.is_valid():
             registro = form.cleaned_data["registro"]

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from django.contrib import messages
 from django.db import IntegrityError
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
 from django.views import View
@@ -18,7 +18,6 @@ from apps.core.services.navigation_service import (
     PERM_CONSULTA_VER,
     ROLE_ADMIN,
     ROLE_CONSULTA,
-    ROLE_EVALUATOR,
     ROLE_QUALITY,
     ROLE_RECTOR,
 )
@@ -87,7 +86,7 @@ def _report_document_error(*, request, exc: Exception, form=None, user_message: 
 
 
 class DocumentosBaseView(SigRoleOrPermissionRequiredMixin, TemplateView):
-    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_EVALUATOR, ROLE_CONSULTA)
+    allowed_roles = (ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA)
     allowed_permissions = ("documentos.ver", PERM_CONSULTA_VER)
     access_denied_message = "No tienes acceso a gestion documental."
     template_name = ""
@@ -382,6 +381,42 @@ class ProtectedDocumentAccessView(SigLoginRequiredMixin, View):
                 or headers.get("Content-Type")
                 or DEFAULT_BINARY_CONTENT_TYPE
             ),
+        )
+
+
+class ProtectedDocumentAvailabilityView(ProtectedDocumentAccessView):
+    def get(self, request, documento_id, *args, **kwargs):
+        actor = self._actor()
+        documento = get_documento_for_access(documento_id, actor=actor)
+        if documento is None:
+            return JsonResponse(
+                {
+                    "available": False,
+                    "message": "Archivo no encontrado.",
+                }
+            )
+
+        try:
+            content_stream, _headers = resolve_protected_document_stream(documento)
+        except ProtectedDocumentAccessError as exc:
+            logger.warning(
+                "No fue posible validar disponibilidad del documento protegido %s: %s",
+                documento_id,
+                exc,
+            )
+            return JsonResponse(
+                {
+                    "available": False,
+                    "message": "Archivo no encontrado o no disponible.",
+                }
+            )
+
+        content_stream.close()
+        return JsonResponse(
+            {
+                "available": True,
+                "message": "Archivo disponible.",
+            }
         )
 
 

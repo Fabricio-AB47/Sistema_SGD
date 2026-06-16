@@ -10,7 +10,9 @@
     <div class="acreditacion-panel__actions">
       <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?panel=caces&ciclo={{ selected_cycle.pk }}&tipo={{ detail.indicator_type }}">Bandeja</a>
       <a class="btn btn-secondary" href="{% url 'evaluacion-caces-ciclo' %}?ciclo={{ selected_cycle.pk }}">Volver a matriz</a>
-      <a class="btn btn-secondary" href="{% url 'evaluacion-caces-reporte' %}?ciclo={{ selected_cycle.pk }}">Reporte final</a>
+      {% if not scope_flags.is_evaluator or scope_flags.is_admin or scope_flags.is_quality %}
+        <a class="btn btn-secondary" href="{% url 'evaluacion-caces-reporte' %}?ciclo={{ selected_cycle.pk }}">Reporte final</a>
+      {% endif %}
     </div>
   </section>
 
@@ -23,6 +25,8 @@
         <div><dt>Criterio</dt><dd>{{ indicador.subcriterio.criterio.codigo_criterio }} - {{ indicador.subcriterio.criterio.nombre_criterio }}</dd></div>
         <div><dt>Subcriterio</dt><dd>{{ indicador.subcriterio.codigo_subcriterio }} - {{ indicador.subcriterio.nombre_subcriterio }}</dd></div>
         <div><dt>Elementos visibles</dt><dd>{{ detail.elements_data|length }}</dd></div>
+        <div><dt>Esenciales</dt><dd>{{ detail.element_type_summary.essential_total }}</dd></div>
+        <div><dt>Complementarios</dt><dd>{{ detail.element_type_summary.complementary_total }}</dd></div>
       </dl>
       {% if detail.mapping_warning %}
         <span class="acreditacion-status acreditacion-status--warning">{{ detail.mapping_warning }}</span>
@@ -39,7 +43,11 @@
           <div><dt>Ponderacion A</dt><dd>{{ detail.modelo.ponderacion_a }}</dd></div>
         </dl>
       {% else %}
-        <p class="text-muted">Sin mapeo configurado.</p>
+        <dl class="acreditacion-detail-list">
+          <div><dt>Modo</dt><dd>Evaluacion general</dd></div>
+          <div><dt>Tipo usado</dt><dd>{{ detail.indicator_type }}</dd></div>
+          <div><dt>Ponderacion usada</dt><dd>{{ detail.ponderacion_referencial }}</dd></div>
+        </dl>
       {% endif %}
     </article>
 
@@ -61,22 +69,99 @@
     </article>
   </div>
 
-  <article class="card acreditacion-panel acreditacion-panel--wide">
+  <article class="card acreditacion-panel acreditacion-panel--wide caces-elements-overview">
     <div class="acreditacion-panel__header">
       <div>
-        <h3>Elementos y evidencias</h3>
-        <p class="text-muted">Clasificacion de elemento y documentos cargados para el ciclo.</p>
+        <h3>Elementos fundamentales</h3>
+        <p class="text-muted">Base documental para evaluar segun el tipo de indicador.</p>
       </div>
-      <span class="acreditacion-status acreditacion-status--info">{{ detail.coverage.porcentaje_cobertura }}% cobertura</span>
+      <div class="acreditacion-panel__actions">
+        <span class="acreditacion-status acreditacion-status--info">{{ detail.element_type_summary.total }} elemento(s)</span>
+        {% if detail.is_quantitative %}
+          <span class="acreditacion-status acreditacion-status--success">Ponderacion {{ detail.ponderacion_referencial }}</span>
+        {% else %}
+          <span class="acreditacion-status acreditacion-status--success">Cumple / No cumple</span>
+        {% endif %}
+      </div>
     </div>
+    <div class="caces-elements-overview__list">
+      {% for item in detail.elements_data %}
+        <div class="caces-elements-overview__item">
+          <div class="caces-elements-overview__main">
+            <strong>{{ item.elemento.codigo_elemento }} - {{ item.elemento.nombre_elemento }}</strong>
+            <small>{{ item.elemento.medio_verificacion|default:"Sin medio de verificacion registrado" }}</small>
+            <div class="caces-elements-overview__meta">
+              <span>{{ item.element_type_group }}</span>
+              {% if detail.is_quantitative %}
+                <span>Ponderacion {{ item.element_weight }}</span>
+              {% else %}
+                <span>Calificacion cualitativa</span>
+              {% endif %}
+              <span>
+                {% if item.latest_registro %}
+                  Evidencia cargada
+                {% else %}
+                  Sin evidencia
+                {% endif %}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="btn btn-primary"
+            data-caces-modal-open="{% if detail.is_qualitative %}caces-modal-element-{{ item.elemento.pk }}{% else %}caces-modal-quantitative{% endif %}"
+          >
+            Evaluar
+          </button>
+        </div>
+      {% empty %}
+        <div class="caces-elements-overview__empty">
+          No existen elementos fundamentales activos para este indicador.
+          {% if detail.is_quantitative %}
+            <button class="btn btn-primary" type="button" data-caces-modal-open="caces-modal-quantitative">Evaluar indicador</button>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="card acreditacion-panel acreditacion-panel--wide">
+    {% if detail.is_qualitative %}
+      <details class="caces-evidence-details">
+        <summary>
+          <span>
+            <strong>Revision documental</strong>
+            <small>Documentos, observaciones y evaluacion por evidencia.</small>
+          </span>
+          <span class="acreditacion-status acreditacion-status--info">{{ detail.coverage.porcentaje_cobertura }}% cobertura</span>
+        </summary>
+    {% else %}
+      <div class="acreditacion-panel__header">
+        <div>
+          <h3>Elementos y evidencias</h3>
+          <p class="text-muted">Clasificacion de elemento y documentos cargados para el ciclo.</p>
+        </div>
+        <div class="acreditacion-panel__actions">
+          <span class="acreditacion-status acreditacion-status--info">{{ detail.coverage.porcentaje_cobertura }}% cobertura</span>
+          <span class="acreditacion-status acreditacion-status--success">
+            Puntaje {{ detail.element_score_summary.puntaje_obtenido }} / {{ detail.element_score_summary.ponderacion_total }}
+          </span>
+        </div>
+      </div>
+    {% endif %}
     <div class="table-responsive">
       <table class="acreditacion-table">
         <thead>
           <tr>
             <th>Elemento fundamental</th>
             <th>Clasificacion del elemento</th>
+            {% if detail.is_quantitative %}
+              <th>Ponderacion</th>
+              <th>Puntaje</th>
+            {% endif %}
             <th>Documento</th>
             <th>Estado</th>
+            <th>Evaluacion de evidencia</th>
           </tr>
         </thead>
         <tbody>
@@ -87,9 +172,23 @@
                 <div class="text-muted">{{ item.elemento.medio_verificacion|default:"--" }}</div>
               </td>
               <td><span class="acreditacion-status acreditacion-status--info">{{ item.elemento.tipo_elemento }}</span></td>
+              {% if detail.is_quantitative %}
+                <td>
+                  <strong>{{ item.element_weight }}</strong>
+                  <div class="text-muted">peso del indicador</div>
+                </td>
+                <td>
+                  <strong>{{ item.element_score }}</strong>
+                  <div class="text-muted">{{ item.element_score_percentage }}% cumplimiento</div>
+                </td>
+              {% endif %}
               <td>
                 {% if item.latest_registro %}
-                  {{ item.latest_registro.documento.nombre_archivo }}
+                  <strong>{{ item.latest_registro.documento.nombre_archivo }}</strong>
+                  <div class="acreditacion-row-actions caces-document-actions">
+                    <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' item.latest_registro.documento.pk %}" target="_blank" rel="noopener" data-document-check-url="{% url 'documentos-protegidos-validar' item.latest_registro.documento.pk %}">Revisar documento</a>
+                    <a class="btn btn-ghost" href="{% url 'documentos-protegidos-descargar' item.latest_registro.documento.pk %}" data-document-check-url="{% url 'documentos-protegidos-validar' item.latest_registro.documento.pk %}">Descargar</a>
+                  </div>
                 {% else %}
                   --
                 {% endif %}
@@ -97,170 +196,211 @@
               <td>
                 {% if item.latest_registro %}
                   <span class="acreditacion-status acreditacion-status--success">{{ item.latest_registro.estado.descripcion }}</span>
+                  {% if item.latest_evaluacion %}
+                    <div class="text-muted">
+                      Ultima evaluacion: {{ item.latest_evaluacion.estado.descripcion }}
+                      {% if item.latest_evaluacion.calificacion is not None %}({{ item.latest_evaluacion.calificacion }}){% endif %}
+                    </div>
+                  {% endif %}
                 {% else %}
                   <span class="acreditacion-status acreditacion-status--warning">Falta cargar</span>
+                {% endif %}
+              </td>
+              <td class="caces-evidence-review-cell">
+                {% if item.evidence_review_form %}
+                  {% with form=item.evidence_review_form registro=item.latest_registro %}
+                    <form method="post" class="caces-evidence-review-form">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="save_evidence_review">
+                      <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
+                      <input type="hidden" name="indicador" value="{{ indicador.pk }}">
+                      <input type="hidden" name="registro" value="{{ registro.pk }}">
+                      <input type="hidden" name="{{ form.registro.html_name }}" value="{{ registro.pk }}">
+                      {{ form.non_field_errors }}
+                      {{ form.registro.errors }}
+
+                      {% if form.evaluation_mode == "qualitative" %}
+                        <div class="caces-evidence-review-form__section">
+                          <span class="caces-evidence-review-form__label">Calificacion</span>
+                          <div class="caces-evidence-choice-list">
+                            {% for option in form.qualitative_result_options %}
+                              <label class="caces-evidence-choice">
+                                <input
+                                  type="radio"
+                                  name="{{ form.resultado_cualitativo.html_name }}"
+                                  value="{{ option.value }}"
+                                  {% if option.selected %}checked{% endif %}
+                                >
+                                <span>{{ option.label }}</span>
+                              </label>
+                            {% endfor %}
+                          </div>
+                          {{ form.resultado_cualitativo.errors }}
+                        </div>
+                      {% else %}
+                        <div class="caces-evidence-review-form__grid">
+                          <label class="acreditacion-form__field">
+                            <span>{{ form.estado.label }}</span>
+                            {{ form.estado }}
+                            {{ form.estado.errors }}
+                          </label>
+                          <label class="acreditacion-form__field">
+                            <span>{{ form.calificacion.label }}</span>
+                            {{ form.calificacion }}
+                            {{ form.calificacion.errors }}
+                          </label>
+                        </div>
+                      {% endif %}
+
+                      <label class="acreditacion-form__field caces-evidence-review-form__comments">
+                        <span>Observaciones sobre la evidencia</span>
+                        {{ form.comentario }}
+                        {{ form.comentario.errors }}
+                      </label>
+                      <div class="acreditacion-form__actions">
+                        <button class="btn btn-primary" type="submit">Guardar evaluacion</button>
+                      </div>
+                    </form>
+                  {% endwith %}
+                {% else %}
+                  <span class="text-muted">Carga una evidencia para evaluarla.</span>
                 {% endif %}
               </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="4" class="text-center text-muted">No existen elementos visibles para este rol.</td>
+              <td colspan="{% if detail.is_quantitative %}7{% else %}5{% endif %}" class="text-center text-muted">No existen elementos visibles para este rol.</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% if detail.is_qualitative %}
+      </details>
+    {% endif %}
   </article>
 
   {% if detail.is_qualitative %}
-    <article class="card acreditacion-panel acreditacion-panel--wide">
-      <div class="acreditacion-panel__header">
-        <div>
-          <h3>Formulario cualitativo</h3>
-          <p class="text-muted">Categoria CACES y observaciones de evaluacion.</p>
-        </div>
-      </div>
-      <form method="post" class="acreditacion-form caces-evaluation-form">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="save_qualitative">
-        <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
-        <input type="hidden" name="indicador" value="{{ indicador.pk }}">
-        {{ qualitative_form.non_field_errors }}
-        <div class="caces-category-grid">
-          {% for option in detail.qualitative_options %}
-            <label class="caces-category-option caces-category-option--calculated">
-              <input
-                type="radio"
-                name="{{ qualitative_form.categoria.html_name }}"
-                id="id_{{ qualitative_form.categoria.html_name }}_{{ forloop.counter0 }}"
-                value="{{ option.category.pk }}"
-                data-caces-category-input
-                data-utility="{{ option.utilidad }}"
-                data-ponderacion="{{ detail.ponderacion_referencial }}"
-                data-aporte="{{ option.aporte_estimado }}"
-                {% if qualitative_form.categoria.value|stringformat:"s" == option.category.pk|stringformat:"s" %}checked{% endif %}
-              >
-              <span class="caces-category-option__content">
-                <strong>{{ option.category.nombre }}</strong>
-                <small>{{ option.category.codigo }}</small>
-                <span class="caces-category-option__metric">Utilidad {{ option.utilidad }} - Aporte {{ option.aporte_estimado }}</span>
-              </span>
-            </label>
-          {% endfor %}
-        </div>
-        {{ qualitative_form.categoria.errors }}
-        <div class="caces-calculation-preview" data-caces-qualitative-preview>
-          <div>
-            <span>Utilidad</span>
-            <strong data-caces-preview-utilidad>{{ detail.result.utilidad|default:"--" }}</strong>
-          </div>
-          <div>
-            <span>Ponderacion</span>
-            <strong data-caces-preview-ponderacion>{{ detail.result.ponderacion|default:detail.ponderacion_referencial }}</strong>
-          </div>
-          <div>
-            <span>Aporte calculado</span>
-            <strong data-caces-preview-aporte>{{ detail.result.aporte|default:"--" }}</strong>
-          </div>
-        </div>
-        <label class="acreditacion-form__field acreditacion-form__field--full">
-          <span>{{ qualitative_form.observacion.label }}</span>
-          {{ qualitative_form.observacion }}
-          {{ qualitative_form.observacion.errors }}
-        </label>
-        <div class="acreditacion-form__actions">
-          <button class="btn btn-primary" type="submit">Calcular evaluacion cualitativa</button>
-        </div>
-      </form>
-    </article>
-  {% elif detail.is_quantitative %}
-    <div class="acreditacion-content-grid">
-      <article class="card acreditacion-panel">
-        <div class="acreditacion-panel__header">
-          <div>
-            <h3>Variables cuantitativas</h3>
-            {% if detail.formula %}
-              <p class="text-muted">{{ detail.formula.codigo_formula }} = {{ detail.formula.expresion_formula }}</p>
-            {% endif %}
-          </div>
-        </div>
-        {% if detail.variables_context.warning %}
-          <span class="acreditacion-status acreditacion-status--warning">{{ detail.variables_context.warning }}</span>
-        {% endif %}
-        <form method="post" class="acreditacion-form caces-evaluation-form">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="save_variables">
-          <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
-          <input type="hidden" name="indicador" value="{{ indicador.pk }}">
-          {{ variables_form.non_field_errors }}
-          {% if variables_form.variable_rows %}
-            <div class="caces-category-grid caces-category-grid--variables">
-              {% for row in variables_form.variable_rows %}
-                <label class="caces-category-option caces-category-option--calculated caces-variable-option">
-                  {{ row.select }}
-                  <span class="caces-category-option__content">
-                    <strong>{{ row.variable.codigo_variable }}</strong>
-                    <small>{{ row.variable.nombre_variable }}</small>
-                    <span class="caces-category-option__metric">Valor actual {{ row.current_value|default:"--" }}</span>
-                    {% if row.required %}
-                      <span class="acreditacion-status acreditacion-status--warning">Obligatoria</span>
-                    {% endif %}
-                    {% if row.variable.descripcion %}
-                      <span>{{ row.variable.descripcion }}</span>
-                    {% endif %}
-                    <span class="caces-variable-option__field">
-                      {{ row.value }}
-                      {{ row.value.errors }}
-                    </span>
-                  </span>
-                </label>
-              {% endfor %}
+    <div class="caces-modal-registry">
+      {% for item in detail.elements_data %}
+        <dialog id="caces-modal-element-{{ item.elemento.pk }}" class="caces-modal">
+          <div class="caces-modal__header">
+            <div>
+              <strong>{{ item.elemento.codigo_elemento }} - {{ item.elemento.nombre_elemento }}</strong>
+              <small>{{ item.elemento.medio_verificacion|default:"Sin medio de verificacion registrado" }}</small>
             </div>
-          {% else %}
-            <p class="text-muted">No hay variables configuradas para esta formula.</p>
-          {% endif %}
-          <label class="acreditacion-form__field acreditacion-form__field--full">
-            <span>{{ variables_form.observacion.label }}</span>
-            {{ variables_form.observacion }}
-            {{ variables_form.observacion.errors }}
-          </label>
-          <div class="acreditacion-form__actions">
-            <button class="btn btn-primary" type="submit">Guardar variables seleccionadas</button>
+            <button class="btn btn-ghost" type="button" data-caces-modal-close>Cerrar</button>
           </div>
-        </form>
-      </article>
 
-      <article class="card acreditacion-panel">
-        <div class="acreditacion-panel__header">
-          <div>
-            <h3>Formulario cuantitativo</h3>
-            <p class="text-muted">Selecciona ponderacion, registra variables y calcula utilidad, ponderacion y aporte.</p>
-          </div>
-        </div>
-        <form method="post" class="acreditacion-form caces-evaluation-form">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="calculate_quantitative">
-          <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
-          <input type="hidden" name="indicador" value="{{ indicador.pk }}">
-          {% if detail.ponderacion_options %}
-            <label class="acreditacion-form__field acreditacion-form__field--full caces-weight-select">
-              <span>Ponderacion CACES</span>
-              <select name="codigo_escenario" data-caces-weight-select>
-                {% for option in detail.ponderacion_options %}
-                  <option
-                    value="{{ option.code }}"
-                    data-weight="{{ option.ponderacion }}"
-                    {% if option.selected %}selected{% endif %}
-                  >
-                    {{ option.code }} - {{ option.nombre }} ({{ option.ponderacion }})
-                  </option>
-                {% endfor %}
-              </select>
-            </label>
+          <section class="caces-modal__section">
+            <h4>Informacion del elemento</h4>
+            <dl class="caces-element-facts">
+              <div>
+                <dt>Tipo</dt>
+                <dd>{{ item.element_type_group }}</dd>
+              </div>
+              <div>
+                <dt>Evidencia</dt>
+                <dd>{% if item.latest_registro %}Disponible{% else %}Sin evidencia{% endif %}</dd>
+              </div>
+              <div>
+                <dt>Revision</dt>
+                <dd>
+                  {% if item.latest_evaluacion %}
+                    {{ item.latest_evaluacion.estado.descripcion }}
+                    {% if item.latest_evaluacion.calificacion is not None %}({{ item.latest_evaluacion.calificacion }}){% endif %}
+                  {% elif item.latest_registro %}
+                    Pendiente
+                  {% else %}
+                    --
+                  {% endif %}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="caces-modal__section">
+            <h4>Documento de evidencia</h4>
+            {% if item.latest_registro %}
+              <div class="caces-modal__document">
+                <strong>{{ item.latest_registro.documento.nombre_archivo }}</strong>
+                <div class="acreditacion-row-actions">
+                  <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' item.latest_registro.documento.pk %}" target="_blank" rel="noopener" data-document-check-url="{% url 'documentos-protegidos-validar' item.latest_registro.documento.pk %}">Revisar documento</a>
+                  <a class="btn btn-ghost" href="{% url 'documentos-protegidos-descargar' item.latest_registro.documento.pk %}" data-document-check-url="{% url 'documentos-protegidos-validar' item.latest_registro.documento.pk %}">Descargar</a>
+                </div>
+              </div>
+            {% else %}
+              <div class="caces-modal__document caces-modal__document--empty">
+                Sin documento cargado para este elemento.
+              </div>
+            {% endif %}
+          </section>
+
+          {% if item.evidence_review_form %}
+            {% with form=item.evidence_review_form registro=item.latest_registro %}
+              <form method="post" class="caces-evidence-review-form caces-evidence-review-form--modal">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_evidence_review">
+                <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
+                <input type="hidden" name="indicador" value="{{ indicador.pk }}">
+                <input type="hidden" name="registro" value="{{ registro.pk }}">
+                <input type="hidden" name="{{ form.registro.html_name }}" value="{{ registro.pk }}">
+                {{ form.non_field_errors }}
+                {{ form.registro.errors }}
+
+                <section class="caces-modal__section caces-modal__section--decision">
+                  <h4>Calificacion del elemento</h4>
+                  <div class="caces-evidence-choice-list">
+                    {% for option in form.qualitative_result_options %}
+                      <label class="caces-evidence-choice">
+                        <input
+                          type="radio"
+                          name="{{ form.resultado_cualitativo.html_name }}"
+                          value="{{ option.value }}"
+                          {% if option.selected %}checked{% endif %}
+                        >
+                        <span>{{ option.label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                  {{ form.resultado_cualitativo.errors }}
+                  <label class="acreditacion-form__field caces-evidence-review-form__comments">
+                    <span>Observaciones sobre la evidencia</span>
+                    {{ form.comentario }}
+                    {{ form.comentario.errors }}
+                  </label>
+                </section>
+                <div class="caces-modal__actions">
+                  <button class="btn btn-primary" type="submit">Evaluar</button>
+                </div>
+              </form>
+            {% endwith %}
+          {% else %}
+            <section class="caces-modal__section caces-modal__section--decision">
+              <h4>Calificacion del elemento</h4>
+              <div class="caces-modal__document caces-modal__document--empty">
+                Carga una evidencia para poder evaluarla.
+              </div>
+            </section>
           {% endif %}
+        </dialog>
+      {% endfor %}
+    </div>
+  {% elif detail.is_quantitative %}
+    <dialog class="caces-modal caces-modal--wide" id="caces-modal-quantitative">
+      <div class="caces-modal__header">
+        <div>
+          <strong>Evaluacion cuantitativa CACES</strong>
+          <small>Ponderacion, variables y calculo del indicador.</small>
+        </div>
+        <button class="btn btn-ghost" type="button" data-caces-modal-close>Cerrar</button>
+      </div>
+      <div class="caces-quantitative-modal" id="evaluacion-cuantitativa">
+        <section class="caces-modal__section">
+          <h4>Resultado y ponderacion</h4>
           <div class="caces-calculation-preview" data-caces-quantitative-preview>
             <div>
-              <span>Valor calculado</span>
+              <span>{% if detail.formula %}Valor calculado{% else %}Calificacion{% endif %}</span>
               <strong>{{ detail.result.valor_calculado|default:"--" }}</strong>
             </div>
             <div>
@@ -282,40 +422,165 @@
               <div><dt>Estandar</dt><dd>{{ detail.formula.estandar }}</dd></div>
               <div><dt>Sentido</dt><dd>{{ detail.formula.sentido_calculo }}</dd></div>
             </dl>
+          {% else %}
+            <p class="text-muted">Sin formula CACES: usa una calificacion general de 0 a 100. El sistema convierte la calificacion a utilidad y calcula el aporte con la ponderacion del indicador.</p>
           {% endif %}
-          <label class="acreditacion-form__field acreditacion-form__field--full">
-            <span>Observaciones de evaluacion</span>
-            <textarea name="observacion_calculo" rows="3"></textarea>
-          </label>
-          <div class="acreditacion-form__actions">
-            <button class="btn btn-primary" type="submit">Calcular resultado</button>
-          </div>
-        </form>
+        </section>
 
-        <form method="post" class="acreditacion-form caces-evaluation-form caces-evaluation-form--manual">
-          {% csrf_token %}
-          <input type="hidden" name="action" value="save_manual">
-          <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
-          <input type="hidden" name="indicador" value="{{ indicador.pk }}">
-          <input type="hidden" name="codigo_escenario" value="{{ detail.escenario_ponderacion }}" data-caces-weight-hidden>
-          {{ manual_form.non_field_errors }}
-          <label class="acreditacion-form__field">
-            <span>{{ manual_form.valor_calculado.label }}</span>
-            {{ manual_form.valor_calculado }}
-            {{ manual_form.valor_calculado.errors }}
-          </label>
-          <label class="acreditacion-form__field acreditacion-form__field--full">
-            <span>{{ manual_form.observacion.label }}</span>
-            {{ manual_form.observacion }}
-            {{ manual_form.observacion.errors }}
-          </label>
-          <div class="acreditacion-form__actions">
-            <button class="btn btn-secondary" type="submit">Guardar valor manual</button>
+        <section class="caces-modal__section">
+          <h4>Evidencias del indicador</h4>
+          <div class="caces-quantitative-evidence-list">
+            {% for item in detail.elements_data %}
+              <div class="caces-quantitative-evidence-item">
+                <div>
+                  <strong>{{ item.elemento.codigo_elemento }} - {{ item.elemento.nombre_elemento }}</strong>
+                  <small>{{ item.element_type_group }}</small>
+                </div>
+                {% if item.latest_registro %}
+                  <div class="acreditacion-row-actions">
+                    <a class="btn btn-secondary" href="{% url 'documentos-protegidos-abrir' item.latest_registro.documento.pk %}" target="_blank" rel="noopener" data-document-check-url="{% url 'documentos-protegidos-validar' item.latest_registro.documento.pk %}">Revisar documento</a>
+                    <a class="btn btn-ghost" href="{% url 'documentos-protegidos-descargar' item.latest_registro.documento.pk %}" data-document-check-url="{% url 'documentos-protegidos-validar' item.latest_registro.documento.pk %}">Descargar</a>
+                  </div>
+                {% else %}
+                  <span class="text-muted">Sin evidencia</span>
+                {% endif %}
+              </div>
+            {% empty %}
+              <div class="caces-modal__document caces-modal__document--empty">
+                No existen elementos fundamentales activos para este indicador.
+              </div>
+            {% endfor %}
           </div>
-        </form>
-      </article>
-    </div>
+        </section>
+
+        {% if detail.formula %}
+          <section class="caces-modal__section">
+            <h4>Variables de formula</h4>
+            {% if detail.variables_context.warning %}
+              <span class="acreditacion-status acreditacion-status--warning">{{ detail.variables_context.warning }}</span>
+            {% endif %}
+            <form method="post" class="acreditacion-form caces-evaluation-form">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="save_variables">
+              <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
+              <input type="hidden" name="indicador" value="{{ indicador.pk }}">
+              {{ variables_form.non_field_errors }}
+              {% if variables_form.variable_rows %}
+                <div class="caces-category-grid caces-category-grid--variables">
+                  {% for row in variables_form.variable_rows %}
+                    <label class="caces-category-option caces-category-option--calculated caces-variable-option">
+                      {{ row.select }}
+                      <span class="caces-category-option__content">
+                        <strong>{{ row.variable.codigo_variable }}</strong>
+                        <small>{{ row.variable.nombre_variable }}</small>
+                        <span class="caces-category-option__metric">Valor actual {{ row.current_value|default:"--" }}</span>
+                        {% if row.required %}
+                          <span class="acreditacion-status acreditacion-status--warning">Obligatoria</span>
+                        {% endif %}
+                        {% if row.variable.descripcion %}
+                          <span>{{ row.variable.descripcion }}</span>
+                        {% endif %}
+                        <span class="caces-variable-option__field">
+                          {{ row.value }}
+                          {{ row.value.errors }}
+                        </span>
+                      </span>
+                    </label>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <p class="text-muted">No hay variables configuradas para esta formula.</p>
+              {% endif %}
+              <label class="acreditacion-form__field acreditacion-form__field--full">
+                <span>{{ variables_form.observacion.label }}</span>
+                {{ variables_form.observacion }}
+                {{ variables_form.observacion.errors }}
+              </label>
+              <div class="caces-modal__actions">
+                <button class="btn btn-secondary" type="submit">Guardar variables</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="caces-modal__section caces-modal__section--decision">
+            <h4>Calcular con formula CACES</h4>
+            <form method="post" class="acreditacion-form caces-evaluation-form">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="calculate_quantitative">
+              <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
+              <input type="hidden" name="indicador" value="{{ indicador.pk }}">
+              {% if detail.ponderacion_options %}
+                <label class="acreditacion-form__field acreditacion-form__field--full caces-weight-select">
+                  <span>Ponderacion CACES</span>
+                  <select name="codigo_escenario" data-caces-weight-select>
+                    {% for option in detail.ponderacion_options %}
+                      <option
+                        value="{{ option.code }}"
+                        data-weight="{{ option.ponderacion }}"
+                        {% if option.selected %}selected{% endif %}
+                      >
+                        {{ option.code }} - {{ option.nombre }} ({{ option.ponderacion }})
+                      </option>
+                    {% endfor %}
+                  </select>
+                </label>
+              {% endif %}
+              <label class="acreditacion-form__field acreditacion-form__field--full">
+                <span>Observaciones de evaluacion</span>
+                <textarea name="observacion_calculo" rows="3"></textarea>
+              </label>
+              <div class="caces-modal__actions">
+                <button class="btn btn-primary" type="submit">Evaluar con formula</button>
+              </div>
+            </form>
+          </section>
+        {% endif %}
+
+        <section class="caces-modal__section">
+          <h4>{% if detail.formula %}Valor manual{% else %}Calificacion general{% endif %}</h4>
+          <form method="post" class="acreditacion-form caces-evaluation-form caces-evaluation-form--manual">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_manual">
+            <input type="hidden" name="ciclo" value="{{ selected_cycle.pk }}">
+            <input type="hidden" name="indicador" value="{{ indicador.pk }}">
+            <input type="hidden" name="codigo_escenario" value="{{ detail.escenario_ponderacion }}" data-caces-weight-hidden>
+            {{ manual_form.non_field_errors }}
+            <label class="acreditacion-form__field">
+              <span>{% if detail.formula %}{{ manual_form.valor_calculado.label }}{% else %}Calificacion general (0-100){% endif %}</span>
+              {{ manual_form.valor_calculado }}
+              {{ manual_form.valor_calculado.errors }}
+            </label>
+            <label class="acreditacion-form__field acreditacion-form__field--full">
+              <span>{{ manual_form.observacion.label }}</span>
+              {{ manual_form.observacion }}
+              {{ manual_form.observacion.errors }}
+            </label>
+            <div class="caces-modal__actions">
+              <button class="btn btn-primary" type="submit">Evaluar</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </dialog>
   {% endif %}
+
+  <dialog class="caces-modal caces-modal--notice" id="caces-document-missing-modal">
+    <div class="caces-modal__header">
+      <div>
+        <strong>Archivo no encontrado</strong>
+        <small>No se puede abrir el documento solicitado.</small>
+      </div>
+      <button class="btn btn-ghost" type="button" data-caces-modal-close>Cerrar</button>
+    </div>
+    <section class="caces-modal__section caces-modal__section--decision">
+      <p class="caces-document-missing-message" data-document-missing-message>
+        El archivo asociado a esta evidencia no existe o no esta disponible.
+      </p>
+    </section>
+    <div class="caces-modal__actions">
+      <button class="btn btn-primary" type="button" data-caces-modal-close>Entendido</button>
+    </div>
+  </dialog>
 {% endwith %}
 {% endblock %}
 
@@ -323,37 +588,285 @@
 {{ block.super }}
 <script>
   (function () {
-    var inputs = document.querySelectorAll("[data-caces-category-input]");
-    if (!inputs.length) {
+    var qualitativeForm = document.querySelector("[data-caces-qualitative-form]");
+    if (!qualitativeForm) {
       return;
     }
 
+    var decisionForm = qualitativeForm.querySelector("[data-caces-decision-form]");
+    var decisionInputs = decisionForm ? decisionForm.querySelectorAll("input[type='radio']") : [];
+    var categoryCards = qualitativeForm.querySelectorAll("[data-caces-category-option]");
+    var categoryInputs = qualitativeForm.querySelectorAll("[data-caces-category-input]");
+    var categoryTarget = document.querySelector("[data-caces-preview-category]");
     var utilityTarget = document.querySelector("[data-caces-preview-utilidad]");
+    var scoreTarget = document.querySelector("[data-caces-preview-score]");
     var weightTarget = document.querySelector("[data-caces-preview-ponderacion]");
     var contributionTarget = document.querySelector("[data-caces-preview-aporte]");
 
-    function renderPreview(input) {
+    function decimalFrom(value) {
+      var parsed = Number.parseFloat(value || "0");
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function formatDecimal(value, places) {
+      return decimalFrom(value).toFixed(places);
+    }
+
+    function checkedDecision(card) {
+      var checked = card.querySelector("input[type='radio']:checked");
+      return checked ? checked.value : "";
+    }
+
+    function calculatedCategoryCode() {
+      if (!decisionForm) {
+        return "";
+      }
+      var cards = decisionForm.querySelectorAll("[data-caces-element-type]");
+      var essentialTotal = 0;
+      var essentialFailed = 0;
+      var complementaryTotal = 0;
+      var complementaryFailed = 0;
+      var pending = 0;
+
+      cards.forEach(function (card) {
+        var type = card.dataset.cacesElementType || "ESENCIAL";
+        var decision = checkedDecision(card);
+        if (!decision) {
+          pending += 1;
+          return;
+        }
+        if (type === "COMPLEMENTARIO") {
+          complementaryTotal += 1;
+          complementaryFailed += decision === "NO_CUMPLE" ? 1 : 0;
+        } else {
+          essentialTotal += 1;
+          essentialFailed += decision === "NO_CUMPLE" ? 1 : 0;
+        }
+      });
+
+      if (pending > 0) {
+        return "";
+      }
+      if (essentialFailed === 0 && complementaryFailed === 0) {
+        return "SATISFACTORIO";
+      }
+      if (essentialFailed === 0) {
+        return complementaryFailed < complementaryTotal ? "CUASI_SATISFACTORIO" : "POCO_SATISFACTORIO";
+      }
+      if (essentialTotal > 0 && essentialFailed >= essentialTotal) {
+        return "DEFICIENTE";
+      }
+      return "POCO_SATISFACTORIO";
+    }
+
+    function calculatedScore() {
+      if (!decisionForm) {
+        return { pending: 0, total: 0, earned: 0, utility: 0 };
+      }
+      var cards = decisionForm.querySelectorAll("[data-caces-element-type]");
+      var total = 0;
+      var earned = 0;
+      var pending = 0;
+
+      cards.forEach(function (card) {
+        var decision = checkedDecision(card);
+        var weight = Number.parseFloat(card.dataset.cacesElementWeight || "0") || 0;
+        var elementScoreTarget = card.querySelector("[data-caces-element-score]");
+        var elementEarned = decision === "CUMPLE" ? weight : 0;
+        total += weight;
+        if (!decision) {
+          pending += 1;
+          if (elementScoreTarget) {
+            elementScoreTarget.textContent = "--";
+          }
+          return;
+        }
+        if (decision === "CUMPLE") {
+          earned += weight;
+        }
+        if (elementScoreTarget) {
+          elementScoreTarget.textContent = elementEarned.toFixed(4);
+        }
+      });
+
+      return {
+        pending: pending,
+        total: total,
+        earned: earned,
+        utility: total > 0 ? earned / total : 0
+      };
+    }
+
+    function checkedCategoryInput() {
+      var selected = null;
+      categoryInputs.forEach(function (input) {
+        if (input.checked) {
+          selected = input;
+        }
+      });
+      return selected;
+    }
+
+    function renderCategoryPreview(input) {
       if (!input) {
+        categoryCards.forEach(function (card) {
+          card.classList.remove("is-active");
+        });
+        if (categoryTarget) {
+          categoryTarget.textContent = "--";
+        }
+        if (utilityTarget) {
+          utilityTarget.textContent = "--";
+        }
+        if (scoreTarget) {
+          scoreTarget.textContent = "--";
+        }
+        if (weightTarget) {
+          weightTarget.textContent = "--";
+        }
+        if (contributionTarget) {
+          contributionTarget.textContent = "--";
+        }
         return;
       }
+
+      var card = input.closest("[data-caces-category-option]");
+      if (!card) {
+        return;
+      }
+      var utility = decimalFrom(card.dataset.utility);
+      var weight = decimalFrom(card.dataset.ponderacion);
+      var contribution = decimalFrom(card.dataset.aporte);
+
+      categoryCards.forEach(function (item) {
+        item.classList.toggle("is-active", item === card);
+      });
+      if (categoryTarget) {
+        categoryTarget.textContent = card.dataset.categoryName || card.dataset.cacesCategoryOption || "--";
+      }
       if (utilityTarget) {
-        utilityTarget.textContent = input.dataset.utility || "--";
+        utilityTarget.textContent = formatDecimal(utility, 4);
+      }
+      if (scoreTarget) {
+        scoreTarget.textContent = formatDecimal(contribution, 4) + " / " + formatDecimal(weight, 4);
       }
       if (weightTarget) {
-        weightTarget.textContent = input.dataset.ponderacion || "--";
+        weightTarget.textContent = formatDecimal(weight, 4);
       }
       if (contributionTarget) {
-        contributionTarget.textContent = input.dataset.aporte || "--";
+        contributionTarget.textContent = formatDecimal(contribution, 4);
       }
     }
 
-    inputs.forEach(function (input) {
+    function selectCategoryByCode(code) {
+      var selectedCard = null;
+      categoryCards.forEach(function (card) {
+        var isSelected = code && card.dataset.cacesCategoryOption === code;
+        card.classList.toggle("is-active", Boolean(isSelected));
+        if (isSelected) {
+          selectedCard = card;
+        }
+      });
+      if (!selectedCard) {
+        return false;
+      }
+      var input = selectedCard.querySelector("[data-caces-category-input]");
+      if (input) {
+        input.checked = true;
+        renderCategoryPreview(input);
+      }
+      return true;
+    }
+
+    function renderDecisionPreview() {
+      var code = calculatedCategoryCode();
+      var score = calculatedScore();
+      if (!code || score.pending) {
+        renderCategoryPreview(checkedCategoryInput());
+        return;
+      }
+      selectCategoryByCode(code);
+
+      if (categoryTarget) {
+        categoryTarget.textContent = code || "--";
+      }
+      if (utilityTarget) {
+        utilityTarget.textContent = score.pending ? "--" : score.utility.toFixed(4);
+      }
+      if (scoreTarget) {
+        scoreTarget.textContent = score.pending ? "--" : score.earned.toFixed(4) + " / " + score.total.toFixed(4);
+      }
+      if (weightTarget) {
+        weightTarget.textContent = score.pending ? "--" : score.total.toFixed(4);
+      }
+      if (contributionTarget) {
+        contributionTarget.textContent = score.pending ? "--" : score.earned.toFixed(6);
+      }
+    }
+
+    decisionInputs.forEach(function (input) {
+      input.addEventListener("change", renderDecisionPreview);
+    });
+    categoryInputs.forEach(function (input) {
       input.addEventListener("change", function () {
-        renderPreview(input);
+        renderCategoryPreview(input);
       });
     });
 
-    renderPreview(document.querySelector("[data-caces-category-input]:checked"));
+    if (decisionForm) {
+      renderDecisionPreview();
+    } else {
+      renderCategoryPreview(checkedCategoryInput());
+    }
+  })();
+
+  (function () {
+    var openButtons = document.querySelectorAll("[data-caces-modal-open]");
+    var closeButtons = document.querySelectorAll("[data-caces-modal-close]");
+
+    function openModal(id) {
+      var modal = document.getElementById(id);
+      if (!modal) {
+        return;
+      }
+      if (typeof modal.showModal === "function") {
+        modal.showModal();
+      } else {
+        modal.setAttribute("open", "open");
+      }
+    }
+
+    function closeModal(button) {
+      var modal = button.closest("dialog");
+      if (!modal) {
+        return;
+      }
+      if (typeof modal.close === "function") {
+        modal.close();
+      } else {
+        modal.removeAttribute("open");
+      }
+    }
+
+    openButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        openModal(button.dataset.cacesModalOpen);
+      });
+    });
+
+    closeButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        closeModal(button);
+      });
+    });
+
+    document.querySelectorAll(".caces-modal").forEach(function (modal) {
+      modal.addEventListener("click", function (event) {
+        if (event.target === modal && typeof modal.close === "function") {
+          modal.close();
+        }
+      });
+    });
   })();
 
   (function () {
@@ -378,6 +891,105 @@
 
     weightSelect.addEventListener("change", renderWeight);
     renderWeight();
+  })();
+
+  (function () {
+    var links = document.querySelectorAll("a[data-document-check-url]");
+    if (!links.length) {
+      return;
+    }
+
+    var missingModal = document.getElementById("caces-document-missing-modal");
+    var missingMessage = document.querySelector("[data-document-missing-message]");
+    var defaultMessage = "El archivo asociado a esta evidencia no existe o no esta disponible.";
+
+    function showMissingModal(message) {
+      if (missingMessage) {
+        missingMessage.textContent = message || defaultMessage;
+      }
+      if (!missingModal) {
+        return;
+      }
+      if (typeof missingModal.showModal === "function") {
+        missingModal.showModal();
+      } else {
+        missingModal.setAttribute("open", "open");
+      }
+    }
+
+    function openCheckedLink(link, pendingWindow) {
+      if (pendingWindow && !pendingWindow.closed) {
+        pendingWindow.location.href = link.href;
+        return;
+      }
+      if (link.target === "_blank") {
+        window.open(link.href, "_blank", "noopener");
+        return;
+      }
+      window.location.href = link.href;
+    }
+
+    function closePendingWindow(pendingWindow) {
+      if (pendingWindow && !pendingWindow.closed) {
+        pendingWindow.close();
+      }
+    }
+
+    links.forEach(function (link) {
+      link.addEventListener("click", function (event) {
+        var checkUrl = link.dataset.documentCheckUrl;
+        if (!checkUrl || link.dataset.documentCheckPending === "true") {
+          return;
+        }
+
+        event.preventDefault();
+        var pendingWindow = null;
+        if (link.target === "_blank") {
+          pendingWindow = window.open("about:blank", "_blank");
+          if (pendingWindow) {
+            pendingWindow.opener = null;
+          }
+        }
+
+        link.dataset.documentCheckPending = "true";
+        link.setAttribute("aria-busy", "true");
+
+        fetch(checkUrl, {
+          credentials: "same-origin",
+          headers: {
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        })
+          .then(function (response) {
+            if (response.redirected) {
+              closePendingWindow(pendingWindow);
+              window.location.href = response.url;
+              return null;
+            }
+            return response.json();
+          })
+          .then(function (payload) {
+            if (!payload) {
+              return;
+            }
+            if (payload.available) {
+              openCheckedLink(link, pendingWindow);
+              return;
+            }
+            closePendingWindow(pendingWindow);
+            showMissingModal(payload.message || defaultMessage);
+          })
+          .catch(function () {
+            closePendingWindow(pendingWindow);
+            showMissingModal(defaultMessage);
+          })
+          .finally(function () {
+            delete link.dataset.documentCheckPending;
+            link.removeAttribute("aria-busy");
+          });
+      });
+    });
   })();
 </script>
 {% endblock %}

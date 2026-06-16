@@ -14,6 +14,13 @@ from apps.core.selectors.dashboard_selector import (
     get_dashboard_quick_links,
     get_dashboard_review_grid,
 )
+from apps.core.services.navigation_service import (
+    ROLE_ADMIN,
+    ROLE_EVALUATOR,
+    ROLE_QUALITY,
+    ROLE_RECTOR,
+    _normalize_roles,
+)
 from apps.core.services.notification_service import marcar_notificacion_leida
 
 class InicioView(SigLoginRequiredMixin, TemplateView):
@@ -33,9 +40,19 @@ class DashboardView(SigLoginRequiredMixin, TemplateView):
         operational_roles = tuple(self.request.session.get("sig_operational_roles", []) or [])
         effective_roles = tuple(dict.fromkeys([*roles, *operational_roles]))
         permissions = tuple(self.request.session.get("sig_permissions", []) or [])
+        normalized_operational_roles = _normalize_roles(operational_roles)
+        normalized_effective_roles = _normalize_roles(effective_roles)
+        privileged_roles = {ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR}
+        is_evaluator_dashboard = ROLE_EVALUATOR in normalized_operational_roles or (
+            ROLE_EVALUATOR in normalized_effective_roles
+            and not normalized_effective_roles.intersection(privileged_roles)
+        )
         context["dashboard_metrics"] = get_dashboard_metrics()
-        context["review_dashboard"] = get_dashboard_review_grid(
-            estado=self.request.GET.get("revision_estado")
+        context["show_review_dashboard"] = not is_evaluator_dashboard
+        context["review_dashboard"] = (
+            get_dashboard_review_grid(estado=self.request.GET.get("revision_estado"))
+            if context["show_review_dashboard"]
+            else None
         )
         context["quick_links"] = get_dashboard_quick_links(
             role_names=effective_roles,

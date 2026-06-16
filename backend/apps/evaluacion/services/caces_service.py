@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ast
+import operator
 import re
-from decimal import Decimal
+from decimal import Decimal, DivisionByZero, InvalidOperation
 
 from django.utils import timezone
 from django.db import DatabaseError, connection, transaction
@@ -13,7 +15,10 @@ from apps.evaluacion.models import (
     CategoriaValoracionCaces,
     CicloConfiguracionCaces,
     EscenarioPonderacionCaces,
+    EvaluacionIndicadorCaces,
+    EvaluacionVariableCaces,
     IndicadorCacesMapeo,
+    IndicadorFormulaCaces,
 )
 from apps.evaluacion.selectors.caces_selector import (
     QUANTITATIVE_TYPE,
@@ -52,6 +57,14 @@ FINALIZATION_CYCLE_STATES = (
     "FINALIZADO",
     "FINALIZADA",
 )
+DECIMAL_FOUR_PLACES = Decimal("0.0001")
+DECIMAL_SIX_PLACES = Decimal("0.000001")
+ALLOWED_FORMULA_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+}
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
@@ -94,7 +107,11 @@ def _first_present(mapping: dict, *keys):
 
 def _ensure_indicator_active(indicador_id):
     indicador_pk = _coerce_positive_int(indicador_id, "id_indicador")
-    indicador = Indicador.objects.filter(pk=indicador_pk).first()
+    indicador = (
+        Indicador.objects.select_related("subcriterio__criterio", "tipo_indicador")
+        .filter(pk=indicador_pk)
+        .first()
+    )
     if indicador is None:
         raise CacesEvaluationError("El indicador seleccionado no existe.")
     if not indicador.activo:
@@ -103,16 +120,19 @@ def _ensure_indicator_active(indicador_id):
 
 
 def _ensure_mapping(indicador):
-    mapping = (
+    return (
         IndicadorCacesMapeo.objects.select_related("modelo")
         .filter(indicador_id=indicador.pk)
         .first()
     )
-    if mapping is None:
-        raise CacesEvaluationError(
-            "El indicador no esta mapeado a modelo_indicador_caces."
-        )
-    return mapping
+
+
+def _evaluation_type_for_indicator(indicador, mapping) -> str:
+    if mapping is not None:
+        return _normalize_code(mapping.modelo.tipo_evaluacion)
+    return _normalize_code(
+        getattr(getattr(indicador, "tipo_indicador", None), "descripcion", "")
+    )
 
 
 def _ensure_active_scenario(codigo_escenario):
@@ -153,7 +173,7 @@ def _get_proc_parameters(proc_name: str):
 def _execute_stored_procedure(proc_name: str, values_by_parameter: dict):
     parameters = _get_proc_parameters(proc_name)
     if not parameters:
-        raise CacesEvaluationError(f"No existe el procedimiento {proc_name}.")
+        return False
 
     assignments = []
     values = []
@@ -171,11 +191,261 @@ def _execute_stored_procedure(proc_name: str, values_by_parameter: dict):
     sql = f"EXEC {proc_name} {', '.join(assignments)}"
     with connection.cursor() as cursor:
         cursor.execute(sql, values)
-        rows = []
-        if cursor.description:
-            columns = [column[0] for column in cursor.description]
-            rows.extend(dict(zip(columns, row)) for row in cursor.fetchall())
-        return rows
+    return True
+
+
+def _quantize(value, places: Decimal) -> Decimal:
+    return _coerce_decimal(value, "valor").quantize(places)
+
+
+def _selected_scenario_code(ciclo_id) -> str:
+    config = CicloConfiguracionCaces.objects.filter(ciclo_id=ciclo_id).first()
+    if config and config.escenario_id:
+        return str(config.escenario_id).upper()
+    return "A"
+
+
+def _normalize_weight(value, field_name: str) -> Decimal:
+    weight = _coerce_decimal(value or 0, field_name)
+    if weight > 1 and weight <= 100:
+        weight = weight / Decimal("100")
+    return _validate_unit_interval(weight, field_name)
+
+
+def _weight_for_indicator(indicador) -> Decimal:
+    for field_name, value in (
+        ("ponderacion", getattr(indicador, "ponderacion", None)),
+        ("ponderacion_subcriterio", getattr(getattr(indicador, "subcriterio", None), "ponderacion", None)),
+        (
+            "ponderacion_criterio",
+            getattr(getattr(getattr(indicador, "subcriterio", None), "criterio", None), "ponderacion", None),
+        ),
+    ):
+        weight = _normalize_weight(value, field_name)
+        if weight > 0:
+            return weight
+    return Decimal("0")
+
+
+def _weight_for_mapping(mapping, ciclo_id, *, indicador=None) -> Decimal:
+    if mapping is None:
+        return _weight_for_indicator(indicador)
+    field_name = {
+        "A": "ponderacion_a",
+        "B": "ponderacion_b",
+        "C": "ponderacion_c",
+    }.get(_selected_scenario_code(ciclo_id), "ponderacion_a")
+    weight = getattr(mapping.modelo, field_name, None)
+    if weight is None:
+        weight = getattr(mapping.modelo, "ponderacion_a", None)
+    return _normalize_weight(weight, "ponderacion")
+
+
+def _clamp_unit_interval(value) -> Decimal:
+    decimal = _coerce_decimal(value, "utilidad")
+    if decimal < 0:
+        return Decimal("0")
+    if decimal > 1:
+        return Decimal("1")
+    return decimal
+
+
+def _active_formula_for_mapping(mapping):
+    if mapping is None:
+        raise CacesEvaluationError(
+            "El indicador no tiene formula CACES; usa la evaluacion cuantitativa manual general."
+        )
+    formula = IndicadorFormulaCaces.objects.filter(
+        modelo_id=mapping.modelo.numero_modelo,
+        activo=True,
+    ).first()
+    if formula is None:
+        raise CacesEvaluationError("El indicador CACES no tiene formula cuantitativa configurada.")
+    return formula
+
+
+def _formula_body(expression: str | None) -> str:
+    body = (expression or "").strip()
+    if "=" in body:
+        body = body.split("=", 1)[1].strip()
+    if not body:
+        raise CacesEvaluationError("La formula CACES no tiene expresion de calculo.")
+    return body
+
+
+def _evaluate_formula_node(node, values_by_code: dict[str, Decimal]) -> Decimal:
+    if isinstance(node, ast.Expression):
+        return _evaluate_formula_node(node.body, values_by_code)
+    if isinstance(node, ast.BinOp):
+        operator_fn = ALLOWED_FORMULA_OPERATORS.get(type(node.op))
+        if operator_fn is None:
+            raise CacesEvaluationError("La formula CACES contiene un operador no permitido.")
+        left = _evaluate_formula_node(node.left, values_by_code)
+        right = _evaluate_formula_node(node.right, values_by_code)
+        try:
+            return operator_fn(left, right)
+        except (DivisionByZero, InvalidOperation, ZeroDivisionError) as exc:
+            raise CacesEvaluationError("No se puede calcular: la formula divide para cero.") from exc
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+        value = _evaluate_formula_node(node.operand, values_by_code)
+        return value if isinstance(node.op, ast.UAdd) else -value
+    if isinstance(node, ast.Name):
+        code = _normalize_code(node.id)
+        if code not in values_by_code:
+            raise CacesEvaluationError(f"No se encontro valor para la variable {node.id}.")
+        return values_by_code[code]
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return Decimal(str(node.value))
+    if hasattr(ast, "Num") and isinstance(node, ast.Num):
+        return Decimal(str(node.n))
+    raise CacesEvaluationError("La formula CACES contiene una expresion no permitida.")
+
+
+def _evaluate_formula(expression: str | None, values_by_code: dict[str, Decimal]) -> Decimal:
+    try:
+        parsed = ast.parse(_formula_body(expression), mode="eval")
+    except SyntaxError as exc:
+        raise CacesEvaluationError("La formula CACES no tiene sintaxis valida.") from exc
+    return _evaluate_formula_node(parsed, values_by_code)
+
+
+def _utility_from_quantitative_value(value, formula) -> Decimal:
+    calculated = _coerce_decimal(value, "valor_calculado")
+    if calculated < 0:
+        calculated = Decimal("0")
+    standard = _coerce_decimal(formula.estandar, "estandar")
+    if standard <= 0:
+        raise CacesEvaluationError("El estandar de la formula CACES debe ser mayor a cero.")
+
+    sentido = _normalize_code(formula.sentido_calculo)
+    if sentido == "MENOR_IGUAL":
+        utility = Decimal("1") if calculated <= standard else standard / calculated
+    else:
+        utility = calculated / standard
+    return _clamp_unit_interval(utility).quantize(DECIMAL_FOUR_PLACES)
+
+
+def _utility_from_general_score(value) -> Decimal:
+    score = _coerce_decimal(value, "calificacion_general")
+    if score < 0 or score > 100:
+        raise CacesEvaluationError("La calificacion general debe estar entre 0 y 100.")
+    return (score / Decimal("100")).quantize(DECIMAL_FOUR_PLACES)
+
+
+def _store_indicator_evaluation(
+    *,
+    ciclo_id,
+    indicador,
+    mapping,
+    tipo_evaluacion,
+    utilidad,
+    ponderacion,
+    actor,
+    observacion=None,
+    categoria=None,
+    formula=None,
+    valor_calculado=None,
+):
+    utility = _validate_unit_interval(utilidad, "utilidad").quantize(DECIMAL_FOUR_PLACES)
+    weight = _validate_unit_interval(ponderacion, "ponderacion").quantize(DECIMAL_FOUR_PLACES)
+    contribution = (utility * weight).quantize(DECIMAL_SIX_PLACES)
+    defaults = {
+        "numero_modelo": mapping.modelo.numero_modelo if mapping is not None else None,
+        "tipo_evaluacion": tipo_evaluacion,
+        "categoria": categoria,
+        "codigo_formula": getattr(formula, "codigo_formula", None),
+        "valor_calculado": _quantize(valor_calculado, DECIMAL_FOUR_PLACES)
+        if valor_calculado is not None
+        else None,
+        "estandar": getattr(formula, "estandar", None),
+        "sentido_calculo": getattr(formula, "sentido_calculo", None),
+        "utilidad": utility,
+        "ponderacion": weight,
+        "aporte": contribution,
+        "observacion": observacion,
+        "calculado_por": actor,
+        "fecha_calculo": timezone.now(),
+    }
+    evaluation, _created = EvaluacionIndicadorCaces.objects.update_or_create(
+        ciclo_id=ciclo_id,
+        indicador_id=indicador.pk,
+        defaults=defaults,
+    )
+    return evaluation
+
+
+def _store_qualitative_evaluation(*, ciclo_id, indicador, mapping, categoria, observacion, actor, utilidad=None):
+    return _store_indicator_evaluation(
+        ciclo_id=ciclo_id,
+        indicador=indicador,
+        mapping=mapping,
+        tipo_evaluacion="CUALITATIVO",
+        categoria=categoria,
+        utilidad=utilidad if utilidad is not None else categoria.utilidad,
+        ponderacion=_weight_for_mapping(mapping, ciclo_id, indicador=indicador),
+        observacion=observacion,
+        actor=actor,
+    )
+
+
+def _store_quantitative_variable(*, ciclo_id, indicador, variable, value, observacion, actor):
+    EvaluacionVariableCaces.objects.update_or_create(
+        ciclo_id=ciclo_id,
+        indicador_id=indicador.pk,
+        codigo_variable=variable.codigo_variable,
+        defaults={
+            "nombre_variable": variable.nombre_variable,
+            "valor_variable": _quantize(value, DECIMAL_FOUR_PLACES),
+            "observacion": observacion,
+            "registrado_por": actor,
+            "fecha_registro": timezone.now(),
+        },
+    )
+
+
+def _stored_formula_values(*, ciclo_id, indicador) -> dict[str, Decimal]:
+    values = {}
+    for item in EvaluacionVariableCaces.objects.filter(
+        ciclo_id=ciclo_id,
+        indicador_id=indicador.pk,
+    ):
+        values[_normalize_code(item.codigo_variable)] = _coerce_decimal(
+            item.valor_variable,
+            item.codigo_variable,
+        )
+    return values
+
+
+def _calculate_and_store_quantitative(*, ciclo_id, indicador, mapping, observacion, actor, manual_value=None):
+    formula = _active_formula_for_mapping(mapping) if mapping is not None else None
+    if manual_value is not None:
+        value = _coerce_decimal(manual_value, "valor_calculado")
+    else:
+        if formula is None:
+            raise CacesEvaluationError(
+                "El indicador no tiene formula CACES; usa la evaluacion cuantitativa manual general."
+            )
+        value = _evaluate_formula(
+            formula.expresion_formula,
+            _stored_formula_values(ciclo_id=ciclo_id, indicador=indicador),
+        )
+    utility = (
+        _utility_from_quantitative_value(value, formula)
+        if formula is not None
+        else _utility_from_general_score(value)
+    )
+    return _store_indicator_evaluation(
+        ciclo_id=ciclo_id,
+        indicador=indicador,
+        mapping=mapping,
+        tipo_evaluacion=QUANTITATIVE_TYPE,
+        formula=formula,
+        valor_calculado=value,
+        utilidad=utility,
+        ponderacion=_weight_for_mapping(mapping, ciclo_id, indicador=indicador),
+        observacion=observacion,
+        actor=actor,
+    )
 
 
 def _parameter_aliases(**values):
@@ -188,6 +458,7 @@ def _parameter_aliases(**values):
     nombre_variable = values.get("nombre_variable")
     valor_variable = values.get("valor_variable")
     valor_calculado = values.get("valor_calculado")
+    utilidad = values.get("utilidad")
     observacion = values.get("observacion")
     return {
         "id_ciclo": id_ciclo,
@@ -213,6 +484,8 @@ def _parameter_aliases(**values):
         "p_valor_variable": valor_variable,
         "valor_calculado": valor_calculado,
         "p_valor_calculado": valor_calculado,
+        "utilidad": utilidad,
+        "p_utilidad": utilidad,
         "observacion": observacion,
         "comentario": observacion,
         "p_observacion": observacion,
@@ -355,6 +628,7 @@ def guardar_evaluacion_cualitativa_caces(
     ciclo_id,
     indicador_id,
     categoria_id,
+    utilidad_calculada=None,
     observacion=None,
     actor=None,
     request=None,
@@ -364,8 +638,8 @@ def guardar_evaluacion_cualitativa_caces(
     id_ciclo = _coerce_positive_int(ciclo_id, "id_ciclo")
     indicador = _ensure_indicator_active(indicador_id)
     mapping = _ensure_mapping(indicador)
-    if mapping.modelo.tipo_evaluacion != "CUALITATIVO":
-        raise CacesEvaluationError("El indicador no es cualitativo segun el modelo CACES.")
+    if _evaluation_type_for_indicator(indicador, mapping) != "CUALITATIVO":
+        raise CacesEvaluationError("El indicador no es cualitativo.")
 
     categoria = CategoriaValoracionCaces.objects.filter(
         pk=_coerce_positive_int(categoria_id, "id_categoria"),
@@ -374,19 +648,35 @@ def guardar_evaluacion_cualitativa_caces(
     if categoria is None:
         raise CacesEvaluationError("La categoria cualitativa seleccionada no existe o esta inactiva.")
     _validate_unit_interval(categoria.utilidad, "utilidad")
+    utility_override = None
+    if utilidad_calculada is not None:
+        utility_override = _validate_unit_interval(utilidad_calculada, "utilidad_calculada")
 
     observacion = _normalize_optional_text(observacion)
-    _execute_stored_procedure(
-        PROC_GUARDAR_CUALITATIVA,
-        _parameter_aliases(
-            id_ciclo=id_ciclo,
-            id_indicador=indicador.pk,
-            id_categoria=categoria.pk,
-            codigo_categoria=categoria.codigo,
+    proc_executed = False
+    if mapping is not None and utility_override is None:
+        proc_executed = _execute_stored_procedure(
+            PROC_GUARDAR_CUALITATIVA,
+            _parameter_aliases(
+                id_ciclo=id_ciclo,
+                id_indicador=indicador.pk,
+                id_categoria=categoria.pk,
+                codigo_categoria=categoria.codigo,
+                utilidad=utility_override,
+                observacion=observacion,
+                actor_id=actor.pk,
+            ),
+        )
+    if not proc_executed or utility_override is not None:
+        _store_qualitative_evaluation(
+            ciclo_id=id_ciclo,
+            indicador=indicador,
+            mapping=mapping,
+            categoria=categoria,
+            utilidad=utility_override,
             observacion=observacion,
-            actor_id=actor.pk,
-        ),
-    )
+            actor=actor,
+        )
     result = get_caces_indicator_result(id_ciclo, indicador.pk)
     if result:
         _validate_unit_interval(result["utilidad"], "utilidad")
@@ -406,6 +696,7 @@ def guardar_evaluacion_cualitativa_caces(
             "id_indicador": indicador.pk,
             "id_categoria": categoria.pk,
             "codigo_categoria": categoria.codigo,
+            "utilidad_calculada": str(utility_override) if utility_override is not None else None,
             "observacion": observacion,
         },
     )
@@ -428,8 +719,12 @@ def guardar_variable_cuantitativa_caces(
     id_ciclo = _coerce_positive_int(ciclo_id, "id_ciclo")
     indicador = _ensure_indicator_active(indicador_id)
     mapping = _ensure_mapping(indicador)
-    if mapping.modelo.tipo_evaluacion != QUANTITATIVE_TYPE:
-        raise CacesEvaluationError("El indicador no es cuantitativo segun el modelo CACES.")
+    if _evaluation_type_for_indicator(indicador, mapping) != QUANTITATIVE_TYPE:
+        raise CacesEvaluationError("El indicador no es cuantitativo.")
+    if mapping is None:
+        raise CacesEvaluationError(
+            "El indicador no tiene formula CACES; usa la evaluacion cuantitativa manual general."
+        )
 
     variable_code = _normalize_code(codigo_variable)
     variables_context = get_caces_required_variables(indicador.pk, ciclo_id=id_ciclo)
@@ -446,7 +741,7 @@ def guardar_variable_cuantitativa_caces(
 
     value = _coerce_decimal(valor_variable, "valor_variable")
     observacion = _normalize_optional_text(observacion)
-    _execute_stored_procedure(
+    if not _execute_stored_procedure(
         PROC_GUARDAR_VARIABLE,
         _parameter_aliases(
             id_ciclo=id_ciclo,
@@ -457,7 +752,15 @@ def guardar_variable_cuantitativa_caces(
             observacion=observacion,
             actor_id=actor.pk,
         ),
-    )
+    ):
+        _store_quantitative_variable(
+            ciclo_id=id_ciclo,
+            indicador=indicador,
+            variable=variable,
+            value=value,
+            observacion=observacion,
+            actor=actor,
+        )
     _audit_caces_event(
         action="GUARDAR_VARIABLE_CUANTITATIVA_CACES",
         description=f"Se guardo variable {variable.codigo_variable} para {indicador.codigo_indicador}.",
@@ -530,8 +833,12 @@ def calcular_evaluacion_cuantitativa_caces(
     id_ciclo = _coerce_positive_int(ciclo_id, "id_ciclo")
     indicador = _ensure_indicator_active(indicador_id)
     mapping = _ensure_mapping(indicador)
-    if mapping.modelo.tipo_evaluacion != QUANTITATIVE_TYPE:
-        raise CacesEvaluationError("El indicador no es cuantitativo segun el modelo CACES.")
+    if _evaluation_type_for_indicator(indicador, mapping) != QUANTITATIVE_TYPE:
+        raise CacesEvaluationError("El indicador no es cuantitativo.")
+    if mapping is None:
+        raise CacesEvaluationError(
+            "El indicador no tiene formula CACES; usa la evaluacion cuantitativa manual general."
+        )
 
     missing = _missing_required_variables(indicador, id_ciclo)
     if missing:
@@ -542,7 +849,7 @@ def calcular_evaluacion_cuantitativa_caces(
         )
 
     observacion = _normalize_optional_text(observacion)
-    _execute_stored_procedure(
+    if not _execute_stored_procedure(
         PROC_CALCULAR_CUANTITATIVA,
         _parameter_aliases(
             id_ciclo=id_ciclo,
@@ -550,7 +857,14 @@ def calcular_evaluacion_cuantitativa_caces(
             observacion=observacion,
             actor_id=actor.pk,
         ),
-    )
+    ):
+        _calculate_and_store_quantitative(
+            ciclo_id=id_ciclo,
+            indicador=indicador,
+            mapping=mapping,
+            observacion=observacion,
+            actor=actor,
+        )
     result = get_caces_indicator_result(id_ciclo, indicador.pk)
     if result:
         _validate_unit_interval(result["utilidad"], "utilidad")
@@ -589,21 +903,32 @@ def guardar_evaluacion_cuantitativa_manual_caces(
     id_ciclo = _coerce_positive_int(ciclo_id, "id_ciclo")
     indicador = _ensure_indicator_active(indicador_id)
     mapping = _ensure_mapping(indicador)
-    if mapping.modelo.tipo_evaluacion != QUANTITATIVE_TYPE:
-        raise CacesEvaluationError("El indicador no es cuantitativo segun el modelo CACES.")
+    if _evaluation_type_for_indicator(indicador, mapping) != QUANTITATIVE_TYPE:
+        raise CacesEvaluationError("El indicador no es cuantitativo.")
 
     value = _coerce_decimal(valor_calculado, "valor_calculado")
     observacion = _normalize_optional_text(observacion)
-    _execute_stored_procedure(
-        PROC_GUARDAR_CUANTITATIVA_MANUAL,
-        _parameter_aliases(
-            id_ciclo=id_ciclo,
-            id_indicador=indicador.pk,
-            valor_calculado=value,
+    proc_executed = False
+    if mapping is not None:
+        proc_executed = _execute_stored_procedure(
+            PROC_GUARDAR_CUANTITATIVA_MANUAL,
+            _parameter_aliases(
+                id_ciclo=id_ciclo,
+                id_indicador=indicador.pk,
+                valor_calculado=value,
+                observacion=observacion,
+                actor_id=actor.pk,
+            ),
+        )
+    if not proc_executed:
+        _calculate_and_store_quantitative(
+            ciclo_id=id_ciclo,
+            indicador=indicador,
+            mapping=mapping,
             observacion=observacion,
-            actor_id=actor.pk,
-        ),
-    )
+            actor=actor,
+            manual_value=value,
+        )
     result = get_caces_indicator_result(id_ciclo, indicador.pk)
     if result:
         _validate_unit_interval(result["utilidad"], "utilidad")

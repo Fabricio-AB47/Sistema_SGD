@@ -16,6 +16,7 @@ from apps.evaluacion.models import (
     CategoriaValoracionCaces,
     CicloConfiguracionCaces,
     EscenarioPonderacionCaces,
+    Evaluacion,
     EvaluacionIndicadorCaces,
     EvaluacionVariableCaces,
     IndicadorCacesMapeo,
@@ -93,6 +94,13 @@ def _normalize_token(value: str | None) -> str:
     return " ".join((value or "").strip().upper().split())
 
 
+def _element_type_group(elemento) -> str:
+    element_type = _normalize_token(getattr(elemento, "tipo_elemento", ""))
+    if element_type == "COMPLEMENTARIO":
+        return "COMPLEMENTARIO"
+    return "ESENCIAL"
+
+
 def _caces_scenario_for_cycle(ciclo_pk) -> str:
     escenario = "A"
     if ciclo_pk:
@@ -148,6 +156,13 @@ def _normalize_result_row(row: dict | None) -> dict | None:
     return normalized
 
 
+def _normalize_weight(value) -> Decimal:
+    weight = _decimal_or_zero(value)
+    if weight > 1 and weight <= 100:
+        weight = weight / Decimal("100")
+    return weight.quantize(Decimal("0.0001"))
+
+
 def _model_weight_for_cycle(modelo, ciclo_pk) -> Decimal:
     if modelo is None:
         return Decimal("0")
@@ -161,7 +176,21 @@ def _model_weight_for_cycle(modelo, ciclo_pk) -> Decimal:
     value = getattr(modelo, field_name, None)
     if value is None:
         value = getattr(modelo, "ponderacion_a", None)
-    return _decimal_or_zero(value)
+    return _normalize_weight(value)
+
+
+def _indicator_weight_for_cycle(mapping, indicador, ciclo_pk) -> Decimal:
+    if mapping is not None:
+        return _model_weight_for_cycle(mapping.modelo, ciclo_pk)
+    for value in (
+        getattr(indicador, "ponderacion", None),
+        getattr(getattr(indicador, "subcriterio", None), "ponderacion", None),
+        getattr(getattr(getattr(indicador, "subcriterio", None), "criterio", None), "ponderacion", None),
+    ):
+        weight = _normalize_weight(value)
+        if weight > 0:
+            return weight
+    return Decimal("0.0000")
 
 
 def _weight_options_for_model(modelo, ciclo_pk):
@@ -192,11 +221,26 @@ def _weight_options_for_model(modelo, ciclo_pk):
                 "code": code,
                 "nombre": getattr(scenario, "nombre", fallback_name),
                 "descripcion": getattr(scenario, "descripcion", ""),
-                "ponderacion": _decimal_or_zero(value),
+                "ponderacion": _normalize_weight(value),
                 "selected": code == selected_scenario,
             }
         )
     return options
+
+
+def _weight_options_for_indicator(mapping, indicador, ciclo_pk):
+    if mapping is not None:
+        return _weight_options_for_model(mapping.modelo, ciclo_pk)
+    weight = _indicator_weight_for_cycle(mapping, indicador, ciclo_pk)
+    return [
+        {
+            "code": "GENERAL",
+            "nombre": "Ponderacion del indicador",
+            "descripcion": "Indicador sin mapeo CACES; se usa la ponderacion propia del indicador.",
+            "ponderacion": weight,
+            "selected": True,
+        }
+    ] if weight else []
 
 
 def _qualitative_options_for_weight(ponderacion: Decimal):
@@ -211,6 +255,44 @@ def _qualitative_options_for_weight(ponderacion: Decimal):
             }
         )
     return options
+
+
+def _clamp_decimal(value, *, minimum=Decimal("0"), maximum=Decimal("1")) -> Decimal:
+    decimal = _decimal_or_zero(value)
+    if decimal < minimum:
+        return minimum
+    if decimal > maximum:
+        return maximum
+    return decimal
+
+
+def _element_weight_map(elementos, indicator_weight: Decimal) -> dict[int, Decimal]:
+    if not elementos:
+        return {}
+    weight = _decimal_or_zero(indicator_weight)
+    if weight <= 0:
+        return {elemento.pk: Decimal("0.0000") for elemento in elementos}
+    element_weight = (weight / Decimal(len(elementos))).quantize(Decimal("0.0001"))
+    weights = {elemento.pk: element_weight for elemento in elementos}
+    difference = weight - sum(weights.values(), Decimal("0"))
+    if difference and elementos:
+        first_key = elementos[0].pk
+        weights[first_key] = (weights[first_key] + difference).quantize(Decimal("0.0001"))
+    return weights
+
+
+def _evaluation_score_ratio(evaluacion) -> Decimal:
+    if evaluacion is None:
+        return Decimal("0")
+    calificacion = getattr(evaluacion, "calificacion", None)
+    if calificacion is not None:
+        return _clamp_decimal(_decimal_or_zero(calificacion) / Decimal("100"))
+    if bool(getattr(evaluacion, "aprobado", False)):
+        return Decimal("1")
+    estado = _normalize_token(getattr(getattr(evaluacion, "estado", None), "descripcion", ""))
+    if estado in {"APROBADA", "APROBADO", "CUMPLE"}:
+        return Decimal("1")
+    return Decimal("0")
 
 
 def _normalize_coverage_row(row: dict | None) -> dict:
@@ -578,7 +660,7 @@ def get_caces_required_variables(indicador_id, *, ciclo_id=None):
             "formula": None,
             "variables": [],
             "existing_values": {},
-            "warning": "El indicador no esta mapeado a modelo_indicador_caces.",
+            "warning": "Indicador sin formula CACES: usa la evaluacion cuantitativa manual general.",
         }
 
     formula = (
@@ -651,21 +733,15 @@ def get_caces_indicator_detail(
             activo=True,
         ).first()
 
-    accessible_ids = get_accessible_element_ids_for_roles(
-        ciclo_id=ciclo_pk,
-        indicador_id=indicador.pk,
-        role_ids=role_ids or [],
-        allow_unrestricted=allow_unrestricted,
-    )
     elementos = list(
         ElementoFundamental.objects.filter(
             indicador_id=indicador.pk,
             activo=True,
-            pk__in=accessible_ids,
         ).order_by("orden_visual", "codigo_elemento")
     )
 
     registros_by_element = {}
+    latest_evaluation_by_registro = {}
     if elementos:
         registros = (
             RegistroEvidencia.objects.select_related("documento", "estado", "registrado_por")
@@ -678,22 +754,69 @@ def get_caces_indicator_detail(
         )
         for registro in registros:
             registros_by_element.setdefault(registro.elemento_fundamental_id, []).append(registro)
+        registro_ids = [registro.pk for registro in registros]
+        latest_evaluations = (
+            Evaluacion.objects.select_related("estado", "usuario_evaluador")
+            .filter(registro_id__in=registro_ids)
+            .order_by("registro_id", "-fecha_evaluacion", "-id_evaluacion")
+        )
+        for evaluacion in latest_evaluations:
+            latest_evaluation_by_registro.setdefault(evaluacion.registro_id, evaluacion)
 
-    elements_data = [
-        {
-            "elemento": elemento,
-            "registros": registros_by_element.get(elemento.pk, []),
-            "latest_registro": (registros_by_element.get(elemento.pk) or [None])[0],
-        }
-        for elemento in elementos
-    ]
     indicator_type = _normalize_token(
         getattr(getattr(indicador, "tipo_indicador", None), "descripcion", "")
     )
     if mapping is not None:
-        indicator_type = mapping.modelo.tipo_evaluacion
-    ponderacion_referencial = _model_weight_for_cycle(mapping.modelo if mapping else None, ciclo_pk)
-    ponderacion_options = _weight_options_for_model(mapping.modelo if mapping else None, ciclo_pk)
+        indicator_type = _normalize_token(mapping.modelo.tipo_evaluacion)
+    ponderacion_referencial = _indicator_weight_for_cycle(mapping, indicador, ciclo_pk)
+    ponderacion_options = _weight_options_for_indicator(mapping, indicador, ciclo_pk)
+    element_weights = _element_weight_map(elementos, ponderacion_referencial)
+    elements_data = []
+    element_type_summary = {
+        "essential_total": 0,
+        "complementary_total": 0,
+        "total": 0,
+    }
+    element_score_summary = {
+        "ponderacion_total": _decimal_or_zero(ponderacion_referencial),
+        "puntaje_obtenido": Decimal("0"),
+        "cumplimiento_ponderado": Decimal("0.00"),
+    }
+    for elemento in elementos:
+        element_type_group = _element_type_group(elemento)
+        if element_type_group == "COMPLEMENTARIO":
+            element_type_summary["complementary_total"] += 1
+        else:
+            element_type_summary["essential_total"] += 1
+        element_type_summary["total"] += 1
+        latest_registro = (registros_by_element.get(elemento.pk) or [None])[0]
+        latest_evaluacion = (
+            latest_evaluation_by_registro.get(latest_registro.pk)
+            if latest_registro
+            else None
+        )
+        element_weight = element_weights.get(elemento.pk, Decimal("0"))
+        score_ratio = _evaluation_score_ratio(latest_evaluacion)
+        element_score = (element_weight * score_ratio).quantize(Decimal("0.0001"))
+        element_score_summary["puntaje_obtenido"] += element_score
+        elements_data.append(
+            {
+                "elemento": elemento,
+                "element_type_group": element_type_group,
+                "element_weight": element_weight,
+                "element_score_ratio": score_ratio,
+                "element_score": element_score,
+                "element_score_percentage": _decimal_to_percent(score_ratio),
+                "registros": registros_by_element.get(elemento.pk, []),
+                "latest_registro": latest_registro,
+                "latest_evaluacion": latest_evaluacion,
+            }
+        )
+    element_score_summary["puntaje_obtenido"] = element_score_summary["puntaje_obtenido"].quantize(Decimal("0.0001"))
+    if element_score_summary["ponderacion_total"] > 0:
+        element_score_summary["cumplimiento_ponderado"] = _decimal_to_percent(
+            element_score_summary["puntaje_obtenido"] / element_score_summary["ponderacion_total"]
+        )
 
     return {
         "ciclo": get_caces_cycle(ciclo_pk),
@@ -711,10 +834,12 @@ def get_caces_indicator_detail(
         "is_qualitative": indicator_type == QUALITATIVE_TYPE,
         "is_quantitative": indicator_type == QUANTITATIVE_TYPE,
         "elements_data": elements_data,
+        "element_type_summary": element_type_summary,
+        "element_score_summary": element_score_summary,
         "result": get_caces_indicator_result(ciclo_pk, indicador.pk),
         "coverage": get_caces_coverage_by_indicator(ciclo_pk, indicador.pk),
         "variables_context": get_caces_required_variables(indicador.pk, ciclo_id=ciclo_pk),
-        "mapping_warning": None if mapping else "Este indicador no esta mapeado a modelo_indicador_caces.",
+        "mapping_warning": None if mapping else "Indicador sin mapeo CACES: se evaluara con tipo y ponderacion general del indicador.",
     }
 
 
@@ -823,11 +948,11 @@ def get_caces_indicator_matrix(ciclo_id):
         modelo = mapping.modelo if mapping else None
         result = result_map.get(indicador.pk)
         coverage = coverage_map.get(indicador.pk, _normalize_coverage_row(None))
-        indicator_type = modelo.tipo_evaluacion if modelo else _normalize_token(
+        indicator_type = _normalize_token(modelo.tipo_evaluacion) if modelo else _normalize_token(
             getattr(getattr(indicador, "tipo_indicador", None), "descripcion", "")
         )
         formula = formulas.get(getattr(modelo, "numero_modelo", None))
-        reference_weight = _model_weight_for_cycle(modelo, ciclo_pk)
+        reference_weight = _indicator_weight_for_cycle(mapping, indicador, ciclo_pk)
         result_weight = _decimal_or_zero(result.get("ponderacion") if result else reference_weight)
         result_aporte = _decimal_or_zero(result.get("aporte") if result else 0)
         node = {
@@ -843,7 +968,7 @@ def get_caces_indicator_matrix(ciclo_id):
             "coverage": coverage,
             "elementos": list(getattr(indicador, "caces_elementos", [])),
             "evaluated": result is not None,
-            "mapping_warning": None if mapping else "Sin mapeo CACES",
+            "mapping_warning": None if mapping else "Evaluacion general",
         }
         criterion_node = criteria_map.setdefault(
             criterio.pk,

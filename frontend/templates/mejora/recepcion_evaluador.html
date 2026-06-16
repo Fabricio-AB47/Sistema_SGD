@@ -30,7 +30,11 @@
       <div class="acreditacion-form__actions">
         <button class="btn btn-primary" type="submit">Registrar recepcion</button>
         <a class="btn btn-secondary" href="{% url 'mejora-seguimiento' %}">Ver seguimiento</a>
-        <a class="btn btn-ghost" href="{% url 'mejora-envio-formal' %}">Volver</a>
+        {% if can_manage_mejora_workflow %}
+          <a class="btn btn-ghost" href="{% url 'mejora-envio-formal' %}">Volver</a>
+        {% else %}
+          <a class="btn btn-ghost" href="{% url 'mejora-lista' %}">Volver</a>
+        {% endif %}
       </div>
     </form>
   </article>

@@ -266,7 +266,7 @@ NAVIGATION_GROUPS = (
                     "documentos-versiones",
                     "documentos-accesos",
                 ),
-                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_EVALUATOR, ROLE_CONSULTA),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA),
                 permissions=("documentos.ver", PERM_CONSULTA_VER),
             ),
             NavigationItem(
@@ -284,7 +284,7 @@ NAVIGATION_GROUPS = (
                     "evaluacion-evidencia-registrar",
                     "evaluacion-evidencia-detalle",
                 ),
-                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_EVALUATOR, ROLE_CONSULTA),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_RECTOR, ROLE_CONSULTA),
                 permissions=(PERM_EVALUACION_REVISAR, PERM_CONSULTA_VER),
             ),
             NavigationItem(
@@ -311,13 +311,13 @@ NAVIGATION_GROUPS = (
                     "evaluacion-caces-indicador",
                     "evaluacion-caces-reporte",
                 ),
-                roles=(ROLE_ADMIN, ROLE_EVALUATOR),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_EVALUATOR),
             ),
             NavigationItem(
                 label="Observaciones",
                 url_name="evaluacion-observaciones",
                 active_names=("evaluacion-observaciones",),
-                roles=(ROLE_ADMIN, ROLE_EVALUATOR),
+                roles=(ROLE_ADMIN,),
             ),
         ),
     },

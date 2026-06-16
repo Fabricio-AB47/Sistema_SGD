@@ -4,9 +4,11 @@ from decimal import Decimal
 
 from apps.core.services.navigation_service import build_navigation_groups
 from apps.evaluacion.models import Evaluacion, TareaEvidencia
+from apps.evaluacion.selectors.caces_selector import (
+    get_caces_indicator_matrix,
+    get_default_caces_cycle,
+)
 from apps.evidencias.models import RegistroEvidencia
-from apps.informes.models import InformeAutoevaluacion
-from apps.mejora.models import PlanMejora
 
 REVIEW_FILTER_OPTIONS = (
     ("RECHAZADAS", "Rechazadas"),
@@ -76,6 +78,12 @@ def _format_percent(value) -> str:
     if value is None:
         return "--"
     return f"{Decimal(value).quantize(Decimal('0.01'))}%"
+
+
+def _format_decimal(value, places=Decimal("0.0001")) -> str:
+    if value is None:
+        value = Decimal("0")
+    return str(Decimal(value).quantize(places))
 
 
 def _latest_records_for_tasks(tasks):
@@ -177,17 +185,41 @@ def _build_designation_summary(rows):
 
 
 def get_dashboard_metrics():
+    ciclo = get_default_caces_cycle()
+    metrics = {
+        "evaluaciones_pendientes": 0,
+        "evaluaciones_calificadas": 0,
+        "ponderacion_calificacion": Decimal("0"),
+        "ponderacion_calificacion_label": "0.00%",
+        "avance_evaluacion_label": "0.00%",
+        "total_evaluaciones": 0,
+        "ciclo_nombre": "",
+    }
+    if ciclo is not None:
+        matrix = get_caces_indicator_matrix(ciclo.pk)
+        summary = matrix["summary"]
+        aporte_total = summary.get("caces_aporte_total") or Decimal("0")
+        metrics.update(
+            {
+                "evaluaciones_pendientes": summary.get("pending_total", 0),
+                "evaluaciones_calificadas": summary.get("evaluated_total", 0),
+                "ponderacion_calificacion": aporte_total,
+                "ponderacion_calificacion_label": _format_percent(
+                    summary.get("caces_compliance_percentage", Decimal("0"))
+                ),
+                "avance_evaluacion_label": _format_percent(
+                    summary.get("evaluation_progress", Decimal("0"))
+                ),
+                "total_evaluaciones": summary.get("indicators_total", 0),
+                "ciclo_nombre": ciclo.nombre,
+            }
+        )
+
     return {
-        "evidencias": RegistroEvidencia.objects.count(),
-        "evaluaciones_pendientes": Evaluacion.objects.filter(
-            estado__descripcion__in=["PENDIENTE", "EN_ANALISIS"]
-        ).count(),
-        "informes_revision": InformeAutoevaluacion.objects.filter(
-            estado__descripcion__in=["BORRADOR", "EN_REVISION"]
-        ).count(),
-        "planes_activos": PlanMejora.objects.filter(
-            estado__descripcion__in=["BORRADOR", "ENVIADO", "EN_EJECUCION", "PAUSADO", "APROBADO"]
-        ).count(),
+        **metrics,
+        "ponderacion_calificacion_valor": _format_decimal(
+            metrics["ponderacion_calificacion"]
+        ),
     }
 
 

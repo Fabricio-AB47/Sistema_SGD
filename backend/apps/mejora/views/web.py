@@ -26,6 +26,9 @@ from apps.mejora.forms import (
 MODULE_TITLE = "Mejora"
 MODULE_DESCRIPTION = "Guia operativa para ejecutar y cerrar el proceso de autoevaluacion."
 WORKFLOW_SESSION_KEY = "mejora_proceso_workflow"
+WORKFLOW_MANAGEMENT_ROLES = {ROLE_ADMIN, ROLE_QUALITY}
+EVALUATOR_RECEPTION_ROLES = {ROLE_ADMIN, ROLE_QUALITY}
+READ_ONLY_TAB_URLS = {"mejora-lista", "mejora-seguimiento"}
 
 
 def _empty_workflow_data() -> dict:
@@ -111,6 +114,42 @@ class MejoraBaseView(SigRoleOrPermissionRequiredMixin, TemplateView):
         self.request.session[WORKFLOW_SESSION_KEY] = data
         self.request.session.modified = True
 
+    def _role_tokens(self) -> set[str]:
+        role_names = [
+            *(self.request.session.get("sig_roles", []) or []),
+            *(self.request.session.get("sig_operational_roles", []) or []),
+        ]
+        return {str(role).strip().upper() for role in role_names if str(role).strip()}
+
+    def _permission_tokens(self) -> set[str]:
+        return {
+            str(permission).strip().lower()
+            for permission in (self.request.session.get("sig_permissions", []) or [])
+            if str(permission).strip()
+        }
+
+    def _can_manage_workflow(self) -> bool:
+        role_tokens = self._role_tokens()
+        permission_tokens = self._permission_tokens()
+        return bool(
+            role_tokens.intersection(WORKFLOW_MANAGEMENT_ROLES)
+            or PERM_MEJORA_GESTIONAR in permission_tokens
+        )
+
+    def _can_access_evaluator_reception(self) -> bool:
+        role_tokens = self._role_tokens()
+        permission_tokens = self._permission_tokens()
+        return bool(
+            role_tokens.intersection(EVALUATOR_RECEPTION_ROLES)
+            or PERM_MEJORA_GESTIONAR in permission_tokens
+        )
+
+    def _module_tabs(self):
+        if self._can_manage_workflow():
+            return self.module_tabs
+
+        return [tab for tab in self.module_tabs if tab["url_name"] in READ_ONLY_TAB_URLS]
+
     @staticmethod
     def _completion(data: dict) -> dict:
         steps = {
@@ -136,7 +175,7 @@ class MejoraBaseView(SigRoleOrPermissionRequiredMixin, TemplateView):
             {
                 "module_title": MODULE_TITLE,
                 "module_description": MODULE_DESCRIPTION,
-                "module_tabs": self.module_tabs,
+                "module_tabs": self._module_tabs(),
                 "page_title": self.page_title,
                 "page_description": self.page_description,
                 "page_status": self.page_status,
@@ -144,6 +183,8 @@ class MejoraBaseView(SigRoleOrPermissionRequiredMixin, TemplateView):
                 "current_url_name": self.request.resolver_match.url_name if self.request.resolver_match else "",
                 "workflow_data": workflow_data,
                 "completion": self._completion(workflow_data),
+                "can_manage_mejora_workflow": self._can_manage_workflow(),
+                "can_access_evaluator_reception": self._can_access_evaluator_reception(),
             }
         )
         return context

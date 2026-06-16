@@ -86,6 +86,7 @@ def upgrade_password_if_needed(
         HistorialPassword.objects.create(
             usuario=credencial.usuario,
             password_hash=previous_hash,
+            algoritmo_hash=previous_algorithm or ARGON2_ALGORITHM,
             fecha_cambio=now,
         )
         credencial.password_hash = hash_password_argon2(raw_password)

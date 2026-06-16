@@ -198,6 +198,7 @@ class HistorialPassword(models.Model):
         db_column="id_user",
     )
     password_hash = models.CharField(max_length=255)
+    algoritmo_hash = models.CharField(max_length=30, default="argon2")
     fecha_cambio = models.DateTimeField(default=timezone.now, null=True, blank=True)
 
     class Meta:
@@ -260,7 +261,7 @@ class UsuarioOTP(models.Model):
         related_name="otps",
         db_column="id_user",
     )
-    codigo_otp_hash = models.CharField(max_length=255)
+    codigo_otp_hash = models.CharField(max_length=64)
     tipo_otp = models.CharField(max_length=50)
     fecha_generacion = models.DateTimeField(default=timezone.now, null=True, blank=True)
     fecha_expiracion = models.DateTimeField()

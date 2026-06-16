@@ -116,6 +116,7 @@ def reset_password_with_token(*, token_plain: str, new_password: str, actor=None
     HistorialPassword.objects.create(
         usuario=usuario,
         password_hash=previous_hash,
+        algoritmo_hash=previous_algorithm or password_service.ARGON2_ALGORITHM,
     )
 
     credencial.password_hash = password_service.hash_password_argon2(new_password)

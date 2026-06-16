@@ -50,7 +50,7 @@
               <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
             {% endif %}
           </td>
-          <td><a href="{% url 'mejora-ciclo-aprobacion' %}">Editar</a></td>
+          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-ciclo-aprobacion' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
         </tr>
         <tr>
           <td>Asignacion</td>
@@ -62,7 +62,7 @@
               <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
             {% endif %}
           </td>
-          <td><a href="{% url 'mejora-asignacion-responsables' %}">Editar</a></td>
+          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-asignacion-responsables' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
         </tr>
         <tr>
           <td>Carga de informacion</td>
@@ -74,7 +74,7 @@
               <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
             {% endif %}
           </td>
-          <td><a href="{% url 'mejora-carga-informacion' %}">Editar</a></td>
+          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-carga-informacion' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
         </tr>
         <tr>
           <td>Revision de jefatura</td>
@@ -86,7 +86,7 @@
               <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
             {% endif %}
           </td>
-          <td><a href="{% url 'mejora-revision-jefatura' %}">Editar</a></td>
+          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-revision-jefatura' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
         </tr>
         <tr>
           <td>Envio formal</td>
@@ -98,7 +98,7 @@
               <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
             {% endif %}
           </td>
-          <td><a href="{% url 'mejora-envio-formal' %}">Editar</a></td>
+          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-envio-formal' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
         </tr>
         <tr>
           <td>Recepcion evaluador</td>
@@ -110,7 +110,7 @@
               <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
             {% endif %}
           </td>
-          <td><a href="{% url 'mejora-recepcion-evaluador' %}">Editar</a></td>
+          <td>{% if can_access_evaluator_reception %}<a href="{% url 'mejora-recepcion-evaluador' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
         </tr>
       </tbody>
     </table>
