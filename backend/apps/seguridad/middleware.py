@@ -5,6 +5,7 @@ Si no hay token, se deja que la autenticación estándar (session) actúe.
 """
 
 import hashlib
+from django.utils import timezone
 from django.utils.deprecation import MiddlewareMixin
 from apps.seguridad.models import UserSession
 from apps.usuarios.models import Usuario
@@ -52,7 +53,7 @@ class TokenSessionMiddleware(MiddlewareMixin):
             .filter(token_sesion_hash=token_hash, activa=True)
             .first()
         )
-        if session and session.fecha_expiracion and session.fecha_expiracion >= session.fecha_inicio:
+        if session and session.fecha_expiracion and session.fecha_expiracion > timezone.now():
             request.user = session.usuario  # asocia usuario autenticado
             request.sig_actor = session.usuario
         return None

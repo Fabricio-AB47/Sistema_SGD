@@ -99,24 +99,34 @@ WSGI_APPLICATION = "SIG.wsgi.application"
 DB_ENCRYPT = (os.getenv("DB_ENCRYPT", "yes") or "yes").strip()
 DB_TRUST_SERVER_CERTIFICATE = _env_bool("DB_TRUST_SERVER_CERTIFICATE", DEBUG)
 DB_CONNECTION_TIMEOUT_SECONDS = int(os.getenv("DB_CONNECTION_TIMEOUT_SECONDS", "30") or "30")
-DATABASES = {
-    "default": {
-        "ENGINE": "mssql",
-        "NAME": os.getenv("DB_NAME" ),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT"),
-        "OPTIONS": {
-            "driver": os.getenv("DB_DRIVER"),
-            "extra_params": (
-                f"Encrypt={DB_ENCRYPT};"
-                f"TrustServerCertificate={'yes' if DB_TRUST_SERVER_CERTIFICATE else 'no'};"
-                f"Connection Timeout={DB_CONNECTION_TIMEOUT_SECONDS};"
-            ),
-        },
+SIG_DATABASE_ENGINE = os.getenv("SIG_DATABASE_ENGINE", "mssql").strip().lower()
+
+if SIG_DATABASE_ENGINE == "sqlite":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": os.getenv("SQLITE_DB_NAME", BASE_DIR / "db.sqlite3"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "mssql",
+            "NAME": os.getenv("DB_NAME"),
+            "USER": os.getenv("DB_USER"),
+            "PASSWORD": os.getenv("DB_PASSWORD"),
+            "HOST": os.getenv("DB_HOST"),
+            "PORT": os.getenv("DB_PORT"),
+            "OPTIONS": {
+                "driver": os.getenv("DB_DRIVER"),
+                "extra_params": (
+                    f"Encrypt={DB_ENCRYPT};"
+                    f"TrustServerCertificate={'yes' if DB_TRUST_SERVER_CERTIFICATE else 'no'};"
+                    f"Connection Timeout={DB_CONNECTION_TIMEOUT_SECONDS};"
+                ),
+            },
+        }
+    }
 
 
 def _validate_runtime_security_settings():
@@ -283,7 +293,7 @@ SIG_BLOCK_PRIVATE_OUTBOUND = _env_bool("SIG_BLOCK_PRIVATE_OUTBOUND", not DEBUG)
 
 # Seguridad de acceso: exigir correo verificado antes de permitir login.
 SIG_REQUIRE_EMAIL_VERIFICATION = _env_bool("SIG_REQUIRE_EMAIL_VERIFICATION", not DEBUG)
-SIG_REQUIRE_OTP_EVERY_LOGIN = _env_bool("SIG_REQUIRE_OTP_EVERY_LOGIN", True)
+SIG_REQUIRE_OTP_EVERY_LOGIN = _env_bool("SIG_REQUIRE_OTP_EVERY_LOGIN", not DEBUG)
 SIG_OTP_CODE_LENGTH = int(os.getenv("SIG_OTP_CODE_LENGTH", "6") or "6")
 SIG_OTP_EXPIRATION_MINUTES = int(os.getenv("SIG_OTP_EXPIRATION_MINUTES", "10") or "10")
 SIG_OTP_MAX_ATTEMPTS = int(os.getenv("SIG_OTP_MAX_ATTEMPTS", "5") or "5")

@@ -37,8 +37,6 @@ def _setting_enabled(value) -> bool:
     return bool(value)
 
 
-REQUIRE_OTP_EVERY_LOGIN = _setting_enabled(getattr(settings, "SIG_REQUIRE_OTP_EVERY_LOGIN", True))
-
 
 def _normalize_email(correo: str | None) -> str:
     return (correo or "").strip().lower()
@@ -50,7 +48,10 @@ def _is_blocked(credencial: UsuarioCredencial, *, now=None) -> bool:
 
 
 def _requires_otp_for_login(credencial: UsuarioCredencial) -> bool:
-    return REQUIRE_OTP_EVERY_LOGIN or bool(credencial.mfa_activo)
+    require_every_login = _setting_enabled(
+        getattr(settings, "SIG_REQUIRE_OTP_EVERY_LOGIN", not settings.DEBUG)
+    )
+    return require_every_login or bool(credencial.mfa_activo)
 
 
 def register_login_attempt(

@@ -1,8 +1,12 @@
 import json
+import logging
 
+from django.db import DatabaseError
 from django.utils import timezone
 
 from apps.auditoria.models import Auditoria
+
+logger = logging.getLogger(__name__)
 
 
 def _serializar_payload(payload):
@@ -33,17 +37,21 @@ def registrar_evento(
     criticidad=None,
     request=None,
 ):
-    return Auditoria.objects.create(
-        usuario=usuario,
-        tipo_evento=tipo_evento,
-        accion=accion,
-        tabla_afectada=tabla_afectada,
-        id_registro=id_registro,
-        descripcion=descripcion,
-        valores_nuevos=_serializar_payload(valores_nuevos),
-        valores_anteriores=_serializar_payload(valores_anteriores),
-        fecha_evento=timezone.now(),
-        ip=_request_ip(request) if request else None,
-        user_agent=request.META.get("HTTP_USER_AGENT", "")[:300] if request else None,
-        criticidad=(criticidad or "").upper() or None,
-    )
+    try:
+        return Auditoria.objects.create(
+            usuario=usuario,
+            tipo_evento=tipo_evento,
+            accion=accion,
+            tabla_afectada=tabla_afectada,
+            id_registro=id_registro,
+            descripcion=descripcion,
+            valores_nuevos=_serializar_payload(valores_nuevos),
+            valores_anteriores=_serializar_payload(valores_anteriores),
+            fecha_evento=timezone.now(),
+            ip=_request_ip(request) if request else None,
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:300] if request else None,
+            criticidad=(criticidad or "").upper() or None,
+        )
+    except DatabaseError:
+        logger.exception("No fue posible registrar el evento de auditoria %s.", accion)
+        return None
