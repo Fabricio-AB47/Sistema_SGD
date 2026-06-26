@@ -83,10 +83,12 @@ def _is_relative_to(path: Path, root: Path) -> bool:
 
 
 def resolve_local_mirror_path(relative_path: str | PurePosixPath) -> Path:
-    root = get_local_storage_root().resolve(strict=False)
+    root = get_local_storage_root()
     suffix = _drive_suffix(relative_path)
-    candidate = root.joinpath(*suffix.parts).resolve(strict=False)
-    if not _is_relative_to(candidate, root):
+    candidate = root.joinpath(*suffix.parts)
+    resolved_root = root.resolve(strict=False)
+    resolved_candidate = candidate.resolve(strict=False)
+    if not _is_relative_to(resolved_candidate, resolved_root):
         raise ValueError("La ruta del espejo local debe permanecer dentro de la carpeta configurada.")
     return candidate
 

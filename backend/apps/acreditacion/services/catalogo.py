@@ -1,6 +1,6 @@
 from django.core.cache import cache
-from django.db import transaction
-from django.db.models import Max
+from django.db import IntegrityError, transaction
+from django.db.models import Max, Q
 from django.utils import timezone
 
 from application.services.storage_path_service import (
@@ -24,6 +24,7 @@ from apps.integraciones.services.graph_service import (
     ensure_drive_folder,
     get_item_by_relative_path,
     GraphServiceError,
+    get_graph_session,
     require_graph_configuration,
 )
 from apps.usuarios.models import UsuarioRol
@@ -67,21 +68,135 @@ def _registrar_evento_carpeta(*, actor, request, accion, descripcion, tabla, reg
     )
 
 
-def _provision_storage(*, drive_path):
-    require_graph_configuration()
-    # Fuerza validacion directa en Graph para confirmar si la carpeta ya existe
-    # antes de crear cualquier segmento faltante en la jerarquia.
-    clear_graph_cache(drive_path)
-    graph_item = ensure_drive_folder(drive_path, refresh=True)
-    validated_item = get_item_by_relative_path(drive_path, refresh=True)
-    if validated_item is None:
-        raise GraphServiceError(
-            f"No fue posible validar la carpeta Graph esperada para la ruta {drive_path.as_posix()}."
-        )
+def _registrar_evento_carpeta_pendiente(
+    *,
+    actor,
+    request,
+    accion,
+    descripcion,
+    tabla,
+    registro,
+    drive_path,
+    error,
+    local_path=None,
+    extra=None,
+):
+    registrar_evento(
+        accion=accion,
+        descripcion=descripcion,
+        usuario=actor,
+        tipo_evento="ALMACENAMIENTO",
+        tabla_afectada=tabla,
+        id_registro=registro.pk,
+        valores_nuevos={
+            "ruta_drive": drive_path.as_posix(),
+            "ruta_espejo_local": str(local_path) if local_path else None,
+            "estado_carpeta": "PENDIENTE_VALIDACION",
+            "detalle_error": str(error)[:500],
+            **(extra or {}),
+        },
+        criticidad="MEDIA",
+        request=request,
+    )
+
+
+def _try_provision_storage(
+    *,
+    drive_path,
+    actor,
+    request,
+    accion,
+    descripcion,
+    tabla,
+    registro,
+    extra=None,
+    storage_context=None,
+):
     local_path = ensure_local_mirror_folder(drive_path)
+    graph_error = (storage_context or {}).get("graph_error")
+    if graph_error is not None:
+        _registrar_evento_carpeta_pendiente(
+            actor=actor,
+            request=request,
+            accion=f"{accion}_PENDIENTE",
+            descripcion=f"{descripcion} Quedo pendiente de validacion Graph.",
+            tabla=tabla,
+            registro=registro,
+            drive_path=drive_path,
+            error=graph_error,
+            local_path=local_path,
+            extra=extra,
+        )
+        return None
+
+    try:
+        storage = _provision_storage(
+            drive_path=drive_path,
+            local_path=local_path,
+            **(storage_context or {}),
+        )
+    except (GraphServiceError, OSError, ValueError) as exc:
+        _registrar_evento_carpeta_pendiente(
+            actor=actor,
+            request=request,
+            accion=f"{accion}_PENDIENTE",
+            descripcion=f"{descripcion} Quedo pendiente de validacion Graph.",
+            tabla=tabla,
+            registro=registro,
+            drive_path=drive_path,
+            error=exc,
+            local_path=local_path,
+            extra=extra,
+        )
+        return None
+
+    _registrar_evento_carpeta(
+        actor=actor,
+        request=request,
+        accion=accion,
+        descripcion=descripcion,
+        tabla=tabla,
+        registro=registro,
+        storage=storage,
+        extra=extra,
+    )
+    return storage
+
+
+def _provision_storage(
+    *,
+    drive_path,
+    graph_payload=None,
+    graph_access_token=None,
+    refresh=False,
+    local_path=None,
+):
+    local_path = local_path or ensure_local_mirror_folder(drive_path)
+    if graph_payload is None or graph_access_token is None:
+        require_graph_configuration()
+    if refresh:
+        clear_graph_cache(drive_path)
+    graph_item = ensure_drive_folder(
+        drive_path,
+        payload=graph_payload,
+        access_token=graph_access_token,
+        refresh=refresh,
+    )
+    if not graph_item or "folder" not in graph_item:
+        validated_item = get_item_by_relative_path(
+            drive_path,
+            payload=graph_payload,
+            access_token=graph_access_token,
+            refresh=refresh,
+        )
+        if validated_item is None or "folder" not in validated_item:
+            raise GraphServiceError(
+                f"No fue posible validar la carpeta Graph esperada para la ruta {drive_path.as_posix()}."
+            )
+        graph_item = validated_item
     return {
         "drive_path": drive_path,
-        "graph_item": validated_item or graph_item,
+        "graph_item": graph_item,
         "local_path": local_path,
     }
 
@@ -130,19 +245,41 @@ def _ensure_tipo_indicador(tipo_evaluacion: str):
     return TipoIndicador.objects.create(descripcion=tipo, activo=True)
 
 
-def _ensure_caces_criterio(*, nombre: str, order: int, actor=None, request=None, ensure_existing_storage=False):
+def _ensure_caces_criterio(
+    *,
+    nombre: str,
+    order: int,
+    actor=None,
+    request=None,
+    ensure_existing_storage=False,
+    storage_context=None,
+):
     nombre = _normalize_text(nombre)
-    criterio = Criterio.objects.filter(nombre_criterio__iexact=nombre).first()
+    base_code = f"CACES-C{order:02d}"
+    criterio = Criterio.objects.filter(
+        Q(nombre_criterio__iexact=nombre) | Q(codigo_criterio__iexact=base_code)
+    ).first()
     created = criterio is None
     if created:
-        criterio = Criterio.objects.create(
-            codigo_criterio=_unique_code(Criterio, "codigo_criterio", f"CACES-C{order:02d}"),
-            nombre_criterio=nombre,
-            descripcion=f"Criterio importado desde modelo_indicador_caces: {nombre}",
-            ponderacion=None,
-            orden_visual=_next_visual_order(Criterio, "orden_visual"),
-            activo=True,
-        )
+        try:
+            with transaction.atomic():
+                criterio = Criterio.objects.create(
+                    codigo_criterio=_unique_code(Criterio, "codigo_criterio", base_code),
+                    nombre_criterio=nombre,
+                    descripcion=f"Criterio importado desde modelo_indicador_caces: {nombre}",
+                    ponderacion=None,
+                    orden_visual=_next_visual_order(Criterio, "orden_visual"),
+                    activo=True,
+                )
+        except IntegrityError:
+            criterio = Criterio.objects.filter(
+                Q(nombre_criterio__iexact=nombre) | Q(codigo_criterio__iexact=base_code)
+            ).first()
+            created = False
+        if criterio is None:
+            raise ValueError(f"No fue posible reutilizar o crear el criterio {base_code}.")
+
+    if created:
         _registrar_evento_catalogo(
             actor=actor,
             request=request,
@@ -153,15 +290,15 @@ def _ensure_caces_criterio(*, nombre: str, order: int, actor=None, request=None,
         )
 
     if created or ensure_existing_storage:
-        storage = _provision_storage(drive_path=build_criterio_drive_path(criterio))
-        _registrar_evento_carpeta(
+        _try_provision_storage(
+            drive_path=build_criterio_drive_path(criterio),
             actor=actor,
             request=request,
             accion="CREAR_CARPETA_CRITERIO_CACES_MASIVO",
             descripcion=f"Se valido la carpeta Graph del criterio {criterio.codigo_criterio}.",
             tabla="criterio",
             registro=criterio,
-            storage=storage,
+            storage_context=storage_context,
         )
     return criterio, created
 
@@ -175,27 +312,41 @@ def _ensure_caces_subcriterio(
     actor=None,
     request=None,
     ensure_existing_storage=False,
+    storage_context=None,
 ):
     nombre = _normalize_text(nombre)
+    base_code = f"C{criterion_order:02d}-S{subcriterion_order:02d}"
     subcriterio = Subcriterio.objects.filter(
-        criterio=criterio,
-        nombre_subcriterio__iexact=nombre,
+        Q(criterio=criterio, nombre_subcriterio__iexact=nombre)
+        | Q(codigo_subcriterio__iexact=base_code)
     ).first()
     created = subcriterio is None
     if created:
-        subcriterio = Subcriterio.objects.create(
-            criterio=criterio,
-            codigo_subcriterio=_unique_code(
-                Subcriterio,
-                "codigo_subcriterio",
-                f"C{criterion_order:02d}-S{subcriterion_order:02d}",
-            ),
-            nombre_subcriterio=nombre,
-            descripcion=f"Subcriterio importado desde modelo_indicador_caces: {nombre}",
-            ponderacion=None,
-            orden_visual=_next_visual_order(Subcriterio, "orden_visual", criterio=criterio),
-            activo=True,
-        )
+        try:
+            with transaction.atomic():
+                subcriterio = Subcriterio.objects.create(
+                    criterio=criterio,
+                    codigo_subcriterio=_unique_code(
+                        Subcriterio,
+                        "codigo_subcriterio",
+                        base_code,
+                    ),
+                    nombre_subcriterio=nombre,
+                    descripcion=f"Subcriterio importado desde modelo_indicador_caces: {nombre}",
+                    ponderacion=None,
+                    orden_visual=_next_visual_order(Subcriterio, "orden_visual", criterio=criterio),
+                    activo=True,
+                )
+        except IntegrityError:
+            subcriterio = Subcriterio.objects.filter(
+                Q(criterio=criterio, nombre_subcriterio__iexact=nombre)
+                | Q(codigo_subcriterio__iexact=base_code)
+            ).first()
+            created = False
+        if subcriterio is None:
+            raise ValueError(f"No fue posible reutilizar o crear el subcriterio {base_code}.")
+
+    if created:
         _registrar_evento_catalogo(
             actor=actor,
             request=request,
@@ -206,15 +357,15 @@ def _ensure_caces_subcriterio(
         )
 
     if created or ensure_existing_storage:
-        storage = _provision_storage(drive_path=build_subcriterio_drive_path(subcriterio))
-        _registrar_evento_carpeta(
+        _try_provision_storage(
+            drive_path=build_subcriterio_drive_path(subcriterio),
             actor=actor,
             request=request,
             accion="CREAR_CARPETA_SUBCRITERIO_CACES_MASIVO",
             descripcion=f"Se valido la carpeta Graph del subcriterio {subcriterio.codigo_subcriterio}.",
             tabla="subcriterio",
             registro=subcriterio,
-            storage=storage,
+            storage_context=storage_context,
         )
     return subcriterio, created
 
@@ -226,6 +377,7 @@ def _ensure_caces_indicador(
     actor=None,
     request=None,
     ensure_existing_storage=False,
+    storage_context=None,
 ):
     codigo = _normalize_text(getattr(modelo, "codigo_modelo", "")).upper()
     nombre = _normalize_text(getattr(modelo, "nombre_indicador", ""))
@@ -238,17 +390,31 @@ def _ensure_caces_indicador(
     created = indicador is None
     if created:
         tipo_indicador = _ensure_tipo_indicador(modelo.tipo_evaluacion)
-        indicador = Indicador.objects.create(
-            subcriterio=subcriterio,
-            tipo_indicador=tipo_indicador,
-            codigo_indicador=_unique_code(Indicador, "codigo_indicador", codigo),
-            nombre_indicador=nombre,
-            descripcion=f"Indicador importado desde modelo_indicador_caces numero {modelo.numero_modelo}.",
-            medio_verificacion=None,
-            ponderacion=modelo.ponderacion_a,
-            orden_visual=_next_visual_order(Indicador, "orden_visual", subcriterio=subcriterio),
-            activo=True,
-        )
+        try:
+            with transaction.atomic():
+                indicador = Indicador.objects.create(
+                    subcriterio=subcriterio,
+                    tipo_indicador=tipo_indicador,
+                    codigo_indicador=_unique_code(Indicador, "codigo_indicador", codigo),
+                    nombre_indicador=nombre,
+                    descripcion=f"Indicador importado desde modelo_indicador_caces numero {modelo.numero_modelo}.",
+                    medio_verificacion=None,
+                    ponderacion=modelo.ponderacion_a,
+                    orden_visual=_next_visual_order(Indicador, "orden_visual", subcriterio=subcriterio),
+                    activo=True,
+                )
+        except IntegrityError:
+            indicador = Indicador.objects.filter(codigo_indicador__iexact=codigo).first()
+            if indicador is None:
+                indicador = Indicador.objects.filter(
+                    subcriterio=subcriterio,
+                    nombre_indicador__iexact=nombre,
+                ).first()
+            created = False
+        if indicador is None:
+            raise ValueError(f"No fue posible reutilizar o crear el indicador {codigo}.")
+
+    if created:
         _registrar_evento_catalogo(
             actor=actor,
             request=request,
@@ -259,15 +425,15 @@ def _ensure_caces_indicador(
         )
 
     if created or ensure_existing_storage:
-        storage = _provision_storage(drive_path=build_indicador_drive_path(indicador))
-        _registrar_evento_carpeta(
+        _try_provision_storage(
+            drive_path=build_indicador_drive_path(indicador),
             actor=actor,
             request=request,
             accion="CREAR_CARPETA_INDICADOR_CACES_MASIVO",
             descripcion=f"Se valido la carpeta Graph del indicador {indicador.codigo_indicador}.",
             tabla="indicador",
             registro=indicador,
-            storage=storage,
+            storage_context=storage_context,
         )
     return indicador, created
 
@@ -292,12 +458,22 @@ def _ensure_caces_mapeo(*, indicador, modelo, actor=None, request=None):
             )
         return existing_by_model, False
 
-    mapping = IndicadorCacesMapeo.objects.create(
-        indicador=indicador,
-        modelo=modelo,
-        fecha_mapeo=timezone.now(),
-        observacion="Mapeo creado por sincronizacion masiva CACES.",
-    )
+    try:
+        with transaction.atomic():
+            mapping = IndicadorCacesMapeo.objects.create(
+                indicador=indicador,
+                modelo=modelo,
+                fecha_mapeo=timezone.now(),
+                observacion="Mapeo creado por sincronizacion masiva CACES.",
+            )
+    except IntegrityError:
+        existing_by_indicator = IndicadorCacesMapeo.objects.filter(indicador=indicador).first()
+        if existing_by_indicator:
+            return existing_by_indicator, False
+        existing_by_model = IndicadorCacesMapeo.objects.filter(modelo=modelo).first()
+        if existing_by_model:
+            return existing_by_model, False
+        raise
     registrar_evento(
         accion="CREAR_MAPEO_INDICADOR_CACES_MASIVO",
         descripcion=f"Se mapeo el indicador {indicador.codigo_indicador} al modelo {modelo.codigo_modelo}.",
@@ -315,7 +491,6 @@ def _ensure_caces_mapeo(*, indicador, modelo, actor=None, request=None):
     return mapping, True
 
 
-@transaction.atomic
 def sincronizar_catalogo_desde_modelo_caces(
     *,
     actor=None,
@@ -338,6 +513,17 @@ def sincronizar_catalogo_desde_modelo_caces(
         "mapeos_creados": 0,
         "mapeos_existentes": 0,
     }
+    storage_context = None
+    if modelos:
+        try:
+            graph_payload, graph_access_token = get_graph_session()
+            storage_context = {
+                "graph_payload": graph_payload,
+                "graph_access_token": graph_access_token,
+                "refresh": False,
+            }
+        except GraphServiceError as exc:
+            storage_context = {"graph_error": exc}
 
     for modelo in modelos:
         criterio_nombre = _normalize_text(modelo.criterio)
@@ -356,6 +542,7 @@ def sincronizar_catalogo_desde_modelo_caces(
             actor=actor,
             request=request,
             ensure_existing_storage=ensure_existing_storage,
+            storage_context=storage_context,
         )
         subcriterio, subcriterio_created = _ensure_caces_subcriterio(
             criterio=criterio,
@@ -365,6 +552,7 @@ def sincronizar_catalogo_desde_modelo_caces(
             actor=actor,
             request=request,
             ensure_existing_storage=ensure_existing_storage,
+            storage_context=storage_context,
         )
         indicador, indicador_created = _ensure_caces_indicador(
             modelo=modelo,
@@ -372,6 +560,7 @@ def sincronizar_catalogo_desde_modelo_caces(
             actor=actor,
             request=request,
             ensure_existing_storage=ensure_existing_storage,
+            storage_context=storage_context,
         )
         _mapping, mapping_created = _ensure_caces_mapeo(
             indicador=indicador,
@@ -502,135 +691,99 @@ def sincronizar_indicadores_ciclo(*, ciclo, indicadores, actor=None, request=Non
     return summary
 
 
-@transaction.atomic
 def crear_criterio(*, form, actor=None, request=None):
-    criterio = form.save()
+    with transaction.atomic():
+        criterio = form.save()
+        _registrar_evento_catalogo(
+            actor=actor,
+            request=request,
+            accion="CREAR_CRITERIO",
+            descripcion=f"Se registro el criterio {criterio.codigo_criterio}.",
+            tabla="criterio",
+            registro=criterio,
+        )
     _invalidate_acreditacion_metrics_cache()
-    storage = _provision_storage(
+    _try_provision_storage(
         drive_path=build_criterio_drive_path(criterio),
-    )
-    _registrar_evento_catalogo(
         actor=actor,
         request=request,
-        accion="CREAR_CRITERIO",
-        descripcion=f"Se registro el criterio {criterio.codigo_criterio}.",
-        tabla="criterio",
-        registro=criterio,
-    )
-    registrar_evento(
         accion="CREAR_CARPETA_CRITERIO",
         descripcion=f"Se creo la carpeta Graph del criterio {criterio.codigo_criterio}.",
-        usuario=actor,
-        tipo_evento="ALMACENAMIENTO",
-        tabla_afectada="criterio",
-        id_registro=criterio.pk,
-        valores_nuevos={
-            "ruta_drive": storage["drive_path"].as_posix(),
-            "ruta_espejo_local": str(storage["local_path"]) if storage.get("local_path") else None,
-            "graph_web_url": (storage["graph_item"] or {}).get("webUrl"),
-        },
-        criticidad="MEDIA",
-        request=request,
+        tabla="criterio",
+        registro=criterio,
     )
     return criterio
 
 
-@transaction.atomic
 def crear_subcriterio(*, form, actor=None, request=None):
-    subcriterio = form.save()
+    with transaction.atomic():
+        subcriterio = form.save()
+        _registrar_evento_catalogo(
+            actor=actor,
+            request=request,
+            accion="CREAR_SUBCRITERIO",
+            descripcion=f"Se registro el subcriterio {subcriterio.codigo_subcriterio}.",
+            tabla="subcriterio",
+            registro=subcriterio,
+        )
     _invalidate_acreditacion_metrics_cache()
-    storage = _provision_storage(
+    _try_provision_storage(
         drive_path=build_subcriterio_drive_path(subcriterio),
-    )
-    _registrar_evento_catalogo(
         actor=actor,
         request=request,
-        accion="CREAR_SUBCRITERIO",
-        descripcion=f"Se registro el subcriterio {subcriterio.codigo_subcriterio}.",
-        tabla="subcriterio",
-        registro=subcriterio,
-    )
-    registrar_evento(
         accion="CREAR_CARPETA_SUBCRITERIO",
         descripcion=f"Se creo la carpeta Graph del subcriterio {subcriterio.codigo_subcriterio}.",
-        usuario=actor,
-        tipo_evento="ALMACENAMIENTO",
-        tabla_afectada="subcriterio",
-        id_registro=subcriterio.pk,
-        valores_nuevos={
-            "ruta_drive": storage["drive_path"].as_posix(),
-            "ruta_espejo_local": str(storage["local_path"]) if storage.get("local_path") else None,
-            "graph_web_url": (storage["graph_item"] or {}).get("webUrl"),
-        },
-        criticidad="MEDIA",
-        request=request,
+        tabla="subcriterio",
+        registro=subcriterio,
     )
     return subcriterio
 
 
-@transaction.atomic
 def crear_indicador(*, form, actor=None, request=None):
-    indicador = form.save()
+    with transaction.atomic():
+        indicador = form.save()
+        _registrar_evento_catalogo(
+            actor=actor,
+            request=request,
+            accion="CREAR_INDICADOR",
+            descripcion=f"Se registro el indicador {indicador.codigo_indicador}.",
+            tabla="indicador",
+            registro=indicador,
+        )
     _invalidate_acreditacion_metrics_cache()
-    storage = _provision_storage(
+    _try_provision_storage(
         drive_path=build_indicador_drive_path(indicador),
-    )
-    _registrar_evento_catalogo(
         actor=actor,
         request=request,
-        accion="CREAR_INDICADOR",
-        descripcion=f"Se registro el indicador {indicador.codigo_indicador}.",
-        tabla="indicador",
-        registro=indicador,
-    )
-    registrar_evento(
         accion="CREAR_CARPETA_INDICADOR",
         descripcion=f"Se creo la carpeta Graph del indicador {indicador.codigo_indicador}.",
-        usuario=actor,
-        tipo_evento="ALMACENAMIENTO",
-        tabla_afectada="indicador",
-        id_registro=indicador.pk,
-        valores_nuevos={
-            "ruta_drive": storage["drive_path"].as_posix(),
-            "ruta_espejo_local": str(storage["local_path"]) if storage.get("local_path") else None,
-            "graph_web_url": (storage["graph_item"] or {}).get("webUrl"),
-        },
-        criticidad="MEDIA",
-        request=request,
+        tabla="indicador",
+        registro=indicador,
     )
     return indicador
 
 
-@transaction.atomic
 def crear_elemento(*, form, actor=None, request=None):
-    elemento = form.save()
+    with transaction.atomic():
+        elemento = form.save()
+        _registrar_evento_catalogo(
+            actor=actor,
+            request=request,
+            accion="CREAR_ELEMENTO_FUNDAMENTAL",
+            descripcion=f"Se registro el elemento {elemento.codigo_elemento}.",
+            tabla="elemento_fundamental",
+            registro=elemento,
+        )
     _invalidate_acreditacion_metrics_cache()
-    storage = _provision_storage(
+    _try_provision_storage(
         drive_path=build_elemento_drive_path(elemento.indicador, elemento),
-    )
-    _registrar_evento_catalogo(
         actor=actor,
         request=request,
-        accion="CREAR_ELEMENTO_FUNDAMENTAL",
-        descripcion=f"Se registro el elemento {elemento.codigo_elemento}.",
-        tabla="elemento_fundamental",
-        registro=elemento,
-    )
-    registrar_evento(
         accion="CREAR_CARPETA_ELEMENTO",
         descripcion=f"Se creo la carpeta Graph del elemento {elemento.codigo_elemento}.",
-        usuario=actor,
-        tipo_evento="ALMACENAMIENTO",
-        tabla_afectada="elemento_fundamental",
-        id_registro=elemento.pk,
-        valores_nuevos={
-            "indicador_id": elemento.indicador_id,
-            "ruta_drive": storage["drive_path"].as_posix(),
-            "ruta_espejo_local": str(storage["local_path"]) if storage.get("local_path") else None,
-            "graph_web_url": (storage["graph_item"] or {}).get("webUrl"),
-        },
-        criticidad="MEDIA",
-        request=request,
+        tabla="elemento_fundamental",
+        registro=elemento,
+        extra={"indicador_id": elemento.indicador_id},
     )
     return elemento
 

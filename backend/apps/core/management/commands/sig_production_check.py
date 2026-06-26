@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
+from pathlib import PurePosixPath
+import uuid
 
 from application.services import ensure_local_mirror_folder, get_drive_root_path, get_local_storage_root
 from application.services.storage_path_service import get_ciclo_auth_drive_root, get_criterio_drive_root
@@ -212,8 +214,13 @@ class Command(BaseCommand):
             mirror_root = ensure_local_mirror_folder(get_drive_root_path()) or get_local_storage_root()
             ensure_local_mirror_folder(get_ciclo_auth_drive_root())
             ensure_local_mirror_folder(get_criterio_drive_root())
+            for base_path in (get_ciclo_auth_drive_root(), get_criterio_drive_root()):
+                probe_path = PurePosixPath(base_path) / f"SIG_WRITE_TEST_{uuid.uuid4().hex}"
+                probe_folder = ensure_local_mirror_folder(probe_path)
+                if probe_folder and probe_folder.exists():
+                    probe_folder.rmdir()
         except Exception as exc:
-            errors.append(f"Espejo local documental: no fue posible preparar la carpeta ({exc}).")
+            errors.append(f"Espejo local documental: no fue posible escribir en la carpeta ({exc}).")
             return
         self.stdout.write(self.style.SUCCESS(f"Espejo local documental: disponible en {mirror_root}."))
 

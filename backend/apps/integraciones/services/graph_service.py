@@ -21,6 +21,10 @@ class GraphServiceError(Exception):
     pass
 
 
+class GraphConflictError(GraphServiceError):
+    pass
+
+
 @dataclass
 class GraphConnectionSummary:
     enabled: bool
@@ -208,6 +212,10 @@ def _graph_json_request(
         details = exc.read().decode("utf-8", errors="ignore")
         if log_payload is not None:
             _log_graph_call(log_payload, api_path=api_path, method=method, result=str(exc.code), detail=details)
+        if exc.code == 409:
+            raise GraphConflictError(
+                f"Graph devolvio {exc.code} en {api_path}. {details}"
+            ) from exc
         raise GraphServiceError(
             f"Graph devolvio {exc.code} en {api_path}. {details}"
         ) from exc
@@ -441,7 +449,7 @@ def _create_child_folder(
         payload={
             "name": folder_name,
             "folder": {},
-            "@microsoft.graph.conflictBehavior": "replace",
+            "@microsoft.graph.conflictBehavior": "fail",
         },
         expected_status=(200, 201),
         log_payload=log_payload,
@@ -525,13 +533,28 @@ def _ensure_drive_folder(
             access_token=access_token,
             log_payload=payload,
         )
-        if next_item is None:
-            next_item = _create_child_folder(
-                parent_item_id=current_item["id"],
-                folder_name=part,
-                access_token=access_token,
-                log_payload=payload,
+        if next_item is not None and "folder" not in next_item:
+            raise GraphServiceError(
+                f"La ruta Graph {current_path} existe, pero no es una carpeta."
             )
+        if next_item is None:
+            try:
+                next_item = _create_child_folder(
+                    parent_item_id=current_item["id"],
+                    folder_name=part,
+                    access_token=access_token,
+                    log_payload=payload,
+                )
+            except GraphConflictError:
+                # Otro proceso o una ejecucion previa pudo crear la carpeta entre
+                # la consulta y el POST. En ese caso reutilizamos la carpeta.
+                next_item = _get_item_by_path(
+                    relative_path=current_path,
+                    access_token=access_token,
+                    log_payload=payload,
+                )
+                if next_item is None or "folder" not in next_item:
+                    raise
         current_item = next_item
         cache.set(
             _cache_key("folder-item", _normalized_graph_path(current_path)),
