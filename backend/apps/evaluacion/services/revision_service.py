@@ -5,7 +5,12 @@ from django.utils import timezone
 
 from apps.auditoria.services.auditoria_service import registrar_evento
 from apps.core.models import EstadoEvidencia
-from apps.evaluacion.models import Evaluacion, ObservacionEvaluacion, TareaEvidencia
+from apps.evaluacion.models import (
+    Evaluacion,
+    ObservacionEvaluacion,
+    RevisionInternaEvidencia,
+    TareaEvidencia,
+)
 from apps.evaluacion.services.notification_service import queue_evaluator_release_notification
 from apps.evaluacion.services.tareas_service import tarea_tiene_visto_bueno_director
 from apps.usuarios.models import UsuarioAreaCargo, UsuarioRol
@@ -407,6 +412,18 @@ def habilitar_salida_evaluador(
     else:
         registro.save(update_fields=["enviado_revision_por", "fecha_envio_revision"])
 
+    revision_interna = (
+        RevisionInternaEvidencia.objects.filter(
+            registro=registro,
+            resultado=RevisionInternaEvidencia.RESULTADO_APROBADA,
+        )
+        .order_by("-fecha_revision", "-id_revision_interna")
+        .first()
+    )
+    if revision_interna is not None and not revision_interna.enviado_a_evaluador:
+        revision_interna.enviado_a_evaluador = True
+        revision_interna.save(update_fields=["enviado_a_evaluador"])
+
     was_reassigned = already_released and allow_reassign
     registrar_evento(
         accion="REASIGNAR_SALIDA_EVALUADOR" if was_reassigned else "HABILITAR_SALIDA_EVALUADOR",
@@ -424,6 +441,7 @@ def habilitar_salida_evaluador(
             "enviado_revision_por": actor_id,
             "fecha_envio_revision": now.isoformat(),
             "estado": getattr(getattr(registro, "estado", None), "descripcion", None),
+            "revision_interna_id": getattr(revision_interna, "pk", None),
         },
         criticidad="MEDIA",
         request=request,

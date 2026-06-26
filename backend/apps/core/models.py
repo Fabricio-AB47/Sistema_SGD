@@ -168,23 +168,6 @@ class TipoIndicador(models.Model):
         return self.descripcion
 
 
-class ClasificacionElementoFundamental(models.Model):
-    id_clasificacion = models.AutoField(primary_key=True)
-    codigo = models.CharField(max_length=20, unique=True)
-    nombre = models.CharField(max_length=100)
-    activo = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = "clasificacion_elemento_fundamental"
-        managed = False
-        verbose_name = "Clasificacion de elemento fundamental"
-        verbose_name_plural = "Clasificaciones de elemento fundamental"
-        ordering = ("codigo",)
-
-    def __str__(self) -> str:
-        return f"{self.codigo} - {self.nombre}"
-
-
 class ClasificacionDocumento(models.Model):
     NIVEL_CHOICES = (
         ("PUBLICO", "Publico"),

@@ -1,0 +1,13 @@
+{{ site_name }} - Codigo temporal de verificacion
+
+Hola {{ usuario.nombre_completo|default:usuario.correo }},
+
+Detectamos un intento valido de inicio de sesion en tu cuenta. Para completar el acceso, ingresa el siguiente codigo temporal:
+
+Codigo OTP: {{ codigo }}
+
+Este codigo tiene una vigencia maxima de {{ otp_minutes }} minutos{% if fecha_expiracion %}, hasta {{ fecha_expiracion|date:"d/m/Y H:i" }}{% endif %}.
+
+No compartas este codigo con nadie.
+
+Si no fuiste tu quien intento ingresar, cambia tu contrasena de inmediato.

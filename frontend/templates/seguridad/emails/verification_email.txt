@@ -1,0 +1,9 @@
+{{ site_name }} - Verificacion de correo
+
+Hola {{ usuario.nombre_completo|default:usuario.correo }},
+
+Para confirmar que este correo pertenece a tu cuenta en {{ site_name }}, usa el siguiente enlace:
+
+{{ verification_url }}
+
+Si no creaste esta cuenta, ignora este mensaje.

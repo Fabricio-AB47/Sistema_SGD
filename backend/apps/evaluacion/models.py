@@ -72,6 +72,43 @@ class ObservacionEvaluacion(models.Model):
         ordering = ("-fecha_observacion",)
 
 
+class RevisionInternaEvidencia(models.Model):
+    RESULTADO_APROBADA = "APROBADA_INTERNA"
+    RESULTADO_DEVUELTA = "DEVUELTA_INTERNA"
+    RESULTADO_CHOICES = (
+        (RESULTADO_APROBADA, "Aprobada interna"),
+        (RESULTADO_DEVUELTA, "Devuelta interna"),
+    )
+
+    id_revision_interna = models.AutoField(primary_key=True)
+    registro = models.ForeignKey(
+        RegistroEvidencia,
+        on_delete=models.CASCADE,
+        related_name="revisiones_internas",
+        db_column="id_registro",
+    )
+    usuario_revisor = models.ForeignKey(
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name="revisiones_internas",
+        db_column="id_usuario_revisor",
+    )
+    fecha_revision = models.DateTimeField()
+    resultado = models.CharField(max_length=30, choices=RESULTADO_CHOICES)
+    comentario = models.CharField(max_length=1000, null=True, blank=True)
+    enviado_a_evaluador = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "revision_interna_evidencia"
+        managed = False
+        verbose_name = "Revision interna de evidencia"
+        verbose_name_plural = "Revisiones internas de evidencia"
+        ordering = ("-fecha_revision", "-id_revision_interna")
+
+    def __str__(self) -> str:
+        return f"{self.registro_id} - {self.resultado}"
+
+
 class TareaEvidencia(models.Model):
     PRIORIDAD_CHOICES = (
         ("BAJA", "Baja"),

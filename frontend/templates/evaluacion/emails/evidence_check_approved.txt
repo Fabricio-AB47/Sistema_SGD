@@ -1,0 +1,16 @@
+{{ site_name }} - Documento aprobado por la cabeza principal
+
+Hola {{ responsable_name }},
+
+{{ actor_name }} aprobo el documento cargado para el elemento {{ elemento_codigo }} - {{ elemento_nombre }} mediante el check de subida.
+
+Ciclo: {{ ciclo_nombre }}
+Indicador: {{ indicador_codigo }} - {{ indicador_nombre }}
+Documento: {{ documento_nombre }}
+Fecha: {{ fecha_evento|date:"d/m/Y H:i" }}
+
+{% if comentario %}Comentario de revision:
+{{ comentario }}
+
+{% endif %}Ver evidencia:
+{{ evidence_url }}

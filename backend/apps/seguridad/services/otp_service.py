@@ -42,6 +42,18 @@ def _request_ip(request) -> str | None:
     return request.META.get("REMOTE_ADDR")
 
 
+def _lock_user_for_otp(*, usuario: Usuario | None = None, usuario_id: int | None = None):
+    target_user_id = getattr(usuario, "pk", None) or usuario_id
+    if not target_user_id:
+        return None
+    return (
+        Usuario.objects.select_for_update()
+        .only(Usuario._meta.pk.name)
+        .filter(pk=target_user_id)
+        .first()
+    )
+
+
 def get_pending_login_otp(usuario: Usuario):
     now = timezone.now()
     return (
@@ -66,11 +78,13 @@ def invalidate_login_otp(
     request=None,
     reason: str = "cancelled",
 ) -> int:
+    target_user_id = getattr(usuario, "pk", None) or usuario_id
+    _lock_user_for_otp(usuario=usuario, usuario_id=usuario_id)
+
     queryset = UsuarioOTP.objects.select_for_update().filter(
         tipo_otp=OTP_LOGIN_TYPE,
         usado=False,
     )
-    target_user_id = getattr(usuario, "pk", None) or usuario_id
     if target_user_id:
         queryset = queryset.filter(usuario_id=target_user_id)
     if otp_id:
@@ -103,12 +117,18 @@ def invalidate_login_otp(
 @transaction.atomic
 def create_login_otp(*, usuario: Usuario, actor=None, request=None):
     now = timezone.now()
-    UsuarioOTP.objects.filter(
-        usuario=usuario,
-        tipo_otp=OTP_LOGIN_TYPE,
-        usado=False,
-        fecha_expiracion__gt=now,
-    ).update(usado=True)
+    _lock_user_for_otp(usuario=usuario)
+    pending_otp_ids = list(
+        UsuarioOTP.objects.select_for_update()
+        .filter(
+            usuario=usuario,
+            tipo_otp=OTP_LOGIN_TYPE,
+            usado=False,
+        )
+        .values_list("pk", flat=True)
+    )
+    if pending_otp_ids:
+        UsuarioOTP.objects.filter(pk__in=pending_otp_ids).update(usado=True)
 
     codigo_plain = _generate_code()
     otp = UsuarioOTP.objects.create(
@@ -155,13 +175,16 @@ def create_login_otp(*, usuario: Usuario, actor=None, request=None):
 
 @transaction.atomic
 def verify_login_otp(*, usuario: Usuario, codigo: str, otp_id: int | None = None, actor=None, request=None):
-    queryset = (
+    _lock_user_for_otp(usuario=usuario)
+    pending_otps = list(
         UsuarioOTP.objects.select_for_update()
         .filter(usuario=usuario, tipo_otp=OTP_LOGIN_TYPE, usado=False)
+        .order_by("-fecha_generacion", "-id_otp")
     )
     if otp_id:
-        queryset = queryset.filter(pk=otp_id)
-    otp = queryset.order_by("-fecha_generacion", "-id_otp").first()
+        otp = next((candidate for candidate in pending_otps if candidate.pk == otp_id), None)
+    else:
+        otp = pending_otps[0] if pending_otps else None
     now = timezone.now()
     if otp is None:
         return {"success": False, "status": "missing"}
@@ -201,6 +224,9 @@ def verify_login_otp(*, usuario: Usuario, codigo: str, otp_id: int | None = None
     otp.usado = True
     otp.intentos = (otp.intentos or 0) + 1
     otp.save(update_fields=["usado", "intentos"])
+    other_pending_ids = [candidate.pk for candidate in pending_otps if candidate.pk != otp.pk]
+    if other_pending_ids:
+        UsuarioOTP.objects.filter(pk__in=other_pending_ids, usado=False).update(usado=True)
 
     registrar_evento(
         accion="OTP_LOGIN_VALIDO",

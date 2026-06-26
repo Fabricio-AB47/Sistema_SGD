@@ -1,0 +1,16 @@
+{{ site_name }} - Se envio una evidencia para evaluacion
+
+Hola,
+
+{{ actor_name }} envio una evidencia para evaluacion.
+
+Ciclo: {{ ciclo_nombre }}
+Indicador: {{ indicador_codigo }} - {{ indicador_nombre }}
+Elemento: {{ elemento_codigo }} - {{ elemento_nombre }}
+Documento: {{ documento_nombre }}
+Fecha de envio: {{ fecha_evento|date:"d/m/Y H:i" }}
+
+Debes revisar la evidencia en la bandeja de evaluacion.
+
+Abrir evaluacion:
+{{ evidence_url }}

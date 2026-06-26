@@ -4,7 +4,7 @@ from django.utils import timezone
 from apps.auditoria.services.auditoria_service import registrar_evento
 from apps.acreditacion.models import ElementoFundamental, RolIndicador, RolIndicadorElemento
 from apps.core.models import EstadoEvidencia, EstadoTareaEvidencia
-from apps.evaluacion.models import TareaEvidencia
+from apps.evaluacion.models import RevisionInternaEvidencia, TareaEvidencia
 from apps.evaluacion.services.notification_service import (
     queue_correction_requested_email,
     queue_director_signoff_email,
@@ -581,6 +581,15 @@ def aprobar_tarea_visto_bueno_director(*, tarea, actor=None, comentario=None, re
             latest_record.save(update_fields=["estado"])
             registros_actualizados = 1
 
+    revision_interna = RevisionInternaEvidencia.objects.create(
+        registro=latest_record,
+        usuario_revisor=actor,
+        fecha_revision=timestamp,
+        resultado=RevisionInternaEvidencia.RESULTADO_APROBADA,
+        comentario=extra_note or None,
+        enviado_a_evaluador=False,
+    )
+
     registrar_evento(
         accion="VISTO_BUENO_DIRECTOR_TAREA",
         descripcion=f"Se registro visto bueno del director para la tarea de evidencia {tarea.pk}.",
@@ -595,6 +604,7 @@ def aprobar_tarea_visto_bueno_director(*, tarea, actor=None, comentario=None, re
             "estado": getattr(getattr(tarea, "estado", None), "descripcion", None),
             "estado_evidencia_id": getattr(estado_evidencia, "pk", None),
             "registro_evidencia_id": latest_record.pk,
+            "revision_interna_id": revision_interna.pk,
             "documento_id": latest_record.documento_id,
             "registros_actualizados": registros_actualizados,
         },
@@ -681,6 +691,15 @@ def rechazar_tarea_revision_director(*, tarea, actor=None, comentario=None, requ
         registros_actualizados = 1
     latest_record.save(update_fields=update_record_fields)
 
+    revision_interna = RevisionInternaEvidencia.objects.create(
+        registro=latest_record,
+        usuario_revisor=actor,
+        fecha_revision=timestamp,
+        resultado=RevisionInternaEvidencia.RESULTADO_DEVUELTA,
+        comentario=correction_note[:1000],
+        enviado_a_evaluador=False,
+    )
+
     registrar_evento(
         accion="SOLICITAR_CORRECCION_DIRECTOR_TAREA",
         descripcion=(
@@ -700,6 +719,7 @@ def rechazar_tarea_revision_director(*, tarea, actor=None, comentario=None, requ
             "resultado_tarea": tarea.resultado_tarea,
             "estado_evidencia_id": getattr(estado_evidencia, "pk", None),
             "registro_evidencia_id": latest_record.pk,
+            "revision_interna_id": revision_interna.pk,
             "documento_id": latest_record.documento_id,
             "comentario_correccion": correction_note,
             "registros_actualizados": registros_actualizados,

@@ -1,0 +1,17 @@
+{{ site_name }} - Se registro una carga documental en la matriz de evidencia
+
+Hola,
+
+{{ actor_name }} cargo informacion documental para el elemento {{ elemento_codigo }} - {{ elemento_nombre }}.
+
+Ciclo: {{ ciclo_nombre }}
+Indicador: {{ indicador_codigo }} - {{ indicador_nombre }}
+Documento: {{ documento_nombre }}
+Fecha: {{ fecha_evento|date:"d/m/Y H:i" }}
+
+{% if requires_director_check %}La evidencia quedo en revision interna. La cabeza principal debe observar el documento y dar el check de subida.
+{% else %}La evidencia quedo registrada como cargada para el ciclo correspondiente.
+{% endif %}
+
+Ver evidencia:
+{{ evidence_url }}
