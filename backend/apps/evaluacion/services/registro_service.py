@@ -110,6 +110,50 @@ def _actor_can_mark_evidence_uploaded(*, actor, tarea) -> bool:
         return True
 
     actor_id = getattr(actor, "pk", None)
+    if not actor_id:
+        return False
+
+    if tarea is None:
+        return bool(_get_actor_level_one_area_ids(actor))
+
+    if tarea.usuario_responsable_id == actor_id or tarea.asignado_por_id == actor_id:
+        return True
+
+    actor_area_ids = _get_actor_level_one_area_ids(actor)
+    if not actor_area_ids:
+        return False
+
+    task_area_ids = set(
+        UsuarioAreaCargo.objects.filter(
+            usuario_id=tarea.usuario_responsable_id,
+            activo=True,
+            area__activo=True,
+            cargo__activo=True,
+        ).values_list("area_id", flat=True)
+    )
+    return bool(actor_area_ids.intersection(task_area_ids))
+
+
+def _latest_evidence_record_for_task(tarea):
+    if tarea is None:
+        return None
+    return (
+        RegistroEvidencia.objects.select_related("documento", "estado")
+        .filter(
+            ciclo=tarea.ciclo,
+            indicador=tarea.indicador,
+            elemento_fundamental=tarea.elemento_fundamental,
+        )
+        .order_by("-fecha_registro", "-id_registro")
+        .first()
+    )
+
+
+def _actor_can_auto_signoff_task(*, actor, tarea) -> bool:
+    if _actor_has_admin_role(actor):
+        return True
+
+    actor_id = getattr(actor, "pk", None)
     actor_area_ids = _get_actor_level_one_area_ids(actor)
     if not actor_id or not actor_area_ids:
         return False
@@ -117,8 +161,8 @@ def _actor_can_mark_evidence_uploaded(*, actor, tarea) -> bool:
     if tarea is None:
         return True
 
-    if tarea.usuario_responsable_id == actor_id or tarea.asignado_por_id == actor_id:
-        return True
+    if tarea.usuario_responsable_id == actor_id:
+        return False
 
     task_area_ids = set(
         UsuarioAreaCargo.objects.filter(
@@ -259,7 +303,21 @@ def register_matrix_evidence(
         actor=actor,
         tarea=related_task,
     )
-    requires_director_check = not can_mark_uploaded
+    can_auto_signoff = _actor_can_auto_signoff_task(
+        actor=actor,
+        tarea=related_task,
+    )
+    if not can_mark_uploaded:
+        raise MatrixEvidenceRegistrationError(
+            "Solo el responsable asignado, quien reasigno la tarea o una cabeza de rango 1 puede registrar esta evidencia."
+        )
+    if related_task is not None and getattr(related_task, "fecha_cierre", None) and not can_auto_signoff:
+        latest_record = _latest_evidence_record_for_task(related_task)
+        if latest_record is not None:
+            raise MatrixEvidenceRegistrationError(
+                "La evidencia ya fue subida y esta pendiente de revision. Solo podras modificarla si la persona que reasigno solicita correcciones."
+            )
+    requires_director_check = not can_auto_signoff
     estado = _get_internal_review_status() if requires_director_check else _get_default_evidence_status()
     if estado is None:
         raise MatrixEvidenceRegistrationError(
@@ -328,7 +386,8 @@ def register_matrix_evidence(
     )
     auto_approved_by_director = False
     auto_release_result = None
-    if can_mark_uploaded and related_task is not None:
+    auto_release_error = None
+    if can_auto_signoff and related_task is not None:
         auto_approved_by_director = _signoff_task_after_director_upload(
             tarea=related_task,
             actor=actor,
@@ -345,9 +404,25 @@ def register_matrix_evidence(
                     request=request,
                 )
             except (EvaluacionWorkflowError, ValueError) as exc:
-                raise MatrixEvidenceRegistrationError(
-                    "La evidencia se cargo, pero no pudo enviarse automaticamente al evaluador."
-                ) from exc
+                auto_release_error = str(exc)
+                registrar_evento(
+                    accion="SALIDA_EVALUADOR_AUTOMATICA_PENDIENTE",
+                    descripcion=(
+                        "La evidencia se registro correctamente, pero quedo pendiente "
+                        "la salida automatica al evaluador."
+                    ),
+                    usuario=actor,
+                    tipo_evento="EVALUACION",
+                    tabla_afectada="registro_evidencia",
+                    id_registro=registro.pk,
+                    valores_nuevos={
+                        "registro_id": registro.pk,
+                        "tarea_id": getattr(related_task, "pk", None),
+                        "detalle_error": auto_release_error[:500],
+                    },
+                    criticidad="MEDIA",
+                    request=request,
+                )
 
     registrar_evento(
         accion="REGISTRAR_EVIDENCIA_MATRIZ",
@@ -374,6 +449,7 @@ def register_matrix_evidence(
             "aprobacion_interna_director": auto_approved_by_director,
             "salida_evaluador_automatica": bool(auto_release_result),
             "salida_evaluador_estado": auto_release_result["status"] if auto_release_result else None,
+            "salida_evaluador_error": auto_release_error,
         },
         criticidad="ALTA",
         request=request,
@@ -393,5 +469,6 @@ def register_matrix_evidence(
         "created": created,
         "auto_approved_by_director": auto_approved_by_director,
         "auto_sent_to_evaluator": bool(auto_release_result),
+        "auto_release_error": auto_release_error,
         "requires_director_check": requires_director_check,
     }

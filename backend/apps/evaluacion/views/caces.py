@@ -181,6 +181,9 @@ def _normalize_variables_payload(variables):
 
 class CacesBaseView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
     page_status = "CACES"
+    readonly_message = (
+        "El rol Externo solo puede revisar el cumplimiento; no puede calificar ni modificar evaluaciones."
+    )
 
     def _selected_cycle(self):
         ciclo = get_caces_cycle(self.request.GET.get("ciclo") or self.request.POST.get("ciclo"))
@@ -192,7 +195,10 @@ class CacesBaseView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
 
     def _allow_unrestricted_caces_access(self):
         scope = self._actor_scope_flags()
-        return bool(scope.get("is_admin") or scope.get("is_quality"))
+        return bool(scope.get("is_admin") or scope.get("is_quality") or scope.get("is_external"))
+
+    def _can_grade_caces(self):
+        return bool(self._actor_scope_flags().get("can_grade_evidence"))
 
     def _caces_detail_url(self, *, ciclo_id, indicador_id):
         return f"{reverse('evaluacion-caces-indicador')}?ciclo={ciclo_id}&indicador={indicador_id}"
@@ -282,9 +288,10 @@ class CacesIndicatorDetailView(CacesBaseView):
         bound_form=None,
         bound_registro_id=None,
     ):
+        can_grade = self._can_grade_caces()
         for item in detail.get("elements_data", []):
             registro = item.get("latest_registro")
-            if registro is None:
+            if registro is None or not can_grade:
                 item["evidence_review_form"] = None
                 continue
             if bound_form is not None and str(registro.pk) == str(bound_registro_id):
@@ -349,6 +356,14 @@ class CacesIndicatorDetailView(CacesBaseView):
         indicador_id = request.POST.get("indicador")
         if selected_cycle is None or not indicador_id:
             raise Http404("No se pudo identificar el ciclo o indicador.")
+        if not self._can_grade_caces():
+            messages.error(request, self.readonly_message)
+            return redirect(
+                self._caces_detail_url(
+                    ciclo_id=selected_cycle.pk,
+                    indicador_id=indicador_id,
+                )
+            )
 
         detail = get_caces_indicator_detail(
             ciclo_id=selected_cycle.pk,

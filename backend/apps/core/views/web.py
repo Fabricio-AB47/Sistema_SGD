@@ -17,6 +17,7 @@ from apps.core.selectors.dashboard_selector import (
 from apps.core.services.navigation_service import (
     ROLE_ADMIN,
     ROLE_EVALUATOR,
+    ROLE_EXTERNAL,
     ROLE_QUALITY,
     ROLE_RECTOR,
     _normalize_roles,
@@ -47,8 +48,11 @@ class DashboardView(SigLoginRequiredMixin, TemplateView):
             ROLE_EVALUATOR in normalized_effective_roles
             and not normalized_effective_roles.intersection(privileged_roles)
         )
+        is_external_dashboard = ROLE_EXTERNAL in normalized_effective_roles and not normalized_effective_roles.intersection(
+            privileged_roles
+        )
         context["dashboard_metrics"] = get_dashboard_metrics()
-        context["show_review_dashboard"] = not is_evaluator_dashboard
+        context["show_review_dashboard"] = not (is_evaluator_dashboard or is_external_dashboard)
         context["review_dashboard"] = (
             get_dashboard_review_grid(estado=self.request.GET.get("revision_estado"))
             if context["show_review_dashboard"]

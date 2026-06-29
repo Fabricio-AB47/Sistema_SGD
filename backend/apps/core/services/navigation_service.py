@@ -15,6 +15,7 @@ ROLE_QUALITY_ALIASES = {
 }
 ROLE_RECTOR = "RECTOR"
 ROLE_EVALUATOR = "EVALUADOR"
+ROLE_EXTERNAL = "EXTERNO"
 ROLE_CONSULTA = "CONSULTA"
 PERM_USUARIOS_VER = "usuarios.ver"
 PERM_USUARIOS_CREAR = "usuarios.crear"
@@ -311,7 +312,7 @@ NAVIGATION_GROUPS = (
                     "evaluacion-caces-indicador",
                     "evaluacion-caces-reporte",
                 ),
-                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_EVALUATOR),
+                roles=(ROLE_ADMIN, ROLE_QUALITY, ROLE_EVALUATOR, ROLE_EXTERNAL),
             ),
             NavigationItem(
                 label="Observaciones",
@@ -418,6 +419,7 @@ ROLE_PRIORITY = (
     ROLE_QUALITY,
     ROLE_RECTOR,
     ROLE_EVALUATOR,
+    ROLE_EXTERNAL,
     "TECNOLOGIA",
     "FINANCIERO",
     "ADMISIONES",

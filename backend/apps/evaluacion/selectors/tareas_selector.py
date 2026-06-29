@@ -22,6 +22,7 @@ def get_tareas_evidencia_queryset(
     estado_id=None,
     ciclo_id=None,
     responsable_id=None,
+    responsable_ids=None,
     area_id=None,
     assigned_by_id=None,
     order_by_hierarchy=False,
@@ -70,7 +71,22 @@ def get_tareas_evidencia_queryset(
         queryset = queryset.filter(estado_id=estado_id)
     if ciclo_id:
         queryset = queryset.filter(ciclo_id=ciclo_id)
-    if responsable_id and assigned_by_id:
+    if responsable_ids is not None and assigned_by_id:
+        responsable_ids = [item for item in responsable_ids if item]
+        if responsable_ids:
+            queryset = queryset.filter(
+                Q(usuario_responsable_id__in=responsable_ids)
+                | Q(asignado_por_id=assigned_by_id)
+            )
+        else:
+            queryset = queryset.filter(asignado_por_id=assigned_by_id)
+    elif responsable_ids is not None:
+        responsable_ids = [item for item in responsable_ids if item]
+        if responsable_ids:
+            queryset = queryset.filter(usuario_responsable_id__in=responsable_ids)
+        else:
+            queryset = queryset.none()
+    elif responsable_id and assigned_by_id:
         queryset = queryset.filter(
             Q(usuario_responsable_id=responsable_id) | Q(asignado_por_id=assigned_by_id)
         )

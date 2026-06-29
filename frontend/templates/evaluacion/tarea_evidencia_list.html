@@ -379,13 +379,22 @@
                 {% if tarea.director_can_signoff %}
                   <form method="post" class="documentos-form evaluacion-task-close-form" style="margin-top: 0.5rem;">
                     {% csrf_token %}
+                    <input type="hidden" name="action" value="director_review">
                     <input type="hidden" name="tarea_id" value="{{ tarea.pk }}">
+                    <select name="decision_revision" required>
+                      <option value="">Selecciona decision</option>
+                      <option value="APROBAR">Aprobar y enviar al evaluador</option>
+                      <option value="RECHAZAR">Rechazar y solicitar correccion</option>
+                    </select>
                     <textarea name="comentario_revision" rows="2" placeholder="Comentario de revision"></textarea>
                     <div class="documentos-form__actions">
-                      <button class="btn btn-secondary" type="submit" name="action" value="director_signoff">Dar visto bueno</button>
-                      <button class="btn btn-danger" type="submit" name="action" value="director_reject">Solicitar correcciones</button>
+                      <button class="btn btn-secondary" type="submit">Registrar decision</button>
                     </div>
                   </form>
+                {% elif tarea.director_review_decision.status == "approved" %}
+                  <div class="text-muted">{{ tarea.director_review_decision.message }}</div>
+                {% elif tarea.director_review_decision.status == "rejected" %}
+                  <div class="text-muted">Rechazado. Pendiente de correccion del responsable.</div>
                 {% endif %}
               {% elif scope_flags.can_assign_tasks or tarea.usuario_responsable_id == current_actor_id %}
                 <form method="post" class="documentos-form evaluacion-task-close-form">

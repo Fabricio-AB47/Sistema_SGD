@@ -111,14 +111,14 @@
             class="btn btn-primary"
             data-caces-modal-open="{% if detail.is_qualitative %}caces-modal-element-{{ item.elemento.pk }}{% else %}caces-modal-quantitative{% endif %}"
           >
-            Evaluar
+            {% if scope_flags.can_grade_evidence %}Evaluar{% else %}Revisar{% endif %}
           </button>
         </div>
       {% empty %}
         <div class="caces-elements-overview__empty">
           No existen elementos fundamentales activos para este indicador.
           {% if detail.is_quantitative %}
-            <button class="btn btn-primary" type="button" data-caces-modal-open="caces-modal-quantitative">Evaluar indicador</button>
+            <button class="btn btn-primary" type="button" data-caces-modal-open="caces-modal-quantitative">{% if scope_flags.can_grade_evidence %}Evaluar indicador{% else %}Revisar indicador{% endif %}</button>
           {% endif %}
         </div>
       {% endfor %}
@@ -263,7 +263,11 @@
                     </form>
                   {% endwith %}
                 {% else %}
-                  <span class="text-muted">Carga una evidencia para evaluarla.</span>
+                  {% if item.latest_registro and not scope_flags.can_grade_evidence %}
+                    <span class="text-muted">Revision de cumplimiento disponible en modo consulta.</span>
+                  {% else %}
+                    <span class="text-muted">Carga una evidencia para evaluarla.</span>
+                  {% endif %}
                 {% endif %}
               </td>
             </tr>
@@ -377,9 +381,13 @@
             {% endwith %}
           {% else %}
             <section class="caces-modal__section caces-modal__section--decision">
-              <h4>Calificacion del elemento</h4>
+              <h4>{% if scope_flags.can_grade_evidence %}Calificacion del elemento{% else %}Revision del elemento{% endif %}</h4>
               <div class="caces-modal__document caces-modal__document--empty">
-                Carga una evidencia para poder evaluarla.
+                {% if item.latest_registro and not scope_flags.can_grade_evidence %}
+                  Modo consulta: el rol Externo revisa el cumplimiento sin calificar la evidencia.
+                {% else %}
+                  Carga una evidencia para poder evaluarla.
+                {% endif %}
               </div>
             </section>
           {% endif %}
@@ -453,7 +461,14 @@
           </div>
         </section>
 
-        {% if detail.formula %}
+        {% if not scope_flags.can_grade_evidence %}
+          <section class="caces-modal__section caces-modal__section--decision">
+            <h4>Modo consulta</h4>
+            <p class="text-muted">El rol Externo revisa el cumplimiento y los documentos cargados sin modificar la evaluacion CACES.</p>
+          </section>
+        {% endif %}
+
+        {% if scope_flags.can_grade_evidence and detail.formula %}
           <section class="caces-modal__section">
             <h4>Variables de formula</h4>
             {% if detail.variables_context.warning %}
@@ -536,6 +551,7 @@
           </section>
         {% endif %}
 
+        {% if scope_flags.can_grade_evidence %}
         <section class="caces-modal__section">
           <h4>{% if detail.formula %}Valor manual{% else %}Calificacion general{% endif %}</h4>
           <form method="post" class="acreditacion-form caces-evaluation-form caces-evaluation-form--manual">
@@ -560,6 +576,7 @@
             </div>
           </form>
         </section>
+        {% endif %}
       </div>
     </dialog>
   {% endif %}

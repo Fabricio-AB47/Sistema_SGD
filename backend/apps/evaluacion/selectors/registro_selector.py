@@ -16,6 +16,16 @@ UPLOADED_EVIDENCE_STATES = {
     "REGISTRADA",
     "VALIDADA",
 }
+LOCKED_INTERNAL_REVIEW_STATES = {
+    "BORRADOR",
+    "EN_REVISION_INTERNA",
+    "REENVIADA",
+}
+CORRECTION_EVIDENCE_STATES = {
+    "DEVUELTA_INTERNA",
+    "OBSERVADA",
+    "RECHAZADA",
+}
 
 
 def _normalize_state(value):
@@ -109,6 +119,8 @@ def get_matrix_registration_rows(*, ciclo=None):
         has_uploaded_evidence = bool(
             latest_record is not None and latest_state in UPLOADED_EVIDENCE_STATES
         )
+        is_correction_requested = latest_state in CORRECTION_EVIDENCE_STATES
+        is_upload_locked = latest_state in LOCKED_INTERNAL_REVIEW_STATES
         drive_folder = build_document_drive_path(elemento.indicador, elemento, ciclo)
         rows.append(
             {
@@ -121,6 +133,9 @@ def get_matrix_registration_rows(*, ciclo=None):
                 "drive_folder": drive_folder.as_posix(),
                 "has_evidence": has_uploaded_evidence,
                 "has_pending_review": bool(latest_record is not None and not has_uploaded_evidence),
+                "is_correction_requested": is_correction_requested,
+                "is_upload_locked": is_upload_locked,
+                "can_upload_revision": latest_record is None or is_correction_requested or not is_upload_locked,
                 "evidence_status": latest_state,
                 "record_count": counts_by_element.get(elemento.pk, 0),
             }

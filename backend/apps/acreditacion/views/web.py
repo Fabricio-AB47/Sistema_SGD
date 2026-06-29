@@ -847,6 +847,7 @@ class MatrizRegistroView(AcreditacionMatrizRegistroRequiredMixin, AcreditacionBa
         context["show_upload_modal"] = bool(
             selected_target
             and _can_register_matrix_evidence(self.request)
+            and selected_target.get("can_upload_revision", True)
             and (
                 self.request.GET.get("modal") == "upload"
                 or kwargs.get("registration_form") is not None
@@ -902,6 +903,22 @@ class MatrizRegistroView(AcreditacionMatrizRegistroRequiredMixin, AcreditacionBa
                 form.add_error(
                     "elemento_fundamental",
                     "Solo puedes registrar evidencia en las tareas reasignadas a tu usuario.",
+                )
+                return self.render_to_response(
+                    self.get_context_data(
+                        registration_form=form,
+                        selected_cycle_id=request.GET.get("ciclo")
+                        or request.POST.get("ciclo")
+                        or getattr(dashboard.get("selected_cycle"), "pk", None),
+                        selected_indicator_id=request.POST.get("indicador"),
+                        selected_element_id=request.POST.get("elemento_fundamental"),
+                        search_query=request.POST.get("q", ""),
+                    )
+                )
+            if selected_target and not selected_target.get("can_upload_revision", True):
+                form.add_error(
+                    None,
+                    "La evidencia ya fue subida y esta pendiente de revision. Solo se habilita una nueva carga si la persona que reasigno solicita correcciones.",
                 )
                 return self.render_to_response(
                     self.get_context_data(
@@ -1041,6 +1058,9 @@ class MatrizRegistroUploadView(AcreditacionMatrizRegistroRequiredMixin, Acredita
                 "filtered_matrix_rows": filtered_rows,
                 "search_query": query,
                 "selected_target": selected_target,
+                "upload_blocked_until_rejection": bool(
+                    selected_target and not selected_target.get("can_upload_revision", True)
+                ),
                 "registration_form": form,
             }
         )
@@ -1066,6 +1086,11 @@ class MatrizRegistroUploadView(AcreditacionMatrizRegistroRequiredMixin, Acredita
                 row["elemento"].pk
                 for row in dashboard.get("matrix_registration_rows", [])
             }
+            selected_target = _find_matrix_target(
+                dashboard.get("matrix_registration_rows", []),
+                indicador_id=request.GET.get("indicador") or request.POST.get("indicador"),
+                elemento_id=request.GET.get("elemento") or request.POST.get("elemento_fundamental"),
+            )
             if (
                 dashboard.get("limited_to_reassigned_tasks")
                 and form.cleaned_data["elemento_fundamental"].pk not in allowed_element_ids
@@ -1073,6 +1098,22 @@ class MatrizRegistroUploadView(AcreditacionMatrizRegistroRequiredMixin, Acredita
                 form.add_error(
                     "elemento_fundamental",
                     "Solo puedes registrar evidencia en las tareas reasignadas a tu usuario.",
+                )
+                return self.render_to_response(
+                    self.get_context_data(
+                        registration_form=form,
+                        selected_cycle_id=request.GET.get("ciclo")
+                        or request.POST.get("ciclo")
+                        or getattr(dashboard.get("selected_cycle"), "pk", None),
+                        selected_indicator_id=request.POST.get("indicador"),
+                        selected_element_id=request.POST.get("elemento_fundamental"),
+                        search_query=request.POST.get("q", ""),
+                    )
+                )
+            if selected_target and not selected_target.get("can_upload_revision", True):
+                form.add_error(
+                    None,
+                    "La evidencia ya fue subida y esta pendiente de revision. Solo se habilita una nueva carga si la persona que reasigno solicita correcciones.",
                 )
                 return self.render_to_response(
                     self.get_context_data(

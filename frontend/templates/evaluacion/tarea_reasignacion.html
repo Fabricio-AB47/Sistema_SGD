@@ -165,18 +165,26 @@
                                 {% if tarea.director_can_signoff %}
                                   <form method="post" class="reassignment-action-form">
                                     {% csrf_token %}
+                                    <input type="hidden" name="action" value="director_review">
                                     <input type="hidden" name="tarea_id" value="{{ tarea.pk }}">
+                                    <label>
+                                      <span>Decision del documento</span>
+                                      <select name="decision_revision" required>
+                                        <option value="">Selecciona una decision</option>
+                                        <option value="APROBAR">Aprobar y enviar al evaluador</option>
+                                        <option value="RECHAZAR">Rechazar y solicitar correccion</option>
+                                      </select>
+                                    </label>
                                     <label>
                                       <span>Comentario de revision</span>
                                       <textarea name="comentario_revision" rows="3" placeholder="Opcional para aprobar, obligatorio para correcciones"></textarea>
                                     </label>
                                     <div class="reassignment-action-form__buttons">
-                                      <button class="btn btn-secondary" type="submit" name="action" value="director_signoff">Dar check de subida</button>
-                                      <button class="btn btn-danger" type="submit" name="action" value="director_reject">Solicitar correcciones</button>
+                                      <button class="btn btn-secondary" type="submit">Registrar decision</button>
                                     </div>
                                   </form>
                                 {% elif tarea.director_pending_signoff %}
-                                  <p class="reassignment-task__muted">Para dar el check primero debe existir un documento cargado en revision.</p>
+                                  <p class="reassignment-task__muted">Para aprobar o rechazar primero debe existir un documento cargado en revision.</p>
                                 {% elif tarea.director_can_redirect %}
                                   {% if tarea.reassignment_options %}
                                     <form method="post" class="reassignment-action-form">
@@ -202,7 +210,13 @@
                                     <p class="reassignment-task__muted">No hay otro usuario disponible para tu rol asignado.</p>
                                   {% endif %}
                                 {% elif tarea.fecha_cierre %}
-                                  <p class="reassignment-task__muted">Revision registrada o sin accion pendiente.</p>
+                                  {% if tarea.director_review_decision.status == "approved" %}
+                                    <p class="reassignment-task__muted">{{ tarea.director_review_decision.message }}</p>
+                                  {% elif tarea.director_review_decision.status == "rejected" %}
+                                    <p class="reassignment-task__muted">Rechazado. Pendiente de correccion del responsable.</p>
+                                  {% else %}
+                                    <p class="reassignment-task__muted">{{ tarea.director_review_decision.message|default:"Sin accion pendiente." }}</p>
+                                  {% endif %}
                                 {% else %}
                                   <p class="reassignment-task__muted">Sin accion disponible.</p>
                                 {% endif %}

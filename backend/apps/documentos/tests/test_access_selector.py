@@ -1,45 +1,103 @@
-from unittest.mock import Mock, patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
 
-from apps.documentos.selectors.access_selector import get_documento_for_access
+from apps.documentos.selectors.access_selector import usuario_puede_acceder_documento
 
 
 class ProtectedDocumentAccessSelectorTests(SimpleTestCase):
-    def _mock_document_lookup(self, documento_model, documento):
-        queryset = documento_model.objects.select_related.return_value.filter.return_value
-        queryset.first.return_value = documento
+    def test_task_responsible_can_access_matching_evidence_document(self):
+        actor = SimpleNamespace(pk=6)
+        documento = SimpleNamespace(
+            pk=3,
+            activo=True,
+            subido_por_id=5,
+            clasificacion=None,
+            ciclos_autorizados=None,
+            ruta_local="SISTEMA INFORMATICO DE GESTION/CRITERIO/doc.pdf",
+        )
+        registro = SimpleNamespace(
+            ciclo_id=1,
+            indicador_id=1,
+            elemento_fundamental_id=1,
+            elemento_fundamental=SimpleNamespace(indicador_id=1),
+        )
+        registro_qs = MagicMock()
+        registro_qs.filter.return_value = [registro]
+        task_qs = MagicMock()
+        task_qs.exists.return_value = True
 
-    @patch("apps.documentos.selectors.access_selector.usuario_puede_acceder_documento")
-    @patch("apps.documentos.selectors.access_selector.Documento")
-    def test_denies_active_document_when_actor_has_no_structural_access(
-        self,
-        documento_model,
-        usuario_puede_acceder_documento,
-    ):
-        actor = Mock(pk=7)
-        documento = Mock(pk=11, activo=True)
-        self._mock_document_lookup(documento_model, documento)
-        usuario_puede_acceder_documento.return_value = False
+        with (
+            patch(
+                "apps.documentos.selectors.access_selector.usuario_tiene_acceso_global",
+                return_value=False,
+            ),
+            patch(
+                "apps.documentos.selectors.access_selector.usuario_tiene_permiso_modulo",
+                return_value=False,
+            ),
+            patch(
+                "apps.documentos.selectors.access_selector.RegistroEvidencia.objects.select_related",
+                return_value=registro_qs,
+            ),
+            patch(
+                "apps.documentos.selectors.access_selector.TareaEvidencia.objects.filter",
+                return_value=task_qs,
+            ) as task_filter,
+        ):
+            can_access = usuario_puede_acceder_documento(actor, documento)
 
-        result = get_documento_for_access(11, actor=actor)
+        self.assertTrue(can_access)
+        task_filter.assert_called_once()
 
-        self.assertIsNone(result)
-        usuario_puede_acceder_documento.assert_called_once_with(actor, documento)
+    def test_evaluator_can_access_released_evidence_document(self):
+        actor = SimpleNamespace(pk=8)
+        documento = SimpleNamespace(
+            pk=3,
+            activo=True,
+            subido_por_id=5,
+            clasificacion=None,
+            ciclos_autorizados=None,
+            ruta_local="SISTEMA INFORMATICO DE GESTION/CRITERIO/doc.pdf",
+        )
+        registro = SimpleNamespace(
+            ciclo_id=1,
+            indicador_id=1,
+            elemento_fundamental_id=1,
+            elemento_fundamental=SimpleNamespace(indicador_id=1),
+            fecha_envio_revision=object(),
+            estado=SimpleNamespace(descripcion="ENVIADA_EVALUADOR"),
+        )
+        registro_qs = MagicMock()
+        registro_qs.filter.return_value = [registro]
+        task_qs = MagicMock()
+        task_qs.exists.return_value = False
+        role_qs = MagicMock()
+        role_qs.filter.return_value.exists.return_value = True
 
-    @patch("apps.documentos.selectors.access_selector.usuario_puede_acceder_documento")
-    @patch("apps.documentos.selectors.access_selector.Documento")
-    def test_returns_active_document_when_actor_has_structural_access(
-        self,
-        documento_model,
-        usuario_puede_acceder_documento,
-    ):
-        actor = Mock(pk=7)
-        documento = Mock(pk=11, activo=True)
-        self._mock_document_lookup(documento_model, documento)
-        usuario_puede_acceder_documento.return_value = True
+        with (
+            patch(
+                "apps.documentos.selectors.access_selector.usuario_tiene_acceso_global",
+                return_value=False,
+            ),
+            patch(
+                "apps.documentos.selectors.access_selector.usuario_tiene_permiso_modulo",
+                return_value=False,
+            ),
+            patch(
+                "apps.documentos.selectors.access_selector.RegistroEvidencia.objects.select_related",
+                return_value=registro_qs,
+            ),
+            patch(
+                "apps.documentos.selectors.access_selector.TareaEvidencia.objects.filter",
+                return_value=task_qs,
+            ),
+            patch(
+                "apps.documentos.selectors.access_selector.UsuarioRol.objects.filter",
+                return_value=role_qs,
+            ),
+        ):
+            can_access = usuario_puede_acceder_documento(actor, documento)
 
-        result = get_documento_for_access(11, actor=actor)
-
-        self.assertIs(result, documento)
-        usuario_puede_acceder_documento.assert_called_once_with(actor, documento)
+        self.assertTrue(can_access)

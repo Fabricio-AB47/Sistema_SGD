@@ -63,10 +63,12 @@
               <span class="acreditacion-status acreditacion-status--warning">Pendiente de check</span>
             {% endif %}
           </div>
-          {% if can_register_matrix_evidence %}
+          {% if can_register_matrix_evidence and row.can_upload_revision %}
             <a class="btn btn-primary" href="{% url 'acreditacion-matriz-registro' %}?ciclo={{ selected_cycle.pk }}&indicador={{ row.indicador.pk }}&elemento={{ row.elemento.pk }}&modal=upload">
-              {% if row.latest_record %}Actualizar{% else %}Subir{% endif %}
+              {% if row.is_correction_requested %}Subir correccion{% elif row.latest_record %}Actualizar{% else %}Subir{% endif %}
             </a>
+          {% elif can_register_matrix_evidence and row.is_upload_locked %}
+            <span class="acreditacion-status acreditacion-status--info">En revision</span>
           {% endif %}
         </div>
       {% endfor %}
@@ -138,10 +140,12 @@
           {% if row.latest_record and can_access_evidence_detail %}
             <a class="btn btn-secondary" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ row.latest_record.pk }}">Ver</a>
           {% endif %}
-          {% if can_register_matrix_evidence and selected_cycle %}
+          {% if can_register_matrix_evidence and selected_cycle and row.can_upload_revision %}
             <a class="btn btn-primary" href="{% url 'acreditacion-matriz-registro' %}?ciclo={{ selected_cycle.pk }}&indicador={{ row.indicador.pk }}&elemento={{ row.elemento.pk }}&modal=upload">
-              {% if row.latest_record %}Actualizar{% else %}Subir{% endif %}
+              {% if row.is_correction_requested %}Subir correccion{% elif row.latest_record %}Actualizar{% else %}Subir{% endif %}
             </a>
+          {% elif can_register_matrix_evidence and selected_cycle and row.is_upload_locked %}
+            <span class="acreditacion-status acreditacion-status--info">Esperando aprobacion</span>
           {% endif %}
         </span>
       </div>
@@ -187,6 +191,8 @@
               <p class="text-muted">
                 {% if selected_target.has_evidence %}
                   Ya registra {{ selected_target.record_count }} carga(s). Puedes subir una nueva version.
+                {% elif selected_target.is_correction_requested %}
+                  La carga fue rechazada/devuelta. Puedes subir la correccion.
                 {% elif selected_target.has_pending_review %}
                   La carga esta pendiente de check del nivel jerarquico 1.
                 {% else %}

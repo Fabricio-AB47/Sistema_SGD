@@ -129,7 +129,7 @@
                           {% endif %}
                         </td>
                         <td>
-                          <a class="btn btn-secondary" href="{% url 'evaluacion-caces-indicador' %}?ciclo={{ selected_caces_cycle.pk }}&indicador={{ node.indicador.pk }}">Evaluar</a>
+                          <a class="btn btn-secondary" href="{% url 'evaluacion-caces-indicador' %}?ciclo={{ selected_caces_cycle.pk }}&indicador={{ node.indicador.pk }}">{% if scope_flags.can_grade_evidence %}Evaluar{% else %}Revisar{% endif %}</a>
                         </td>
                       </tr>
                     {% endfor %}
@@ -181,7 +181,7 @@
 </section>
 
 <article class="card">
-  {% if scope_flags.is_evaluator %}
+  {% if scope_flags.is_evaluator or scope_flags.is_external %}
     <p class="text-muted" style="margin-bottom: 0.8rem;">Bandeja limitada a evidencias con salida habilitada por nivel 1.</p>
   {% endif %}
   <div class="page-header">
@@ -344,13 +344,75 @@
         </span>
         <span class="acreditacion-row-actions">
           {% if row.registro %}
-            <a class="btn btn-ghost" href="{% url 'evaluacion-evidencia-detalle' %}?registro={{ row.registro.pk }}">Detalle</a>
-            <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?panel=evidencias&estado={{ selected_estado }}{% if selected_evidence_cycle %}&ciclo={{ selected_evidence_cycle.pk }}{% endif %}&registro={{ row.registro.pk }}&modal=evaluar">Evaluar</a>
+            <button
+              class="btn btn-ghost"
+              type="button"
+              data-bandeja-detail-open="bandeja-detalle-{{ row.registro.pk }}"
+            >
+              Detalle
+            </button>
+            {% if scope_flags.can_grade_evidence %}
+              <a class="btn btn-secondary" href="{% url 'evaluacion-bandeja' %}?panel=evidencias&estado={{ selected_estado }}{% if selected_evidence_cycle %}&ciclo={{ selected_evidence_cycle.pk }}{% endif %}&registro={{ row.registro.pk }}&modal=evaluar">Evaluar</a>
+            {% else %}
+              <span class="acreditacion-status acreditacion-status--info">Solo revision</span>
+            {% endif %}
           {% else %}
             <span class="acreditacion-status acreditacion-status--warning">Pendiente de asignacion</span>
           {% endif %}
         </span>
       </div>
+      {% if row.registro %}
+        <div class="acreditacion-info-modal" id="bandeja-detalle-{{ row.registro.pk }}" aria-labelledby="bandeja-detalle-title-{{ row.registro.pk }}" hidden>
+          <button class="acreditacion-info-modal__overlay" type="button" data-bandeja-detail-close aria-label="Cerrar detalle"></button>
+          <div class="acreditacion-info-dialog">
+            <div class="acreditacion-info-dialog__header">
+              <div>
+                <span class="acreditacion-pill">Detalle de estructura</span>
+                <h3 id="bandeja-detalle-title-{{ row.registro.pk }}">Informacion del elemento</h3>
+              </div>
+              <button class="acreditacion-info-dialog__close" type="button" data-bandeja-detail-close aria-label="Cerrar detalle">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7l10 10M17 7L7 17" /></svg>
+              </button>
+            </div>
+            <div class="acreditacion-info-dialog__body">
+              <dl class="acreditacion-detail-list">
+                <div>
+                  <dt>Criterio</dt>
+                  <dd>{{ row.criterio.codigo_criterio }} - {{ row.criterio.nombre_criterio }}</dd>
+                </div>
+                <div>
+                  <dt>Subcriterio</dt>
+                  <dd>{{ row.subcriterio.codigo_subcriterio }} - {{ row.subcriterio.nombre_subcriterio }}</dd>
+                </div>
+                <div>
+                  <dt>Indicador</dt>
+                  <dd>{{ row.indicador.codigo_indicador }} - {{ row.indicador.nombre_indicador }}</dd>
+                </div>
+                <div>
+                  <dt>Tipo de indicador</dt>
+                  <dd>{{ row.indicador.tipo_indicador.descripcion|default:"--" }}</dd>
+                </div>
+                <div>
+                  <dt>Elemento fundamental</dt>
+                  <dd>{{ row.elemento.codigo_elemento }} - {{ row.elemento.nombre_elemento }}</dd>
+                </div>
+                <div>
+                  <dt>Clasificacion de elemento</dt>
+                  <dd>{{ row.elemento.tipo_elemento|default:"--" }}</dd>
+                </div>
+                <div>
+                  <dt>Medio de verificacion</dt>
+                  <dd>{{ row.elemento.medio_verificacion|default:"--" }}</dd>
+                </div>
+                <div>
+                  <dt>Ciclo</dt>
+                  <dd>{{ row.registro.ciclo.nombre|default:"--" }}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      {% endif %}
     {% empty %}
       <div class="acreditacion-matrix__row">
         <span>No existen evidencias para el filtro seleccionado.</span>
@@ -570,6 +632,45 @@
 {% block extra_js %}
 {{ block.super }}
 <script>
+  (function () {
+    const openButtons = document.querySelectorAll('[data-bandeja-detail-open]');
+    if (!openButtons.length) {
+      return;
+    }
+
+    const closeModal = function (modal) {
+      if (!modal) {
+        return;
+      }
+      modal.hidden = true;
+      document.body.style.overflow = '';
+    };
+
+    openButtons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        const modal = document.getElementById(button.dataset.bandejaDetailOpen);
+        if (!modal) {
+          return;
+        }
+        modal.hidden = false;
+        document.body.style.overflow = 'hidden';
+      });
+    });
+
+    document.querySelectorAll('[data-bandeja-detail-close]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        closeModal(button.closest('.acreditacion-info-modal'));
+      });
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      document.querySelectorAll('.acreditacion-info-modal:not([hidden])').forEach(closeModal);
+    });
+  })();
+
   (function () {
     const modal = document.getElementById('bandeja-calificacion-dialog');
     const openButton = document.querySelector('[data-bandeja-info-trigger]');

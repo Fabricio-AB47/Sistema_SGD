@@ -82,6 +82,19 @@ def _is_relative_to(path: Path, root: Path) -> bool:
     return path == root or root in path.parents
 
 
+def _filesystem_path(path: Path) -> Path:
+    if not path.is_absolute() or not str(path).strip():
+        return path
+    if not str(path).startswith("\\\\") and not str(path).startswith("//"):
+        raw_path = str(path.resolve(strict=False))
+        if raw_path.startswith("\\\\?\\"):
+            return Path(raw_path)
+        if raw_path.startswith("\\\\"):
+            return Path("\\\\?\\UNC\\" + raw_path.lstrip("\\"))
+        return Path("\\\\?\\" + raw_path)
+    return path
+
+
 def resolve_local_mirror_path(relative_path: str | PurePosixPath) -> Path:
     root = get_local_storage_root()
     suffix = _drive_suffix(relative_path)
@@ -97,7 +110,7 @@ def ensure_local_mirror_folder(relative_path: str | PurePosixPath) -> Path | Non
     if not local_document_mirror_enabled():
         return None
     folder_path = resolve_local_mirror_path(relative_path)
-    folder_path.mkdir(parents=True, exist_ok=True)
+    _filesystem_path(folder_path).mkdir(parents=True, exist_ok=True)
     return folder_path
 
 
@@ -105,13 +118,15 @@ def write_local_mirror_file(relative_file_path: str | PurePosixPath, content: by
     if not local_document_mirror_enabled():
         return None
     file_path = resolve_local_mirror_path(relative_file_path)
-    file_path.parent.mkdir(parents=True, exist_ok=True)
+    filesystem_file_path = _filesystem_path(file_path)
+    filesystem_parent = filesystem_file_path.parent
+    filesystem_parent.mkdir(parents=True, exist_ok=True)
     tmp_name = None
     try:
-        with tempfile.NamedTemporaryFile(dir=file_path.parent, delete=False) as tmp_file:
+        with tempfile.NamedTemporaryFile(dir=str(filesystem_parent), delete=False) as tmp_file:
             tmp_name = tmp_file.name
             tmp_file.write(content)
-        Path(tmp_name).replace(file_path)
+        Path(tmp_name).replace(filesystem_file_path)
     finally:
         if tmp_name:
             tmp_path = Path(tmp_name)
@@ -124,7 +139,8 @@ def get_existing_local_mirror_file(relative_file_path: str | PurePosixPath | Non
     if not relative_file_path or not local_document_mirror_enabled():
         return None
     file_path = resolve_local_mirror_path(relative_file_path)
-    return file_path if file_path.is_file() else None
+    filesystem_file_path = _filesystem_path(file_path)
+    return filesystem_file_path if filesystem_file_path.is_file() else None
 
 
 def _slugify_segment(value: str) -> str:

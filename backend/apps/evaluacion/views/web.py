@@ -59,12 +59,25 @@ from apps.evaluacion.services import (
 )
 from apps.evaluacion.models import ObservacionEvaluacion
 from apps.evidencias.models import RegistroEvidencia
-from apps.usuarios.models import AreaInstitucional, Usuario, UsuarioAreaCargo, UsuarioRol
+from apps.usuarios.models import AreaInstitucional, Usuario, UsuarioAreaCargo, UsuarioRol, UsuarioSupervisor
 from apps.usuarios.selectors import get_usuario_area_cargo_for_context
 
 
 logger = logging.getLogger(__name__)
 TASK_NOT_FOUND_MESSAGE = "La tarea seleccionada no existe."
+INTERNAL_REVIEW_APPROVED_STATES = {
+    "APROBADA",
+    "CARGADA",
+    "EN_REVISION_EVALUADOR",
+    "ENVIADA_EVALUADOR",
+    "REGISTRADA",
+    "VALIDADA",
+}
+INTERNAL_REVIEW_REJECTED_STATES = {
+    "DEVUELTA_INTERNA",
+    "OBSERVADA",
+    "RECHAZADA",
+}
 
 
 def _normalize_token(value: str | None) -> str:
@@ -81,20 +94,26 @@ QUALITY_ROLE_TOKENS = {
 }
 ADMIN_ROLE_TOKEN = "ADMINISTRADOR"
 EVALUATOR_ROLE_TOKEN = "EVALUADOR"
+RECTOR_ROLE_TOKEN = "RECTOR"
+EXTERNAL_ROLE_TOKEN = "EXTERNO"
 DIRECTOR_REDIRECT_BLOCKED_ROLE_TOKENS = {
     EVALUATOR_ROLE_TOKEN,
+    EXTERNAL_ROLE_TOKEN,
     "CONSULTA",
 }
 EVALUACION_ENTRY_ROLE_TOKENS = {
     ADMIN_ROLE_TOKEN,
     EVALUATOR_ROLE_TOKEN,
+    RECTOR_ROLE_TOKEN,
+    EXTERNAL_ROLE_TOKEN,
     *QUALITY_ROLE_TOKENS,
 }
 EVALUACION_ENTRY_ACCESS_DENIED_MESSAGE = (
-    "Solo los roles ADMINISTRADOR, CALIDAD o EVALUADOR pueden ingresar a evaluacion."
+    "Solo los roles ADMINISTRADOR, CALIDAD, RECTOR, EVALUADOR o EXTERNO pueden ingresar a evaluacion."
 )
 EVALUATOR_ALLOWED_URL_NAMES = {
     "evaluacion-bandeja",
+    "evaluacion-evidencia-detalle",
     "evaluacion-evaluar",
     "evaluacion-caces",
     "evaluacion-caces-ciclo",
@@ -184,6 +203,7 @@ def _is_evaluator_only_request(request) -> bool:
     role_tokens = set(_request_role_tokens(request))
     return (
         EVALUATOR_ROLE_TOKEN in role_tokens
+        and EXTERNAL_ROLE_TOKEN not in role_tokens
         and ADMIN_ROLE_TOKEN not in role_tokens
         and not role_tokens.intersection(QUALITY_ROLE_TOKENS)
     )
@@ -324,26 +344,34 @@ class EvaluacionBaseView(SigLoginRequiredMixin, TemplateView):
         is_tech_director = cargo_name == "DIRECTOR DE TECNOLOGIA"
         is_area_director = "DIRECTOR" in cargo_name if cargo_name else False
         is_evaluator = EVALUATOR_ROLE_TOKEN in role_tokens
+        is_rector = RECTOR_ROLE_TOKEN in role_tokens or cargo_name in {"RECTOR", "RECTORADO"}
+        is_external = EXTERNAL_ROLE_TOKEN in role_tokens
         is_consulta = "CONSULTA" in role_tokens
         is_admin = ADMIN_ROLE_TOKEN in role_tokens
         is_quality = any(token in QUALITY_ROLE_TOKENS for token in role_tokens)
-        is_evaluator_only = is_evaluator and not is_admin and not is_quality
+        is_evaluator_only = is_evaluator and not is_external and not is_admin and not is_quality
+        can_grade_evidence = bool(is_admin or is_quality or is_evaluator)
 
         return {
             "is_admin": is_admin,
             "is_level_one_approver": is_level_one_approver,
             "is_tech_director": is_tech_director,
             "is_area_director": is_area_director,
+            "is_rector": is_rector,
             "is_evaluator": is_evaluator,
+            "is_external": is_external,
             "is_evaluator_only": is_evaluator_only,
             "is_consulta": is_consulta,
             "is_quality": is_quality,
-            "can_enter_evaluation": is_admin or is_evaluator,
+            "can_enter_evaluation": is_admin or is_evaluator or is_rector or is_external,
+            "can_grade_evidence": can_grade_evidence,
+            "can_review_compliance": bool(is_external or can_grade_evidence),
             "can_assign_tasks": is_admin or is_quality,
-            "can_manage_release": is_admin or is_level_one_approver or is_tech_director,
+            "can_manage_release": is_admin or is_level_one_approver or is_tech_director or is_rector,
             "can_manage_corrections": is_admin or is_quality,
             "can_redirect_subordinates": (
                 is_admin
+                or is_rector
                 or (
                     is_level_one_approver
                     and not is_evaluator
@@ -413,7 +441,7 @@ class EvidenciaListView(EvaluacionBaseView):
             q=q,
             estado=estado,
             ciclo_id=ciclo,
-            only_released=scope_flags["is_evaluator"] and not scope_flags["is_admin"],
+            only_released=(scope_flags["is_evaluator"] or scope_flags["is_external"]) and not scope_flags["is_admin"],
         )[:100]
         context["registros"] = registros
         context["scope_flags"] = scope_flags
@@ -575,6 +603,53 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         return options
 
     @staticmethod
+    def _subordinate_user_ids_for_actor(*, actor, include_all=False):
+        actor_id = getattr(actor, "pk", None)
+        if not actor_id:
+            return set()
+        if include_all:
+            return set(
+                Usuario.objects.filter(activo=True)
+                .exclude(pk=actor_id)
+                .values_list("pk", flat=True)
+            )
+
+        subordinate_ids = set(
+            UsuarioSupervisor.objects.filter(
+                supervisor_id=actor_id,
+                activo=True,
+                usuario__activo=True,
+            ).values_list("usuario_id", flat=True)
+        )
+        actor_assignments = list(
+            UsuarioAreaCargo.objects.select_related("cargo")
+            .filter(
+                usuario_id=actor_id,
+                activo=True,
+                area__activo=True,
+                cargo__activo=True,
+                cargo__aprueba_interno=True,
+            )
+        )
+        for assignment in actor_assignments:
+            actor_level = getattr(assignment.cargo, "nivel_jerarquico", None)
+            if actor_level is None:
+                continue
+            subordinate_ids.update(
+                UsuarioAreaCargo.objects.filter(
+                    area_id=assignment.area_id,
+                    activo=True,
+                    area__activo=True,
+                    cargo__activo=True,
+                    cargo__nivel_jerarquico__gt=actor_level,
+                    usuario__activo=True,
+                )
+                .exclude(usuario_id=actor_id)
+                .values_list("usuario_id", flat=True)
+            )
+        return subordinate_ids
+
+    @staticmethod
     def _can_redirect_task(*, tarea, actor_id, actor_area_id, can_redirect_subordinates, is_admin=False):
         if not can_redirect_subordinates or not actor_id or tarea.fecha_cierre:
             return False
@@ -590,7 +665,14 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         return any(assignment.area_id == actor_area_id for assignment in task_assignments)
 
     @staticmethod
-    def _can_signoff_task(*, tarea, actor_id, can_redirect_subordinates, is_admin=False):
+    def _can_signoff_task(
+        *,
+        tarea,
+        actor_id,
+        can_redirect_subordinates,
+        is_admin=False,
+        subordinate_user_ids=None,
+    ):
         if not can_redirect_subordinates or not actor_id:
             return False
         if not tarea.fecha_cierre:
@@ -601,7 +683,9 @@ class TareaEvidenciaListView(EvaluacionBaseView):
             return True
         if tarea.usuario_responsable_id == actor_id:
             return False
-        return tarea.asignado_por_id == actor_id
+        if tarea.asignado_por_id == actor_id:
+            return True
+        return tarea.usuario_responsable_id in (subordinate_user_ids or set())
 
     @staticmethod
     def _latest_registro_for_tarea(tarea):
@@ -615,6 +699,41 @@ class TareaEvidenciaListView(EvaluacionBaseView):
             .order_by("-fecha_registro", "-id_registro")
             .first()
         )
+
+    @staticmethod
+    def _director_review_decision(*, tarea, registro):
+        state = _normalize_token(
+            getattr(getattr(registro, "estado", None), "descripcion", "")
+        )
+        approved_by_signoff = tarea_tiene_visto_bueno_director(tarea)
+        released_to_evaluator = bool(getattr(registro, "fecha_envio_revision", None))
+        if approved_by_signoff or released_to_evaluator or state in INTERNAL_REVIEW_APPROVED_STATES:
+            return {
+                "status": "approved",
+                "label": "Aprobada",
+                "message": (
+                    "Aprobado y enviado al evaluador."
+                    if released_to_evaluator or state in {"ENVIADA_EVALUADOR", "EN_REVISION_EVALUADOR"}
+                    else "Aprobado. Pendiente de envio al evaluador."
+                ),
+            }
+        if state in INTERNAL_REVIEW_REJECTED_STATES:
+            return {
+                "status": "rejected",
+                "label": "Rechazada",
+                "message": "Rechazado. La evidencia queda habilitada para correccion.",
+            }
+        if getattr(tarea, "fecha_cierre", None):
+            return {
+                "status": "pending",
+                "label": "Pendiente",
+                "message": "Pendiente de aprobacion o rechazo por la cabeza de jerarquia 1.",
+            }
+        return {
+            "status": "open",
+            "label": "En carga",
+            "message": "Pendiente de carga por el responsable asignado.",
+        }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -631,7 +750,15 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         can_assign_tasks = scope_flags["can_assign_tasks"]
         can_redirect_subordinates = scope_flags.get("can_redirect_subordinates", False)
         is_admin = scope_flags.get("is_admin", False)
+        subordinate_user_ids = self._subordinate_user_ids_for_actor(
+            actor=actor,
+            include_all=is_admin,
+        ) if can_redirect_subordinates else set()
+        visible_responsable_ids = None
         effective_responsable = responsable if can_assign_tasks else getattr(actor, "pk", -1)
+        if not can_assign_tasks and can_redirect_subordinates:
+            visible_responsable_ids = {actor_id, *subordinate_user_ids} if actor_id else subordinate_user_ids
+            effective_responsable = None
         if can_assign_tasks:
             assigned_by_filter = None
         elif can_redirect_subordinates:
@@ -661,6 +788,7 @@ class TareaEvidenciaListView(EvaluacionBaseView):
             estado_id=estado,
             ciclo_id=ciclo,
             responsable_id=effective_responsable,
+            responsable_ids=visible_responsable_ids,
             area_id=area,
             assigned_by_id=assigned_by_filter,
         )[:100]
@@ -668,6 +796,12 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         context["current_actor_id"] = actor_id
         context["subordinate_options"] = self._director_subordinate_options(actor=actor)
         for tarea in context["tareas"]:
+            review_record = self._latest_registro_for_tarea(tarea)
+            tarea.review_record = review_record
+            tarea.director_review_decision = self._director_review_decision(
+                tarea=tarea,
+                registro=review_record,
+            )
             tarea.director_can_redirect = self._can_redirect_task(
                 tarea=tarea,
                 actor_id=actor_id,
@@ -680,7 +814,8 @@ class TareaEvidenciaListView(EvaluacionBaseView):
                 actor_id=actor_id,
                 can_redirect_subordinates=can_redirect_subordinates,
                 is_admin=is_admin,
-            )
+                subordinate_user_ids=subordinate_user_ids,
+            ) and tarea.director_review_decision["status"] == "pending" and bool(review_record)
         context["area_options"] = AreaInstitucional.objects.filter(activo=True).order_by("nombre_area")
         context["tarea_metrics"] = get_tarea_evidencia_metrics(
             responsable_id=None if can_assign_tasks else getattr(actor, "pk", -1)
@@ -917,6 +1052,10 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         scope_flags = self._actor_scope_flags()
         can_redirect_subordinates = scope_flags.get("can_redirect_subordinates", False)
         is_admin = scope_flags.get("is_admin", False)
+        subordinate_user_ids = self._subordinate_user_ids_for_actor(
+            actor=actor,
+            include_all=is_admin,
+        ) if can_redirect_subordinates else set()
 
         tarea = get_tarea_evidencia_detail(request.POST.get("tarea_id"))
         if tarea is None:
@@ -928,13 +1067,14 @@ class TareaEvidenciaListView(EvaluacionBaseView):
             actor_id=actor_id,
             can_redirect_subordinates=can_redirect_subordinates,
             is_admin=is_admin,
+            subordinate_user_ids=subordinate_user_ids,
         ):
             messages.error(
                 request,
                 (
                     "El administrador puede registrar el visto bueno de cualquier tarea cerrada."
                     if is_admin
-                    else "Solo el director que desgloso la tarea puede registrar el visto bueno."
+                    else "Solo el director o rector responsable puede aprobar documentos de sus subordinados."
                 ),
             )
             return redirect(redirect_url_name)
@@ -996,6 +1136,10 @@ class TareaEvidenciaListView(EvaluacionBaseView):
         scope_flags = self._actor_scope_flags()
         can_redirect_subordinates = scope_flags.get("can_redirect_subordinates", False)
         is_admin = scope_flags.get("is_admin", False)
+        subordinate_user_ids = self._subordinate_user_ids_for_actor(
+            actor=actor,
+            include_all=is_admin,
+        ) if can_redirect_subordinates else set()
 
         tarea = get_tarea_evidencia_detail(request.POST.get("tarea_id"))
         if tarea is None:
@@ -1007,13 +1151,14 @@ class TareaEvidenciaListView(EvaluacionBaseView):
             actor_id=actor_id,
             can_redirect_subordinates=can_redirect_subordinates,
             is_admin=is_admin,
+            subordinate_user_ids=subordinate_user_ids,
         ):
             messages.error(
                 request,
                 (
                     "El administrador puede solicitar correcciones sobre cualquier tarea cerrada."
                     if is_admin
-                    else "Solo el director que desgloso la tarea puede solicitar correcciones."
+                    else "Solo el director o rector responsable puede solicitar correcciones a sus subordinados."
                 ),
             )
             return redirect(redirect_url_name)
@@ -1042,6 +1187,21 @@ class TareaEvidenciaListView(EvaluacionBaseView):
 
         return redirect(redirect_url_name)
 
+    def _handle_director_review_decision(self, request, *, redirect_url_name="evaluacion-tareas"):
+        decision = (request.POST.get("decision_revision") or "").strip().upper()
+        if decision == "APROBAR":
+            return self._handle_director_signoff(
+                request,
+                redirect_url_name=redirect_url_name,
+            )
+        if decision == "RECHAZAR":
+            return self._handle_director_reject(
+                request,
+                redirect_url_name=redirect_url_name,
+            )
+        messages.error(request, "Selecciona si el documento queda aprobado o rechazado.")
+        return redirect(redirect_url_name)
+
     def post(self, request, *args, **kwargs):
         action = (request.POST.get("action") or "").strip().lower()
         if action == "close":
@@ -1054,6 +1214,8 @@ class TareaEvidenciaListView(EvaluacionBaseView):
             return self._handle_director_signoff(request)
         if action == "director_reject":
             return self._handle_director_reject(request)
+        if action == "director_review":
+            return self._handle_director_review_decision(request)
 
         scope_flags = self._actor_scope_flags()
         if not scope_flags.get("can_assign_tasks"):
@@ -1246,6 +1408,10 @@ class TareaReasignacionView(TareaEvidenciaListView):
         actor_area_id = getattr(actor_assignment, "area_id", None)
         can_redirect_subordinates = scope_flags.get("can_redirect_subordinates", False)
         is_admin = scope_flags.get("is_admin", False)
+        subordinate_user_ids = self._subordinate_user_ids_for_actor(
+            actor=actor,
+            include_all=is_admin,
+        ) if can_redirect_subordinates else set()
         q = self.request.GET.get("q", "")
         selected_cycle = get_current_enabled_cycle()
 
@@ -1269,25 +1435,16 @@ class TareaReasignacionView(TareaEvidenciaListView):
                 "order_by_hierarchy": True,
             }
             if not is_admin:
+                visible_responsable_ids = {actor_id, *subordinate_user_ids} if actor_id else subordinate_user_ids
                 task_filters.update(
                     {
-                        "responsable_id": actor_id,
+                        "responsable_ids": visible_responsable_ids,
                         "assigned_by_id": actor_id,
                     }
                 )
             tareas = list(
                 get_tareas_evidencia_queryset(**task_filters)[:100]
             )
-            uploaded_element_ids = self._uploaded_element_ids_for_cycle(
-                ciclo=selected_cycle,
-                tareas=tareas,
-            )
-            if uploaded_element_ids:
-                tareas = [
-                    tarea
-                    for tarea in tareas
-                    if tarea.elemento_fundamental_id not in uploaded_element_ids
-                ]
             subordinate_options = self._director_subordinate_options(actor=actor)
         else:
             tareas = []
@@ -1310,6 +1467,10 @@ class TareaReasignacionView(TareaEvidenciaListView):
                 if review_record
                 else ""
             )
+            tarea.director_review_decision = self._director_review_decision(
+                tarea=tarea,
+                registro=review_record,
+            )
             tarea.director_can_redirect = self._can_redirect_task(
                 tarea=tarea,
                 actor_id=actor_id,
@@ -1322,7 +1483,8 @@ class TareaReasignacionView(TareaEvidenciaListView):
                 actor_id=actor_id,
                 can_redirect_subordinates=can_redirect_subordinates,
                 is_admin=is_admin,
-            )
+                subordinate_user_ids=subordinate_user_ids,
+            ) and tarea.director_review_decision["status"] == "pending"
             tarea.director_can_signoff = bool(
                 tarea.director_pending_signoff
                 and getattr(tarea.review_document, "pk", None)
@@ -1379,6 +1541,11 @@ class TareaReasignacionView(TareaEvidenciaListView):
             )
         if action == "director_reject":
             return self._handle_director_reject(
+                request,
+                redirect_url_name="evaluacion-tareas-reasignacion",
+            )
+        if action == "director_review":
+            return self._handle_director_review_decision(
                 request,
                 redirect_url_name="evaluacion-tareas-reasignacion",
             )
@@ -1585,8 +1752,6 @@ class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
         return self.request.POST.get("ciclo") or self.request.GET.get("ciclo")
 
     def _selected_panel(self):
-        if self._actor_scope_flags().get("is_evaluator_only"):
-            return self.PANEL_CACES
         panel = (self.request.GET.get("panel") or self.PANEL_EVIDENCIAS).strip().lower()
         return panel if panel in {self.PANEL_EVIDENCIAS, self.PANEL_CACES} else self.PANEL_EVIDENCIAS
 
@@ -1616,7 +1781,7 @@ class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
         selected_estado = self._selected_estado()
         inbox_data = get_evaluation_inbox_data(
             estado=selected_estado,
-            only_released=scope_flags["is_evaluator"] and not scope_flags["is_admin"],
+            only_released=(scope_flags["is_evaluator"] or scope_flags["is_external"]) and not scope_flags["is_admin"],
             ciclo_id=self._selected_evidence_cycle_id(),
         )
         selected_registro = kwargs.get("registro") or get_registro_detail(
@@ -1656,6 +1821,7 @@ class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
         )
         context["show_evaluation_modal"] = bool(
             selected_registro
+            and scope_flags.get("can_grade_evidence")
             and (
                 self.request.GET.get("modal") == "evaluar"
                 or kwargs.get("evaluation_form") is not None
@@ -1696,12 +1862,6 @@ class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
                 "url": f"{reverse('evaluacion-bandeja')}?panel={self.PANEL_CACES}",
             },
         ]
-        if scope_flags.get("is_evaluator_only"):
-            evaluation_panel_options = [
-                option
-                for option in evaluation_panel_options
-                if option["key"] == self.PANEL_CACES
-            ]
         context["evaluation_panel_options"] = tuple(evaluation_panel_options)
         context["caces_cycles"] = get_caces_cycles() if selected_panel == self.PANEL_CACES else []
         context["selected_caces_cycle"] = selected_caces_cycle
@@ -1718,9 +1878,9 @@ class EvaluacionInboxView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
     def post(self, request, *args, **kwargs):
         form = EvaluacionGestionForm(request.POST)
         scope_flags = self._actor_scope_flags()
-        if scope_flags.get("is_evaluator_only"):
-            messages.error(request, "El rol Evaluador debe registrar la calificacion desde la matriz CACES.")
-            return redirect(f"{reverse('evaluacion-bandeja')}?panel={self.PANEL_CACES}")
+        if not scope_flags.get("can_grade_evidence"):
+            messages.error(request, "El rol Externo solo puede revisar el cumplimiento; no puede calificar evidencias.")
+            return redirect(self._bandeja_url())
         selected_registro = get_registro_detail(request.POST.get("registro"))
         if form.is_valid():
             registro = form.cleaned_data["registro"]
@@ -1821,6 +1981,9 @@ class EvaluacionFormView(EvaluacionEntryRoleRequiredMixin, EvaluacionBaseView):
     def post(self, request, *args, **kwargs):
         form = EvaluacionGestionForm(request.POST)
         scope_flags = self._actor_scope_flags()
+        if not scope_flags.get("can_grade_evidence"):
+            messages.error(request, "El rol Externo solo puede revisar el cumplimiento; no puede calificar evidencias.")
+            return redirect("evaluacion-bandeja")
         if form.is_valid():
             registro = form.cleaned_data["registro"]
             if (

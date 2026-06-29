@@ -13,7 +13,7 @@ from apps.evaluacion.models import (
 )
 from apps.evaluacion.services.notification_service import queue_evaluator_release_notification
 from apps.evaluacion.services.tareas_service import tarea_tiene_visto_bueno_director
-from apps.usuarios.models import UsuarioAreaCargo, UsuarioRol
+from apps.usuarios.models import UsuarioAreaCargo, UsuarioRol, UsuarioSupervisor
 
 
 class EvaluacionWorkflowError(Exception):
@@ -82,6 +82,19 @@ def _is_first_rank_approver_for_task(tarea) -> bool:
         activo=True,
         rol__activo=True,
         rol__nombre_rol__iexact="Administrador",
+    ).exists():
+        return True
+    if UsuarioRol.objects.filter(
+        usuario_id=approver_id,
+        activo=True,
+        rol__activo=True,
+        rol__nombre_rol__iexact="Rector",
+    ).exists():
+        return True
+    if UsuarioSupervisor.objects.filter(
+        usuario_id=tarea.usuario_responsable_id,
+        supervisor_id=approver_id,
+        activo=True,
     ).exists():
         return True
 

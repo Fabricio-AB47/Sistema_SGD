@@ -23,6 +23,16 @@ UPLOADED_EVIDENCE_STATES = {
     "REGISTRADA",
     "VALIDADA",
 }
+LOCKED_INTERNAL_REVIEW_STATES = {
+    "BORRADOR",
+    "EN_REVISION_INTERNA",
+    "REENVIADA",
+}
+CORRECTION_EVIDENCE_STATES = {
+    "DEVUELTA_INTERNA",
+    "OBSERVADA",
+    "RECHAZADA",
+}
 
 
 def _normalize_state(value):
@@ -373,6 +383,13 @@ def get_matrix_rows(*, ciclo_id=None):
             latest_record is not None and latest_state in UPLOADED_EVIDENCE_STATES
         )
         row["has_pending_review"] = bool(latest_record is not None and not row["has_evidence"])
+        row["is_correction_requested"] = latest_state in CORRECTION_EVIDENCE_STATES
+        row["is_upload_locked"] = latest_state in LOCKED_INTERNAL_REVIEW_STATES
+        row["can_upload_revision"] = (
+            latest_record is None
+            or row["is_correction_requested"]
+            or not row["is_upload_locked"]
+        )
         row["evidence_status"] = latest_state
     return rows
 
