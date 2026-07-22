@@ -240,15 +240,25 @@
                       {% else %}
                         <div class="caces-evidence-review-form__grid">
                           <label class="acreditacion-form__field">
-                            <span>{{ form.estado.label }}</span>
-                            {{ form.estado }}
-                            {{ form.estado.errors }}
+                            <span>{{ form.calificacion_caces.label }}</span>
+                            {{ form.calificacion_caces }}
+                            <small class="text-muted">Satisfactorio y Cuasi satisfactorio aprueban; Poco satisfactorio y Deficiente rechazan.</small>
+                            {{ form.calificacion_caces.errors }}
                           </label>
-                          <label class="acreditacion-form__field">
-                            <span>{{ form.calificacion.label }}</span>
-                            {{ form.calificacion }}
-                            {{ form.calificacion.errors }}
-                          </label>
+                        </div>
+                        <div class="caces-calculation-preview evaluacion-qualitative-preview" data-caces-valuation-preview>
+                          <div>
+                            <span>Valoracion</span>
+                            <strong data-caces-valuation-label>--</strong>
+                          </div>
+                          <div>
+                            <span>Ponderacion</span>
+                            <strong data-caces-valuation-score>--</strong>
+                          </div>
+                          <div>
+                            <span>Estado calculado</span>
+                            <strong data-caces-valuation-state>--</strong>
+                          </div>
                         </div>
                       {% endif %}
 
@@ -604,6 +614,48 @@
 {% block extra_js %}
 {{ block.super }}
 <script>
+  (function () {
+    var selects = document.querySelectorAll("[data-caces-valuation-select]");
+    if (!selects.length) {
+      return;
+    }
+
+    var valuationMap = {
+      SATISFACTORIO: { label: "Satisfactorio", score: "100", state: "APROBADA" },
+      CUASI_SATISFACTORIO: { label: "Cuasi satisfactorio", score: "70", state: "APROBADA" },
+      POCO_SATISFACTORIO: { label: "Poco satisfactorio", score: "35", state: "RECHAZADA" },
+      DEFICIENTE: { label: "Deficiente", score: "0", state: "RECHAZADA" }
+    };
+
+    function renderValuation(select) {
+      var form = select.closest("form");
+      var preview = form ? form.querySelector("[data-caces-valuation-preview]") : null;
+      var data = valuationMap[select.value] || null;
+      if (!preview) {
+        return;
+      }
+      var labelTarget = preview.querySelector("[data-caces-valuation-label]");
+      var scoreTarget = preview.querySelector("[data-caces-valuation-score]");
+      var stateTarget = preview.querySelector("[data-caces-valuation-state]");
+      if (labelTarget) {
+        labelTarget.textContent = data ? data.label : "--";
+      }
+      if (scoreTarget) {
+        scoreTarget.textContent = data ? data.score : "--";
+      }
+      if (stateTarget) {
+        stateTarget.textContent = data ? data.state : "--";
+      }
+    }
+
+    selects.forEach(function (select) {
+      select.addEventListener("change", function () {
+        renderValuation(select);
+      });
+      renderValuation(select);
+    });
+  })();
+
   (function () {
     var qualitativeForm = document.querySelector("[data-caces-qualitative-form]");
     if (!qualitativeForm) {

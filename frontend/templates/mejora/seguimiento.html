@@ -40,78 +40,45 @@
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td>Aprobacion del ciclo</td>
-          <td>{{ workflow_data.ciclo_aprobacion.ciclo_nombre|default:"Sin registro" }}</td>
-          <td>
-            {% if completion.steps.ciclo_aprobacion %}
-              <span class="acreditacion-status acreditacion-status--success">Completada</span>
-            {% else %}
-              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
-            {% endif %}
-          </td>
-          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-ciclo-aprobacion' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
-        </tr>
-        <tr>
-          <td>Asignacion</td>
-          <td>{{ workflow_data.asignaciones|length }} responsables</td>
-          <td>
-            {% if completion.steps.asignaciones %}
-              <span class="acreditacion-status acreditacion-status--success">Completada</span>
-            {% else %}
-              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
-            {% endif %}
-          </td>
-          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-asignacion-responsables' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
-        </tr>
-        <tr>
-          <td>Carga de informacion</td>
-          <td>{{ workflow_data.cargas|length }} cargas</td>
-          <td>
-            {% if completion.steps.cargas %}
-              <span class="acreditacion-status acreditacion-status--success">Completada</span>
-            {% else %}
-              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
-            {% endif %}
-          </td>
-          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-carga-informacion' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
-        </tr>
-        <tr>
-          <td>Revision de jefatura</td>
-          <td>{{ workflow_data.revision_jefatura.decision|default:"Sin decision" }}</td>
-          <td>
-            {% if completion.steps.revision_jefatura %}
-              <span class="acreditacion-status acreditacion-status--success">Completada</span>
-            {% else %}
-              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
-            {% endif %}
-          </td>
-          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-revision-jefatura' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
-        </tr>
-        <tr>
-          <td>Envio formal</td>
-          <td>{{ workflow_data.envio_formal.fecha_envio|default:"Sin envio" }}</td>
-          <td>
-            {% if completion.steps.envio_formal %}
-              <span class="acreditacion-status acreditacion-status--success">Completada</span>
-            {% else %}
-              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
-            {% endif %}
-          </td>
-          <td>{% if can_manage_mejora_workflow %}<a href="{% url 'mejora-envio-formal' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
-        </tr>
-        <tr>
-          <td>Recepcion evaluador</td>
-          <td>{{ workflow_data.recepcion_evaluador.estado_inicial|default:"Sin recepcion" }}</td>
-          <td>
-            {% if completion.steps.recepcion_evaluador %}
-              <span class="acreditacion-status acreditacion-status--success">Completada</span>
-            {% else %}
-              <span class="acreditacion-status acreditacion-status--warning">Pendiente</span>
-            {% endif %}
-          </td>
-          <td>{% if can_access_evaluator_reception %}<a href="{% url 'mejora-recepcion-evaluador' %}">Editar</a>{% else %}<span class="text-muted">Consulta</span>{% endif %}</td>
-        </tr>
+        {% for step in workflow_steps %}
+          <tr>
+            <td>{{ step.number }}. {{ step.label }}</td>
+            <td>
+              {% if step.key == "ciclo_aprobacion" %}
+                {{ workflow_data.ciclo_aprobacion.ciclo_nombre|default:"Sin registro" }}
+              {% elif step.key == "asignaciones" %}
+                {{ workflow_data.asignaciones|length }} responsables
+              {% elif step.key == "cargas" %}
+                {{ workflow_data.cargas|length }} cargas
+              {% elif step.key == "revision_jefatura" %}
+                {{ workflow_data.revision_jefatura.decision|default:"Sin decision" }}
+              {% elif step.key == "envio_formal" %}
+                {{ workflow_data.envio_formal.fecha_envio|default:"Sin envio" }}
+              {% else %}
+                {{ workflow_data.recepcion_evaluador.estado_inicial|default:"Sin recepcion" }}
+              {% endif %}
+              {% if step.detail %}<div class="text-muted">{{ step.detail }}</div>{% endif %}
+            </td>
+            <td><span class="acreditacion-status acreditacion-status--{{ step.status_class }}">{{ step.status_label }}</span></td>
+            <td>
+              {% if step.key == "recepcion_evaluador" %}
+                {% if step.can_manage and can_access_evaluator_reception %}
+                  <a href="{% url step.url_name %}">Gestionar</a>
+                {% elif step.complete %}
+                  <a href="{% url step.url_name %}">Consultar</a>
+                {% else %}
+                  <span class="text-muted">Bloqueado</span>
+                {% endif %}
+              {% elif step.can_manage and can_manage_mejora_workflow %}
+                <a href="{% url step.url_name %}">Gestionar</a>
+              {% elif step.complete %}
+                <a href="{% url step.url_name %}">Consultar</a>
+              {% else %}
+                <span class="text-muted">Bloqueado</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
       </tbody>
     </table>
   </div>
@@ -193,6 +160,8 @@
     </div>
     {% if completion.completed == completion.total %}
       <span class="acreditacion-status acreditacion-status--success">Proceso completo</span>
+    {% elif next_workflow_step.status == "blocked" %}
+      <span class="acreditacion-status acreditacion-status--danger">Proceso observado</span>
     {% else %}
       <span class="acreditacion-status acreditacion-status--warning">Proceso en curso</span>
     {% endif %}

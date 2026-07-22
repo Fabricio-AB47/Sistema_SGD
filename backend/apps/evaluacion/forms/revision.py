@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 
 from apps.core.models import EstadoEvaluacion
@@ -10,6 +12,10 @@ QUALITATIVE_RESULT_CHOICES = (
     ("CUMPLE", "Cumple"),
     ("NO_CUMPLE", "No cumple"),
 )
+QUALITATIVE_RESULT_SCORES = {
+    "CUMPLE": Decimal("100.00"),
+    "NO_CUMPLE": Decimal("0.00"),
+}
 QUALITATIVE_RESULT_DETAILS = (
     {
         "value": "CUMPLE",
@@ -28,6 +34,42 @@ QUALITATIVE_RESULT_DETAILS = (
         "cumplimiento": "0%",
         "utility": "0,00",
         "description": "La evidencia no cumple con el elemento evaluado.",
+    },
+)
+QUANTITATIVE_CACES_RANGES = {
+    "SATISFACTORIO": (Decimal("100.00"), Decimal("100.00")),
+    "CUASI_SATISFACTORIO": (Decimal("70.00"), Decimal("99.99")),
+    "POCO_SATISFACTORIO": (Decimal("35.00"), Decimal("69.99")),
+    "DEFICIENTE": (Decimal("0.00"), Decimal("34.99")),
+}
+QUANTITATIVE_CACES_OPTIONS = (
+    {
+        "value": "SATISFACTORIO",
+        "label": "Satisfactorio",
+        "range_label": "100",
+        "score": Decimal("100.00"),
+        "estado": "APROBADA",
+    },
+    {
+        "value": "CUASI_SATISFACTORIO",
+        "label": "Cuasi satisfactorio",
+        "range_label": "70 a 99.99",
+        "score": Decimal("70.00"),
+        "estado": "APROBADA",
+    },
+    {
+        "value": "POCO_SATISFACTORIO",
+        "label": "Poco satisfactorio",
+        "range_label": "35 a 69.99",
+        "score": Decimal("35.00"),
+        "estado": "RECHAZADA",
+    },
+    {
+        "value": "DEFICIENTE",
+        "label": "Deficiente",
+        "range_label": "0 a 34.99",
+        "score": Decimal("0.00"),
+        "estado": "RECHAZADA",
     },
 )
 
@@ -62,6 +104,31 @@ def _estado_by_description(description: str):
     ).first()
 
 
+def _range_code_for_score(score) -> str | None:
+    if score is None:
+        return None
+    value = score if isinstance(score, Decimal) else Decimal(str(score))
+    for code, (minimum, maximum) in QUANTITATIVE_CACES_RANGES.items():
+        if minimum <= value <= maximum:
+            return code
+    return None
+
+
+def _state_description_for_quantitative_score(score) -> str:
+    range_code = _range_code_for_score(score)
+    if range_code in {"SATISFACTORIO", "CUASI_SATISFACTORIO"}:
+        return "APROBADA"
+    return "RECHAZADA"
+
+
+def _quantitative_option_by_code(code: str | None) -> dict | None:
+    normalized = _normalize_token(code)
+    return next(
+        (option for option in QUANTITATIVE_CACES_OPTIONS if option["value"] == normalized),
+        None,
+    )
+
+
 class EvaluacionGestionForm(forms.Form):
     registro = forms.ModelChoiceField(
         queryset=RegistroEvidencia.objects.select_related(
@@ -90,6 +157,12 @@ class EvaluacionGestionForm(forms.Form):
         min_value=0,
         max_value=100,
         label="Calificacion cuantitativa",
+        widget=forms.NumberInput(attrs={"step": "0.01", "min": "0", "max": "100"}),
+    )
+    calificacion_caces = forms.ChoiceField(
+        choices=(),
+        required=False,
+        label="Calificacion cualitativa CACES",
     )
     comentario = forms.CharField(
         max_length=1000,
@@ -111,6 +184,45 @@ class EvaluacionGestionForm(forms.Form):
         self.evaluation_mode = (
             "qualitative" if is_qualitative_register(self.registro_for_mode) else "quantitative"
         )
+        self.quantitative_caces_options = [
+            {
+                **option,
+                "selected": False,
+            }
+            for option in QUANTITATIVE_CACES_OPTIONS
+        ]
+        self.fields["calificacion_caces"].choices = [("", "Seleccione la valoracion CACES")] + [
+            (
+                option["value"],
+                f"{option['label']} ({option['range_label']})",
+            )
+            for option in QUANTITATIVE_CACES_OPTIONS
+        ]
+        if self.evaluation_mode == "quantitative":
+            initial_code = _range_code_for_score(self.initial.get("calificacion"))
+            selected_code = (
+                self.data.get(self.add_prefix("calificacion_caces"))
+                if self.is_bound
+                else initial_code
+            )
+            if initial_code and not self.is_bound:
+                self.fields["calificacion_caces"].initial = initial_code
+            self.quantitative_caces_options = [
+                {
+                    **option,
+                    "selected": option["value"] == selected_code,
+                }
+                for option in QUANTITATIVE_CACES_OPTIONS
+            ]
+            self.fields["calificacion"].widget.attrs.update(
+                {
+                    "data-caces-quantitative-score": "true",
+                    "placeholder": "Ingrese un valor de 0 a 100",
+                }
+            )
+            self.fields["calificacion_caces"].widget.attrs.update(
+                {"data-caces-valuation-select": "true"}
+            )
         selected_result = None
         if self.is_bound:
             selected_result = self.data.get(self.add_prefix("resultado_cualitativo"))
@@ -152,12 +264,24 @@ class EvaluacionGestionForm(forms.Form):
                 )
             else:
                 cleaned_data["estado"] = estado
-            cleaned_data["calificacion"] = None
+            if result in QUALITATIVE_RESULT_SCORES:
+                cleaned_data["calificacion"] = QUALITATIVE_RESULT_SCORES[result]
         else:
-            if cleaned_data.get("estado") is None:
-                self.add_error("estado", "Selecciona el estado final de la evaluacion cuantitativa.")
-            if cleaned_data.get("calificacion") is None:
-                self.add_error("calificacion", "Registra la calificacion cuantitativa.")
+            selected_option = _quantitative_option_by_code(cleaned_data.get("calificacion_caces"))
+            if selected_option is None:
+                self.add_error("calificacion_caces", "Selecciona la valoracion CACES.")
+            else:
+                score = selected_option["score"]
+                cleaned_data["calificacion"] = score
+                estado_description = selected_option["estado"]
+                estado = _estado_by_description(estado_description)
+                if estado is None:
+                    self.add_error(
+                        "calificacion_caces",
+                        f"No existe el estado de evaluacion {estado_description}.",
+                    )
+                else:
+                    cleaned_data["estado"] = estado
         return cleaned_data
 
 

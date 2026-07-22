@@ -116,14 +116,24 @@
           </div>
         {% else %}
           <div class="acreditacion-form__field">
-            <label for="{{ form.estado.id_for_label }}">{{ form.estado.label }}</label>
-            {{ form.estado }}
-            {{ form.estado.errors }}
+            <label for="{{ form.calificacion_caces.id_for_label }}">{{ form.calificacion_caces.label }}</label>
+            {{ form.calificacion_caces }}
+            <small class="text-muted">Satisfactorio y Cuasi satisfactorio aprueban; Poco satisfactorio y Deficiente rechazan.</small>
+            {{ form.calificacion_caces.errors }}
           </div>
-          <div class="acreditacion-form__field">
-            <label for="{{ form.calificacion.id_for_label }}">{{ form.calificacion.label }}</label>
-            {{ form.calificacion }}
-            {{ form.calificacion.errors }}
+          <div class="caces-calculation-preview evaluacion-qualitative-preview" data-caces-valuation-preview>
+            <div>
+              <span>Valoracion</span>
+              <strong data-caces-valuation-label>--</strong>
+            </div>
+            <div>
+              <span>Ponderacion</span>
+              <strong data-caces-valuation-score>--</strong>
+            </div>
+            <div>
+              <span>Estado calculado</span>
+              <strong data-caces-valuation-state>--</strong>
+            </div>
           </div>
         {% endif %}
         <div class="acreditacion-form__field acreditacion-form__field--full">
@@ -148,7 +158,7 @@
         {% if evaluation_mode == "qualitative" %}
           Este indicador es cualitativo: registra si cumple o no cumple y documenta las observaciones de evaluacion.
         {% else %}
-          Este indicador es cuantitativo: registra la calificacion numerica, el estado final y las observaciones de evaluacion.
+          Este indicador es cuantitativo: selecciona la valoracion CACES; el estado final se calcula automaticamente.
         {% endif %}
       </p>
     </article>
@@ -189,11 +199,11 @@
     </div>
     <div class="acreditacion-info-dialog__body">
       <p>
-        Si la revision es <strong>cuantitativa</strong>, registra un valor numerico en <strong>Calificacion</strong>, el estado final y las observaciones de evaluacion.
+        Si la revision es <strong>cuantitativa</strong>, selecciona una <strong>Valoracion CACES</strong>. El sistema determina si queda aprobada o rechazada.
         Si la revision es <strong>cualitativa</strong>, selecciona <strong>Cumple</strong> o <strong>No cumple</strong> y sustenta la decision en las observaciones de evaluacion.
       </p>
       <ul class="acreditacion-form-guide__list">
-        <li><strong>Cuantitativa:</strong> calificacion numerica, con observaciones breves si aplica.</li>
+        <li><strong>Cuantitativa:</strong> valoracion CACES; aprobacion automatica desde la ponderacion.</li>
         <li><strong>Cualitativa:</strong> cumple o no cumple, con observaciones de evaluacion obligatorias.</li>
       </ul>
     </div>
@@ -262,6 +272,48 @@
       if (event.key === 'Escape' && !modal.hidden) {
         closeModal();
       }
+    });
+  })();
+
+  (function () {
+    const selects = document.querySelectorAll('[data-caces-valuation-select]');
+    if (!selects.length) {
+      return;
+    }
+
+    const valuationMap = {
+      SATISFACTORIO: { label: 'Satisfactorio', score: '100', state: 'APROBADA' },
+      CUASI_SATISFACTORIO: { label: 'Cuasi satisfactorio', score: '70', state: 'APROBADA' },
+      POCO_SATISFACTORIO: { label: 'Poco satisfactorio', score: '35', state: 'RECHAZADA' },
+      DEFICIENTE: { label: 'Deficiente', score: '0', state: 'RECHAZADA' }
+    };
+
+    const renderValuation = function (select) {
+      const form = select.closest('form');
+      const preview = form ? form.querySelector('[data-caces-valuation-preview]') : null;
+      const data = valuationMap[select.value] || null;
+      if (!preview) {
+        return;
+      }
+      const labelTarget = preview.querySelector('[data-caces-valuation-label]');
+      const scoreTarget = preview.querySelector('[data-caces-valuation-score]');
+      const stateTarget = preview.querySelector('[data-caces-valuation-state]');
+      if (labelTarget) {
+        labelTarget.textContent = data ? data.label : '--';
+      }
+      if (scoreTarget) {
+        scoreTarget.textContent = data ? data.score : '--';
+      }
+      if (stateTarget) {
+        stateTarget.textContent = data ? data.state : '--';
+      }
+    };
+
+    selects.forEach(function (select) {
+      select.addEventListener('change', function () {
+        renderValuation(select);
+      });
+      renderValuation(select);
     });
   })();
 
